@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "FurniSpace Mobile",
+    "slug": "furnispace-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "scheme": "furnispace",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.anonymous.furnispacemobile"
+    },
+    "web": {}
+  }
+}

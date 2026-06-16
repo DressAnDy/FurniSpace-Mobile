@@ -7,8 +7,10 @@ Expo + React Native + TypeScript project scaffolded with a feature-first archite
    - `npm install`
 2. Copy env file:
    - `.env.example` -> `.env`
-3. Update backend URL:
-   - `EXPO_PUBLIC_API_BASE_URL`
+3. Update backend URLs:
+   - `EXPO_PUBLIC_API_URL`
+   - `EXPO_PUBLIC_AUTH_API_URL`
+   - `EXPO_PUBLIC_WS_URL`
 4. Run app:
    - `npm run start`
    - `npm run android` / `npm run ios`
@@ -22,4 +24,3 @@ Expo + React Native + TypeScript project scaffolded with a feature-first archite
 ## Notes
 - Homepage UI is implemented from Figma in `src/features/home/screens/HomeScreen.tsx`.
 - `src/features/auth` is kept as a sample feature template for API + state flow.
-"# FurniSpace-Mobile" 
