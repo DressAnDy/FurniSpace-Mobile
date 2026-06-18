@@ -1,0 +1,192 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: "#FAF8F5",
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  header: {
+    backgroundColor: "#3A3330",
+    paddingHorizontal: 19,
+    paddingTop: 38,
+    paddingBottom: 14,
+  },
+  brand: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  title: {
+    color: "#FFFFFF",
+    fontFamily: "serif",
+    fontSize: 35,
+    marginTop: 2,
+  },
+  searchBox: {
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    flexDirection: "row",
+    height: 30,
+    marginTop: 11,
+    paddingHorizontal: 10,
+  },
+  searchInput: {
+    color: "#FFFFFF",
+    flex: 1,
+    fontSize: 12,
+    marginLeft: 6,
+    paddingVertical: 0,
+  },
+  content: {
+    paddingHorizontal: 19,
+    paddingTop: 12,
+  },
+  sectionLabel: {
+    color: "#7A6F68",
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(60,51,48,0.05)",
+    borderRadius: 15,
+    borderWidth: 1,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  cardTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  leftInfo: {
+    alignItems: "center",
+    flexDirection: "row",
+    flex: 1,
+  },
+  avatar: {
+    alignItems: "center",
+    borderRadius: 16,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+  },
+  nameWrap: {
+    marginLeft: 10,
+  },
+  name: {
+    color: "#2C2420",
+    fontSize: 13,
+  },
+  role: {
+    color: "#7A6F68",
+    fontSize: 10,
+    marginTop: 1,
+  },
+  rightInfo: {
+    alignItems: "flex-end",
+    marginLeft: 8,
+  },
+  time: {
+    color: "#7A6F68",
+    fontSize: 10,
+  },
+  unreadBadge: {
+    alignItems: "center",
+    backgroundColor: "#C9A86A",
+    borderRadius: 8,
+    height: 15,
+    justifyContent: "center",
+    marginTop: 6,
+    minWidth: 15,
+    paddingHorizontal: 4,
+  },
+  unreadText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+  },
+  messageRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    marginTop: 10,
+    paddingLeft: 38,
+  },
+  onlineDot: {
+    backgroundColor: "#10B981",
+    borderRadius: 3,
+    height: 6,
+    marginRight: 8,
+    marginTop: 6,
+    width: 6,
+  },
+  message: {
+    color: "#7A6F68",
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  footerText: {
+    color: "rgba(122,111,104,0.5)",
+    fontSize: 11,
+    marginTop: 20,
+    textAlign: "center",
+  },
+  bottomNav: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderTopColor: "rgba(60,51,48,0.08)",
+    borderTopWidth: 1,
+    bottom: 0,
+    flexDirection: "row",
+    height: 74,
+    left: 0,
+    position: "absolute",
+    right: 0,
+  },
+  bottomItem: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+  },
+  bottomIconWrap: {
+    position: "relative",
+  },
+  bottomBadge: {
+    alignItems: "center",
+    backgroundColor: "#C9A86A",
+    borderRadius: 8,
+    height: 15,
+    justifyContent: "center",
+    position: "absolute",
+    right: -10,
+    top: -5,
+    width: 15,
+  },
+  bottomBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 9,
+  },
+  bottomLabel: {
+    color: "rgba(122,111,104,0.7)",
+    fontSize: 10,
+    marginTop: 4,
+  },
+  bottomLabelActive: {
+    color: "#C9A86A",
+  },
+  bottomActiveIndicator: {
+    backgroundColor: "#C9A86A",
+    borderRadius: 999,
+    height: 2,
+    position: "absolute",
+    top: 6,
+    width: 20,
+  },
+});
