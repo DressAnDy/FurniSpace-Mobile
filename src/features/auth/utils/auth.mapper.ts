@@ -1,9 +1,13 @@
-import { AuthUser, LoginResponseDto } from "../models/auth.model";
+import { AuthUser, CurrentUserDto } from "../models/auth.model";
 
-export function mapUserFromLoginResponse(dto: LoginResponseDto): AuthUser {
+export function mapUserFromCurrentUser(dto: CurrentUserDto): AuthUser {
   return {
-    id: dto.user.id,
-    email: dto.user.email,
-    name: dto.user.fullName ?? dto.user.email,
+    accountId: dto.accountId,
+    email: dto.email,
+    fullName: dto.fullName,
+    phone: dto.phone,
+    avatarUrl: dto.avatarUrl,
+    status: dto.status,
+    role: dto.role,
   };
 }

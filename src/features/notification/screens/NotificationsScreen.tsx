@@ -1,138 +1,153 @@
 import React, { useMemo, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { userIconDefinition } from "../../../icons/auth/definitions";
 import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
-import { cubeIconDefinition } from "../../../icons/design/definitions";
-import { fileTextIconDefinition } from "../../../icons/file/definitions";
 import { dashboardIconDefinition, homeIconDefinition } from "../../../icons/navigation/definitions";
-import { calendarIconDefinition } from "../../../icons/project/definitions";
-import { checkIconDefinition } from "../../../icons/status/definitions";
 import type { IconDefinition } from "../../../icons/types";
+import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import {
+  useNotificationActions,
+  useNotificationBadgeLabel,
+  useNotificationsQuery,
+  useUnreadNotificationCount,
+} from "../hooks/useNotifications";
+import { NotificationFilter, NotificationListItem } from "../models/notification.model";
+import { navigateFromNotification } from "../utils/notification.navigation";
 import { styles } from "./NotificationsScreen.styles";
-
-type NotificationFilter = "all" | "unread" | "read";
-
-type NotificationItem = {
-  id: string;
-  title: string;
-  description: string;
-  timeLabel: string;
-  iconDefinition: IconDefinition;
-  iconColor: string;
-  iconBackground: string;
-  unread: boolean;
-};
-
-const notifications: NotificationItem[] = [
-  {
-    id: "proposal-ready",
-    title: "3D Proposal Ready for Review",
-    description: "Marcus Chen has uploaded your Urban Coffee House design - v2.1 is available now.",
-    timeLabel: "2 HOURS AGO",
-    iconDefinition: cubeIconDefinition,
-    iconColor: "#C9A86A",
-    iconBackground: "#F5F2ED",
-    unread: true,
-  },
-  {
-    id: "new-message",
-    title: "New Message from Designer",
-    description: "Marcus: I've uploaded the revised 3D model. Please take a look and share your thoughts.",
-    timeLabel: "2 HOURS AGO",
-    iconDefinition: chatIconDefinition,
-    iconColor: "#7A6F68",
-    iconBackground: "#F5F2ED",
-    unread: true,
-  },
-  {
-    id: "installation-confirmed",
-    title: "Installation Date Confirmed",
-    description: "Your installation is scheduled for June 27, 2026 at 9:00 AM. Please ensure site access.",
-    timeLabel: "1 DAY AGO",
-    iconDefinition: calendarIconDefinition,
-    iconColor: "#7A6F68",
-    iconBackground: "#F5F2ED",
-    unread: true,
-  },
-  {
-    id: "quotation",
-    title: "Quotation Document Available",
-    description: "Your itemised project quotation is ready. Review and approve to begin production.",
-    timeLabel: "2 DAYS AGO",
-    iconDefinition: fileTextIconDefinition,
-    iconColor: "#9B8F86",
-    iconBackground: "#F5F2ED",
-    unread: false,
-  },
-  {
-    id: "production-update",
-    title: "Production Update",
-    description: "Custom furniture pieces are now in production at the workshop.",
-    timeLabel: "3 DAYS AGO",
-    iconDefinition: cubeIconDefinition,
-    iconColor: "#9B8F86",
-    iconBackground: "#F5F2ED",
-    unread: false,
-  },
-  {
-    id: "proposal-approved",
-    title: "Proposal Approved - Moving to Quotation",
-    description: "Your design proposal has been approved and the project has advanced to quotation stage.",
-    timeLabel: "5 DAYS AGO",
-    iconDefinition: checkIconDefinition,
-    iconColor: "#16A34A",
-    iconBackground: "#ECFDF5",
-    unread: false,
-  },
-];
 
 export function NotificationsScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [filter, setFilter] = useState<NotificationFilter>("all");
+  const alertsBadge = useNotificationBadgeLabel();
+  const { data: unreadData } = useUnreadNotificationCount();
+  const { markReadMutation, markAllReadMutation } = useNotificationActions();
+  const notificationsQuery = useNotificationsQuery(filter);
 
-  const unreadCount = useMemo(() => notifications.filter((item) => item.unread).length, []);
-  const readCount = notifications.length - unreadCount;
+  const unreadCount = unreadData?.unreadCount ?? 0;
+  const readCount = filter === "read" ? (notificationsQuery.data?.pages[0]?.total ?? 0) : 0;
 
-  const visibleItems = useMemo(() => {
-    if (filter === "unread") {
-      return notifications.filter((item) => item.unread);
+  const visibleItems = useMemo(
+    () => notificationsQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [notificationsQuery.data?.pages],
+  );
+
+  const handleRefresh = () => {
+    void notificationsQuery.refetch();
+  };
+
+  const handleLoadMore = () => {
+    if (notificationsQuery.hasNextPage && !notificationsQuery.isFetchingNextPage) {
+      void notificationsQuery.fetchNextPage();
     }
-    if (filter === "read") {
-      return notifications.filter((item) => !item.unread);
+  };
+
+  const handleMarkAllRead = () => {
+    markAllReadMutation.mutate(undefined, {
+      onError: (error) => {
+        Alert.alert("Unable to mark all read", getErrorMessage(error, "Please try again."));
+      },
+    });
+  };
+
+  const handleNotificationPress = (item: NotificationListItem) => {
+    if (item.unread) {
+      markReadMutation.mutate(item.id, {
+        onError: (error) => {
+          Alert.alert("Unable to mark read", getErrorMessage(error, "Please try again."));
+        },
+      });
     }
-    return notifications;
-  }, [filter]);
+
+    navigateFromNotification(navigation, item);
+  };
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={notificationsQuery.isRefetching} onRefresh={handleRefresh} />}
+        onScroll={({ nativeEvent }) => {
+          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+          const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+          if (distanceFromBottom < 120) {
+            handleLoadMore();
+          }
+        }}
+        scrollEventThrottle={200}
+      >
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
             <View>
               <Text style={styles.brand}>FURNISPACE</Text>
               <Text style={styles.title}>Notifications</Text>
             </View>
-            <View style={styles.newBadge}>
-              <View style={styles.newDot} />
-              <Text style={styles.newText}>{unreadCount} new</Text>
+            <View style={styles.headerActions}>
+              {unreadCount > 0 ? (
+                <Pressable
+                  disabled={markAllReadMutation.isPending}
+                  style={styles.markAllButton}
+                  onPress={handleMarkAllRead}
+                >
+                  <Text style={styles.markAllText}>Mark all read</Text>
+                </Pressable>
+              ) : null}
+              <View style={styles.newBadge}>
+                <View style={styles.newDot} />
+                <Text style={styles.newText}>{unreadCount} new</Text>
+              </View>
             </View>
           </View>
 
           <View style={styles.filterRow}>
             <FilterChip label="All" active={filter === "all"} onPress={() => setFilter("all")} />
             <FilterChip label={`Unread (${unreadCount})`} active={filter === "unread"} onPress={() => setFilter("unread")} />
-            <FilterChip label={`Read (${readCount})`} active={filter === "read"} onPress={() => setFilter("read")} />
+            <FilterChip label={filter === "read" ? `Read (${readCount})` : "Read"} active={filter === "read"} onPress={() => setFilter("read")} />
           </View>
         </View>
 
         <View style={styles.content}>
-          {visibleItems.map((item) => (
-            <NotificationCard key={item.id} item={item} />
-          ))}
+          {notificationsQuery.isLoading ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator color="#C9A86A" />
+            </View>
+          ) : notificationsQuery.isError ? (
+            <View style={styles.centerState}>
+              <Text style={styles.emptyText}>
+                {getErrorMessage(notificationsQuery.error, "Unable to load notifications.")}
+              </Text>
+              <Pressable style={styles.retryButton} onPress={handleRefresh}>
+                <Text style={styles.retryText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : visibleItems.length === 0 ? (
+            <View style={styles.centerState}>
+              <Text style={styles.emptyText}>No notifications yet.</Text>
+            </View>
+          ) : (
+            <>
+              {visibleItems.map((item) => (
+                <NotificationCard key={item.id} item={item} onPress={() => handleNotificationPress(item)} />
+              ))}
+              {notificationsQuery.isFetchingNextPage ? (
+                <View style={styles.loadMoreState}>
+                  <ActivityIndicator color="#C9A86A" />
+                </View>
+              ) : null}
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -144,7 +159,7 @@ export function NotificationsScreen(): React.JSX.Element {
           onPress={() => navigation.navigate("Tracking")}
         />
         <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={String(unreadCount)} active />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} active />
         <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
       </View>
     </View>
@@ -167,9 +182,15 @@ function FilterChip({
   );
 }
 
-function NotificationCard({ item }: { item: NotificationItem }): React.JSX.Element {
+function NotificationCard({
+  item,
+  onPress,
+}: {
+  item: NotificationListItem;
+  onPress: () => void;
+}): React.JSX.Element {
   return (
-    <Pressable style={[styles.card, item.unread && styles.cardUnread]}>
+    <Pressable style={[styles.card, item.unread && styles.cardUnread]} onPress={onPress}>
       <View style={[styles.cardIconWrap, { backgroundColor: item.iconBackground }]}>
         <AppIcon definition={item.iconDefinition} size={16} color={item.iconColor} strokeWidth={1.9} />
       </View>

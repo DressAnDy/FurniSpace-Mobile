@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
+import { userIconDefinition } from "../../../icons/auth/definitions";
 import {
   arrowRightIconDefinition,
   chevronRightIconDefinition,
@@ -17,6 +18,7 @@ import {
 import type { IconDefinition } from "../../../icons/types";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./HomeScreen.styles";
 
 type UpdateItem = {
@@ -53,6 +55,7 @@ const updates: UpdateItem[] = [
 
 export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const alertsBadge = useNotificationBadgeLabel();
 
   return (
     <View style={styles.screen}>
@@ -64,14 +67,16 @@ export function HomeScreen(): React.JSX.Element {
               <Text style={styles.userName}>Sarah Anderson</Text>
             </View>
 
-            <View style={styles.notifyWrap}>
+            <Pressable style={styles.notifyWrap} onPress={() => navigation.navigate("Notifications")}>
               <View style={styles.notifyIcon}>
                 <AppIcon definition={bellIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
               </View>
-              <View style={styles.notifyBadge}>
-                <Text style={styles.notifyBadgeText}>5</Text>
-              </View>
-            </View>
+              {alertsBadge ? (
+                <View style={styles.notifyBadge}>
+                  <Text style={styles.notifyBadgeText}>{alertsBadge}</Text>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
 
           <View style={styles.activeProjectRow}>
@@ -159,7 +164,8 @@ export function HomeScreen(): React.JSX.Element {
           onPress={() => navigation.navigate("Tracking")}
         />
         <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
       </View>
     </View>
   );

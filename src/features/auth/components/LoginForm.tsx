@@ -13,9 +13,11 @@ import { styles } from "./LoginForm.styles";
 type LoginFormProps = {
   isSubmitting: boolean;
   onSubmit: (payload: { email: string; password: string }) => void;
+  onForgotPassword?: () => void;
+  onRegister?: () => void;
 };
 
-export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps): React.JSX.Element {
+export function LoginForm({ isSubmitting, onSubmit, onForgotPassword, onRegister }: LoginFormProps): React.JSX.Element {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -67,7 +69,7 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps): React.JSX
         <View style={styles.fieldSection}>
           <View style={styles.passwordRow}>
             <Text style={styles.label}>PASSWORD</Text>
-            <Pressable>
+            <Pressable onPress={onForgotPassword}>
               <Text style={styles.forgotText}>Forgot password?</Text>
             </Pressable>
           </View>
@@ -99,7 +101,7 @@ export function LoginForm({ isSubmitting, onSubmit }: LoginFormProps): React.JSX
 
         <View style={styles.contactRow}>
           <Text style={styles.contactText}>Don&apos;t have an account? </Text>
-          <Pressable>
+          <Pressable onPress={onRegister}>
             <Text style={styles.contactAction}>Contact your sales team</Text>
           </Pressable>
         </View>

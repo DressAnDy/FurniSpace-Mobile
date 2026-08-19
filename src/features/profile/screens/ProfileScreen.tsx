@@ -1,7 +1,8 @@
 import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { getAccessToken } from "../../../core/storage/secureStorage";
 import { lockIconDefinition, logoutIconDefinition, mailIconDefinition, userIconDefinition } from "../../../icons/auth/definitions";
 import { bellIconDefinition, chatIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
@@ -11,10 +12,28 @@ import { helpIconDefinition, locationIconDefinition } from "../../../icons/commo
 import type { IconDefinition } from "../../../icons/types";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { useLogoutAction } from "../../auth/hooks/useAuthActions";
+import { useAuthStore } from "../../auth/store/auth.store";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./ProfileScreen.styles";
 
 export function ProfileScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const logoutMutation = useLogoutAction();
+  const currentUser = useAuthStore((state) => state.user);
+  const alertsBadge = useNotificationBadgeLabel();
+
+  const handleChangePassword = async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      Alert.alert("Sign in required", "Please sign in before changing your password.", [
+        { text: "OK", onPress: () => navigation.navigate("Login") },
+      ]);
+      return;
+    }
+
+    navigation.navigate("ChangePassword");
+  };
 
   return (
     <View style={styles.screen}>
@@ -28,7 +47,7 @@ export function ProfileScreen(): React.JSX.Element {
               <Text style={styles.avatarText}>SA</Text>
             </View>
             <View>
-              <Text style={styles.name}>Sarah Anderson</Text>
+              <Text style={styles.name}>{currentUser?.fullName ?? "Sarah Anderson"}</Text>
               <Text style={styles.role}>Business Owner</Text>
               <View style={styles.statusChip}>
                 <View style={styles.statusDot} />
@@ -41,8 +60,8 @@ export function ProfileScreen(): React.JSX.Element {
         <View style={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardLabel}>CONTACT INFORMATION</Text>
-            <ContactRow icon={mailIconDefinition} text="sarah.anderson@urbancafe.co" />
-            <ContactRow icon={phoneIconDefinition} text="+84 901 234 567" />
+            <ContactRow icon={mailIconDefinition} text={currentUser?.email ?? "sarah.anderson@urbancafe.co"} />
+            <ContactRow icon={phoneIconDefinition} text={currentUser?.phone ?? "+84 901 234 567"} />
             <ContactRow icon={projectIconDefinition} text="Urban Coffee House" />
             <ContactRow icon={locationIconDefinition} text="Downtown Plaza, Ho Chi Minh City" />
           </View>
@@ -65,6 +84,7 @@ export function ProfileScreen(): React.JSX.Element {
               icon={lockIconDefinition}
               title="Change Password"
               subtitle="Update your account password"
+              onPress={handleChangePassword}
             />
             <SettingRow
               icon={fileTextIconDefinition}
@@ -74,13 +94,21 @@ export function ProfileScreen(): React.JSX.Element {
             <SettingRow icon={helpIconDefinition} title="Help & Support" subtitle="Contact the FurniSpace team" isLast />
           </View>
 
-          <Pressable style={[styles.signOutCard, styles.mt15]}>
+          <Pressable
+            style={[styles.signOutCard, styles.mt15]}
+            disabled={logoutMutation.isPending}
+            onPress={() =>
+              logoutMutation.mutate(undefined, {
+                onSettled: () => navigation.navigate("Login"),
+              })
+            }
+          >
             <View style={styles.signOutIconWrap}>
               <AppIcon definition={logoutIconDefinition} size={15} color="#FB2C36" />
             </View>
             <View>
               <Text style={styles.signOutTitle}>Sign Out</Text>
-              <Text style={styles.signOutSub}>sarah.anderson@urbancafe.co</Text>
+              <Text style={styles.signOutSub}>{currentUser?.email ?? "sarah.anderson@urbancafe.co"}</Text>
             </View>
           </Pressable>
 
@@ -96,7 +124,7 @@ export function ProfileScreen(): React.JSX.Element {
           onPress={() => navigation.navigate("Tracking")}
         />
         <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
         <BottomNavItem label="Profile" iconDefinition={userIconDefinition} active />
       </View>
     </View>
@@ -128,14 +156,17 @@ function SettingRow({
   title,
   subtitle,
   isLast = false,
+  onPress,
 }: {
   icon: IconDefinition;
   title: string;
   subtitle: string;
   isLast?: boolean;
+  onPress?: () => void;
 }): React.JSX.Element {
-  return (
-    <Pressable style={[styles.settingRow, !isLast && styles.settingDivider]}>
+  const rowStyle = [styles.settingRow, !isLast && styles.settingDivider];
+  const content = (
+    <>
       <View style={styles.iconWrap}>
         <AppIcon definition={icon} size={15} color="#7A6F68" />
       </View>
@@ -144,6 +175,16 @@ function SettingRow({
         <Text style={styles.settingSubtitle}>{subtitle}</Text>
       </View>
       <AppIcon definition={chevronRightIconDefinition} size={15} color="#7A6F68" />
+    </>
+  );
+
+  if (!onPress) {
+    return <View style={rowStyle}>{content}</View>;
+  }
+
+  return (
+    <Pressable accessibilityRole="button" style={rowStyle} onPress={onPress}>
+      {content}
     </Pressable>
   );
 }

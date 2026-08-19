@@ -3,10 +3,12 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
+import { userIconDefinition } from "../../../icons/auth/definitions";
 import { dashboardIconDefinition, homeIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
 import type { IconDefinition } from "../../../icons/types";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./MessagesScreen.styles";
 
 type ConversationItem = {
@@ -56,6 +58,7 @@ const conversations: ConversationItem[] = [
 
 export function MessagesScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const alertsBadge = useNotificationBadgeLabel();
 
   return (
     <View style={styles.screen}>
@@ -90,7 +93,8 @@ export function MessagesScreen(): React.JSX.Element {
           onPress={() => navigation.navigate("Tracking")}
         />
         <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} active />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
       </View>
     </View>
   );
