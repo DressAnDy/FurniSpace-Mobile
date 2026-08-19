@@ -3,6 +3,8 @@ export type AppErrorCode =
   | "UNAUTHORIZED"
   | "FORBIDDEN"
   | "VALIDATION_ERROR"
+  | "CONFLICT"
+  | "RATE_LIMITED"
   | "SERVER_ERROR"
   | "UNKNOWN_ERROR";
 

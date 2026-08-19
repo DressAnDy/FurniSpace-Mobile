@@ -9,10 +9,12 @@ import { arrowLeftIconDefinition, dashboardIconDefinition, homeIconDefinition } 
 import type { IconDefinition } from "../../../icons/types";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./MessageChatScreen.styles";
 
 export function MessageChatScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const alertsBadge = useNotificationBadgeLabel();
 
   return (
     <View style={styles.screen}>
@@ -100,7 +102,7 @@ export function MessageChatScreen(): React.JSX.Element {
         <BottomNavItem label="Home" iconDefinition={homeIconDefinition} onPress={() => navigation.navigate("Home")} />
         <BottomNavItem label="Tracking" iconDefinition={dashboardIconDefinition} onPress={() => navigation.navigate("Tracking")} />
         <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} active />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
         <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
       </View>
     </View>

@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { mailIconDefinition, phoneIconDefinition, chatIconDefinition, bellIconDefinition } from "../../../icons/communication/definitions";
+import { userIconDefinition } from "../../../icons/auth/definitions";
 import {
   arrowLeftIconDefinition,
   dashboardIconDefinition,
@@ -13,6 +14,7 @@ import { checkIconDefinition, pendingIconDefinition } from "../../../icons/statu
 import type { IconDefinition } from "../../../icons/types";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./ProjectTrackingScreen.styles";
 
 type TimelineStatus = "done" | "active" | "pending";
@@ -88,6 +90,7 @@ const timelineItems: TimelineItem[] = [
 
 export function ProjectTrackingScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const alertsBadge = useNotificationBadgeLabel();
 
   return (
     <View style={styles.screen}>
@@ -168,7 +171,8 @@ export function ProjectTrackingScreen(): React.JSX.Element {
           badge="3"
           onPress={() => navigation.navigate("Messages")}
         />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
+        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
       </View>
     </View>
   );

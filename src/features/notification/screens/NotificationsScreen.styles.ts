@@ -19,6 +19,21 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
+  headerActions: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  markAllButton: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  markAllText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "500",
+  },
   brand: {
     color: "rgba(255,255,255,0.55)",
     fontSize: 10,
@@ -76,6 +91,33 @@ export const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 19,
     paddingTop: 12,
+  },
+  centerState: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 180,
+    paddingHorizontal: 24,
+  },
+  emptyText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#3A3330",
+    borderRadius: 999,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  retryText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  loadMoreState: {
+    alignItems: "center",
+    paddingVertical: 16,
   },
   card: {
     backgroundColor: "#FFFFFF",

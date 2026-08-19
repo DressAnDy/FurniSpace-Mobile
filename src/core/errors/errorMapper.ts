@@ -3,6 +3,7 @@ import { AppError } from "./AppError";
 
 type BackendErrorPayload = {
   message?: string;
+  errors?: Array<{ message?: string } | string> | null;
 };
 
 export function mapAxiosError(error: unknown): AppError {
@@ -12,7 +13,12 @@ export function mapAxiosError(error: unknown): AppError {
 
   const status = error.response?.status;
   const payload = error.response?.data as BackendErrorPayload | undefined;
-  const message = payload?.message ?? error.message;
+  let firstError: string | undefined;
+  if (payload?.errors && payload.errors.length > 0) {
+    const firstItem = payload.errors[0];
+    firstError = typeof firstItem === "string" ? firstItem : firstItem?.message;
+  }
+  const message = payload?.message ?? firstError ?? error.message;
 
   if (!status) {
     return new AppError("Network error. Please check your connection.", "NETWORK_ERROR");
@@ -28,6 +34,14 @@ export function mapAxiosError(error: unknown): AppError {
 
   if (status === 400 || status === 422) {
     return new AppError(message || "Validation error.", "VALIDATION_ERROR", status);
+  }
+
+  if (status === 409) {
+    return new AppError(message || "Conflict error.", "CONFLICT", status);
+  }
+
+  if (status === 429) {
+    return new AppError(message || "Too many requests. Please try again later.", "RATE_LIMITED", status);
   }
 
   if (status >= 500) {
