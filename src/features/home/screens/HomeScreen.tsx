@@ -7,16 +7,14 @@ import {
   Text,
   View,
 } from "react-native";
-import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
-import { userIconDefinition } from "../../../icons/auth/definitions";
+import { bellIconDefinition } from "../../../icons/communication/definitions";
 import {
   arrowRightIconDefinition,
   chevronRightIconDefinition,
-  dashboardIconDefinition,
-  homeIconDefinition,
 } from "../../../icons/navigation/definitions";
-import type { IconDefinition } from "../../../icons/types";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./HomeScreen.styles";
@@ -56,10 +54,14 @@ const updates: UpdateItem[] = [
 export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const alertsBadge = useNotificationBadgeLabel();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.headerWrap}>
           <View style={styles.headerTopRow}>
             <View>
@@ -156,53 +158,7 @@ export function HomeScreen(): React.JSX.Element {
         ))}
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} active />
-        <BottomNavItem
-          label="Tracking"
-          iconDefinition={dashboardIconDefinition}
-          onPress={() => navigation.navigate("Tracking")}
-        />
-        <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
-        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
-      </View>
+      <AppBottomNav activeTab="home" />
     </View>
-  );
-}
-
-type BottomNavItemProps = {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-};
-
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: BottomNavItemProps): React.JSX.Element {
-  return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon
-          definition={iconDefinition}
-          size={19}
-          color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"}
-          strokeWidth={1.9}
-        />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
-    </Pressable>
   );
 }

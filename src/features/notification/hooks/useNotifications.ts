@@ -10,14 +10,8 @@ import {
 } from "../services/notification.api";
 import { mapNotificationDtoToListItem } from "../utils/notification.mapper";
 
-function filterToIsUnread(filter: NotificationFilter): boolean | undefined {
-  if (filter === "unread") {
-    return true;
-  }
-  if (filter === "read") {
-    return false;
-  }
-  return undefined;
+function isCategoryFilter(filter: NotificationFilter): filter is Exclude<NotificationFilter, "all"> {
+  return filter !== "all";
 }
 
 export function useNotificationsQuery(filter: NotificationFilter) {
@@ -29,14 +23,17 @@ export function useNotificationsQuery(filter: NotificationFilter) {
     initialPageParam: 1,
     queryFn: async ({ pageParam }) => {
       const response = await getNotificationsApi({
-        isUnread: filterToIsUnread(filter),
         page: pageParam,
         limit: 20,
       });
 
+      const items = response.items
+        .map(mapNotificationDtoToListItem)
+        .filter((item) => !isCategoryFilter(filter) || item.category === filter);
+
       return {
         ...response,
-        items: response.items.map(mapNotificationDtoToListItem),
+        items,
       };
     },
     getNextPageParam: (lastPage) => {

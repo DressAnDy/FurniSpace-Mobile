@@ -6,7 +6,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    flexGrow: 1,
   },
   headerWrap: {
     backgroundColor: "#C1A06A",

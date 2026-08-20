@@ -6,7 +6,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    flexGrow: 1,
   },
   header: {
     backgroundColor: "#3A3330",
@@ -145,9 +145,44 @@ export const styles = StyleSheet.create({
     marginLeft: 10,
     marginRight: 8,
   },
+  cardTitleRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "space-between",
+  },
   cardTitle: {
     color: "#2C2420",
+    flex: 1,
     fontSize: 13,
+  },
+  categoryBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  categoryBadge_order: {
+    backgroundColor: "rgba(201,168,106,0.18)",
+  },
+  categoryBadge_payment: {
+    backgroundColor: "rgba(22,163,74,0.12)",
+  },
+  categoryBadge_project: {
+    backgroundColor: "rgba(58,51,48,0.08)",
+  },
+  categoryBadgeText: {
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+  categoryBadgeText_order: {
+    color: "#A8843E",
+  },
+  categoryBadgeText_payment: {
+    color: "#15803D",
+  },
+  categoryBadgeText_project: {
+    color: "#7A6F68",
   },
   cardDescription: {
     color: "#7A6F68",

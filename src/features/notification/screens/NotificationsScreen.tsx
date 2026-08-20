@@ -10,33 +10,36 @@ import {
   Text,
   View,
 } from "react-native";
-import { userIconDefinition } from "../../../icons/auth/definitions";
-import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
-import { dashboardIconDefinition, homeIconDefinition } from "../../../icons/navigation/definitions";
-import type { IconDefinition } from "../../../icons/types";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import {
   useNotificationActions,
-  useNotificationBadgeLabel,
   useNotificationsQuery,
   useUnreadNotificationCount,
 } from "../hooks/useNotifications";
-import { NotificationFilter, NotificationListItem } from "../models/notification.model";
+import { NotificationCategory, NotificationFilter, NotificationListItem } from "../models/notification.model";
 import { navigateFromNotification } from "../utils/notification.navigation";
 import { styles } from "./NotificationsScreen.styles";
 
+const CATEGORY_FILTERS: Array<{ key: NotificationFilter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "order", label: "Order" },
+  { key: "payment", label: "Payment" },
+  { key: "project", label: "Project" },
+];
+
 export function NotificationsScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
   const [filter, setFilter] = useState<NotificationFilter>("all");
-  const alertsBadge = useNotificationBadgeLabel();
   const { data: unreadData } = useUnreadNotificationCount();
   const { markReadMutation, markAllReadMutation } = useNotificationActions();
   const notificationsQuery = useNotificationsQuery(filter);
 
   const unreadCount = unreadData?.unreadCount ?? 0;
-  const readCount = filter === "read" ? (notificationsQuery.data?.pages[0]?.total ?? 0) : 0;
 
   const visibleItems = useMemo(
     () => notificationsQuery.data?.pages.flatMap((page) => page.items) ?? [],
@@ -76,7 +79,7 @@ export function NotificationsScreen(): React.JSX.Element {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={notificationsQuery.isRefetching} onRefresh={handleRefresh} />}
         onScroll={({ nativeEvent }) => {
@@ -112,9 +115,14 @@ export function NotificationsScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.filterRow}>
-            <FilterChip label="All" active={filter === "all"} onPress={() => setFilter("all")} />
-            <FilterChip label={`Unread (${unreadCount})`} active={filter === "unread"} onPress={() => setFilter("unread")} />
-            <FilterChip label={filter === "read" ? `Read (${readCount})` : "Read"} active={filter === "read"} onPress={() => setFilter("read")} />
+            {CATEGORY_FILTERS.map((item) => (
+              <FilterChip
+                key={item.key}
+                active={filter === item.key}
+                label={item.label}
+                onPress={() => setFilter(item.key)}
+              />
+            ))}
           </View>
         </View>
 
@@ -151,17 +159,7 @@ export function NotificationsScreen(): React.JSX.Element {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} onPress={() => navigation.navigate("Home")} />
-        <BottomNavItem
-          label="Tracking"
-          iconDefinition={dashboardIconDefinition}
-          onPress={() => navigation.navigate("Tracking")}
-        />
-        <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} active />
-        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
-      </View>
+      <AppBottomNav />
     </View>
   );
 }
@@ -195,7 +193,10 @@ function NotificationCard({
         <AppIcon definition={item.iconDefinition} size={16} color={item.iconColor} strokeWidth={1.9} />
       </View>
       <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.title}</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle}>{item.title}</Text>
+          <CategoryBadge category={item.category} label={item.categoryLabel} />
+        </View>
         <Text style={styles.cardDescription}>{item.description}</Text>
         <Text style={styles.cardTime}>{item.timeLabel}</Text>
       </View>
@@ -204,31 +205,10 @@ function NotificationCard({
   );
 }
 
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-}): React.JSX.Element {
+function CategoryBadge({ category, label }: { category: NotificationCategory; label: string }): React.JSX.Element {
   return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon definition={iconDefinition} size={19} color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"} strokeWidth={1.9} />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
-    </Pressable>
+    <View style={[styles.categoryBadge, styles[`categoryBadge_${category}`]]}>
+      <Text style={[styles.categoryBadgeText, styles[`categoryBadgeText_${category}`]]}>{label}</Text>
+    </View>
   );
 }

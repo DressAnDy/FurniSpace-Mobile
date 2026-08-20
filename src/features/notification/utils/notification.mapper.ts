@@ -4,7 +4,44 @@ import { fileTextIconDefinition } from "../../../icons/file/definitions";
 import { calendarIconDefinition } from "../../../icons/project/definitions";
 import { checkIconDefinition } from "../../../icons/status/definitions";
 import type { IconDefinition } from "../../../icons/types";
-import { NotificationDto, NotificationListItem, RealtimeNotificationPayloadDto } from "../models/notification.model";
+import {
+  NotificationCategory,
+  NotificationDto,
+  NotificationListItem,
+  RealtimeNotificationPayloadDto,
+} from "../models/notification.model";
+
+const CATEGORY_LABELS: Record<NotificationCategory, string> = {
+  order: "Order",
+  payment: "Payment",
+  project: "Project",
+};
+
+export function resolveNotificationCategory(
+  notificationType: string,
+  referenceType: string | null,
+): NotificationCategory {
+  const type = notificationType.toLowerCase();
+
+  if (referenceType === "PAYMENT" || type.includes("payment")) {
+    return "payment";
+  }
+
+  if (
+    referenceType === "ORDER" ||
+    referenceType === "QUOTATION" ||
+    type.includes("order") ||
+    type.includes("quotation")
+  ) {
+    return "order";
+  }
+
+  return "project";
+}
+
+export function getNotificationCategoryLabel(category: NotificationCategory): string {
+  return CATEGORY_LABELS[category];
+}
 
 type NotificationVisual = {
   iconDefinition: IconDefinition;
@@ -82,6 +119,7 @@ export function formatNotificationTime(isoDate: string): string {
 
 export function mapNotificationDtoToListItem(dto: NotificationDto): NotificationListItem {
   const visual = resolveNotificationVisual(dto.notificationType, dto.referenceType);
+  const category = resolveNotificationCategory(dto.notificationType, dto.referenceType);
 
   return {
     id: dto.notificationId,
@@ -92,6 +130,8 @@ export function mapNotificationDtoToListItem(dto: NotificationDto): Notification
     iconColor: visual.iconColor,
     iconBackground: visual.iconBackground,
     unread: !dto.isRead,
+    category,
+    categoryLabel: getNotificationCategoryLabel(category),
     notificationType: dto.notificationType,
     referenceType: dto.referenceType,
     referenceId: dto.referenceId,
@@ -105,6 +145,7 @@ export function mapRealtimePayloadToListItem(payload: RealtimeNotificationPayloa
   }
 
   const visual = resolveNotificationVisual(payload.notificationType, payload.referenceType);
+  const category = resolveNotificationCategory(payload.notificationType, payload.referenceType);
 
   return {
     id: payload.notificationId,
@@ -115,6 +156,8 @@ export function mapRealtimePayloadToListItem(payload: RealtimeNotificationPayloa
     iconColor: visual.iconColor,
     iconBackground: visual.iconBackground,
     unread: true,
+    category,
+    categoryLabel: getNotificationCategoryLabel(category),
     notificationType: payload.notificationType,
     referenceType: payload.referenceType,
     referenceId: payload.referenceId,

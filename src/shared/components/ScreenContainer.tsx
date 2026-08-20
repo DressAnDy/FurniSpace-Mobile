@@ -1,5 +1,6 @@
 import React from "react";
-import { SafeAreaView, ViewStyle } from "react-native";
+import { ViewStyle } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { styles } from "./ScreenContainer.styles";
 
 type ScreenContainerProps = {
