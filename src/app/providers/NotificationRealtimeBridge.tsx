@@ -39,6 +39,10 @@ export function NotificationRealtimeBridge(): null {
       if (payload.notificationId) {
         void queryClient.invalidateQueries({ queryKey: ["notification", "list"] });
       }
+
+      if (payload.referenceType === "PROJECT_CHAT_MESSAGE" && payload.projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(payload.projectId) });
+      }
     });
 
     return () => {

@@ -16,7 +16,8 @@
       "package": "com.anonymous.furnispacemobile",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       [
@@ -24,7 +25,8 @@
         {
           "color": "#C9A86A"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "web": {}
   }

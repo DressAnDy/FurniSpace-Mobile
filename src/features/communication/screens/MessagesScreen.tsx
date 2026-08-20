@@ -1,88 +1,293 @@
-import React from "react";
-import { useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { searchIconDefinition } from "../../../icons/navigation/definitions";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
+import { chatIconDefinition } from "../../../icons/communication/definitions";
+import { projectIconDefinition } from "../../../icons/project/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { AppBottomNav } from "../../../shared/components/AppBottomNav";
 import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
+import { useProjectsQuery } from "../../project/hooks/useProjects";
+import { useProjectStore } from "../../project/store/project.store";
+import { pickDefaultActiveProject } from "../../project/utils/project.mapper";
+import { useChatSearchQuery, useProjectChatsQuery } from "../hooks/useProjectChats";
+import { ChatListItem, CustomerChatTab } from "../models/chat.model";
+import { formatChatTime, getCustomerTabLabel } from "../utils/chat.mapper";
 import { styles } from "./MessagesScreen.styles";
 
-type ConversationItem = {
-  id: string;
-  initials: string;
-  avatarColor: string;
-  name: string;
-  role: string;
-  message: string;
-  time: string;
-  unreadCount?: number;
-  showOnlineDot?: boolean;
-};
+const CUSTOMER_TABS: CustomerChatTab[] = ["SALES", "DESIGNER"];
 
-const conversations: ConversationItem[] = [
-  {
-    id: "marcus",
-    initials: "MC",
-    avatarColor: "#3A3330",
-    name: "Marcus Chen",
-    role: "Lead Designer",
-    message: "I've uploaded the revised 3D model. Please take a look when you have a moment.",
-    time: "2h ago",
-    unreadCount: 2,
-    showOnlineDot: true,
-  },
-  {
-    id: "jennifer",
-    initials: "JL",
-    avatarColor: "#C9A86A",
-    name: "Jennifer Liu",
-    role: "Sales Manager",
-    message: "The installation team will arrive on June 27th at 9:00 AM. Please confirm.",
-    time: "Yesterday",
-    unreadCount: 1,
-  },
-  {
-    id: "project-team",
-    initials: "PT",
-    avatarColor: "#7A6F68",
-    name: "Project Team",
-    role: "Group · 4 members",
-    message: "Sarah: Thank you for the update! Looking forward to the final proposal.",
-    time: "2 days ago",
-  },
-];
+type MessagesRoute = RouteProp<RootStackParamList, "Messages">;
 
 export function MessagesScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<MessagesRoute>();
   const { scrollPaddingBottom } = useBottomNavMetrics();
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
+  const projectsQuery = useProjectsQuery({ limit: 100 });
+  const projectId = activeProjectId;
+  const [activeTab, setActiveTab] = useState<CustomerChatTab>("SALES");
+  const [searchQuery, setSearchQuery] = useState("");
+  const chatsQuery = useProjectChatsQuery(projectId);
+  const searchResultsQuery = useChatSearchQuery(projectId, searchQuery);
+
+  const projects = projectsQuery.data?.items ?? [];
+  const selectedProject = projects.find((project) => project.projectId === projectId) ?? null;
+
+  useEffect(() => {
+    if (activeProjectId || !route.params?.projectId) {
+      return;
+    }
+
+    setActiveProjectId(route.params.projectId);
+  }, [activeProjectId, route.params?.projectId, setActiveProjectId]);
+
+  useEffect(() => {
+    if (activeProjectId || projectsQuery.isLoading || projects.length === 0) {
+      return;
+    }
+
+    const defaultProject = pickDefaultActiveProject(projects);
+    if (defaultProject) {
+      setActiveProjectId(defaultProject.projectId);
+    }
+  }, [activeProjectId, projects, projectsQuery.isLoading, setActiveProjectId]);
+
+  const handleSelectProject = (nextProjectId: string) => {
+    setActiveProjectId(nextProjectId);
+    navigation.setParams({ projectId: nextProjectId });
+  };
+
+  const activeChat = useMemo(
+    () => chatsQuery.data?.find((item) => item.chatType === activeTab) ?? null,
+    [activeTab, chatsQuery.data],
+  );
+
+  const isSearching = searchQuery.trim().length >= 2;
+
+  const handleOpenChat = (chat: ChatListItem) => {
+    navigation.navigate("MessageChat", {
+      chatId: chat.chatId,
+      projectId: chat.projectId,
+      title: chat.title,
+      staffName: chat.staffName,
+      chatType: chat.chatType,
+      status: chat.status,
+    });
+  };
+
+  const handleOpenSearchResult = (chatId: string, title: string) => {
+    const chat = chatsQuery.data?.find((item) => item.chatId === chatId);
+    if (!chat || !projectId) {
+      return;
+    }
+
+    navigation.navigate("MessageChat", {
+      chatId,
+      projectId,
+      title: chat.title || title,
+      staffName: chat.staffName,
+      chatType: chat.chatType,
+      status: chat.status,
+    });
+  };
+
+  const handleRefresh = useCallback(() => {
+    void projectsQuery.refetch();
+    void chatsQuery.refetch();
+    if (isSearching) {
+      void searchResultsQuery.refetch();
+    }
+  }, [chatsQuery, isSearching, projectsQuery, searchResultsQuery]);
 
   return (
     <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Text style={styles.brand}>FURNISPACE</Text>
-          <Text style={styles.title}>Messages</Text>
-          <View style={styles.searchBox}>
-            <AppIcon definition={searchIconDefinition} size={14} color="rgba(255,255,255,0.5)" />
-            <TextInput
-              placeholder="Search conversations..."
-              placeholderTextColor="rgba(255,255,255,0.45)"
-              style={styles.searchInput}
-            />
-          </View>
+      <View style={styles.header}>
+        <Text style={styles.brand}>FURNISPACE</Text>
+        <Text style={styles.title}>Messages</Text>
+        <View style={styles.searchBox}>
+          <AppIcon definition={searchIconDefinition} size={14} color="rgba(255,255,255,0.5)" />
+          <TextInput
+            placeholder="Search messages in project..."
+            placeholderTextColor="rgba(255,255,255,0.45)"
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.sectionLabel}>ALL CONVERSATIONS</Text>
-          {conversations.map((item) => (
-            <ConversationCard key={item.id} item={item} onPress={() => navigation.navigate("MessageChat")} />
+        <View style={styles.tabRow}>
+          {CUSTOMER_TABS.map((tab) => (
+            <Pressable
+              key={tab}
+              style={[styles.tabChip, activeTab === tab && styles.tabChipActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabChipText, activeTab === tab && styles.tabChipTextActive]}>
+                {getCustomerTabLabel(tab)}
+              </Text>
+            </Pressable>
           ))}
-          <Text style={styles.footerText}>All conversations shown</Text>
+        </View>
+      </View>
+
+      {projects.length > 1 ? (
+        <View style={styles.projectPickerSection}>
+          <View style={styles.projectPickerCard}>
+            <View style={styles.projectPickerHeader}>
+              <View style={styles.projectPickerTitleRow}>
+                <View style={styles.projectPickerIconWrap}>
+                  <AppIcon definition={projectIconDefinition} size={15} color="#C9A86A" strokeWidth={1.8} />
+                </View>
+                <View style={styles.projectPickerTitleWrap}>
+                  <Text style={styles.projectPickerTitle}>Your Projects</Text>
+                  {selectedProject ? (
+                    <Text style={styles.projectPickerSubtitle} numberOfLines={1}>
+                      Viewing {selectedProject.projectName}
+                    </Text>
+                  ) : (
+                    <Text style={styles.projectPickerSubtitle}>Select a project to view chats</Text>
+                  )}
+                </View>
+              </View>
+              <View style={styles.projectCountBadge}>
+                <Text style={styles.projectCountText}>{projects.length}</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.projectPickerRow}
+            >
+              {projects.map((project) => {
+                const isActive = projectId === project.projectId;
+
+                return (
+                  <Pressable
+                    key={project.projectId}
+                    style={[styles.projectChip, isActive && styles.projectChipActive]}
+                    onPress={() => handleSelectProject(project.projectId)}
+                  >
+                    {isActive ? <View style={styles.projectChipDot} /> : null}
+                    <View style={styles.projectChipContent}>
+                      <Text
+                        style={[styles.projectChipText, isActive && styles.projectChipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {project.projectName}
+                      </Text>
+                      <Text
+                        style={[styles.projectChipCode, isActive && styles.projectChipCodeActive]}
+                        numberOfLines={1}
+                      >
+                        {project.projectCode}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      ) : null}
+
+      <ScrollView
+        style={styles.contentScroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={chatsQuery.isRefetching} onRefresh={handleRefresh} />}
+      >
+        <View style={styles.content}>
+          {projectsQuery.isLoading ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator color="#C9A86A" />
+            </View>
+          ) : projectsQuery.isError ? (
+            <View style={styles.centerState}>
+              <Text style={styles.emptyText}>{getErrorMessage(projectsQuery.error, "Unable to load projects.")}</Text>
+              <Pressable style={styles.retryButton} onPress={handleRefresh}>
+                <Text style={styles.retryText}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : projects.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconWrap}>
+                <AppIcon definition={chatIconDefinition} size={20} color="#C9A86A" strokeWidth={1.8} />
+              </View>
+              <Text style={styles.emptyText}>You have no projects yet. Create a project to start chatting with your team.</Text>
+            </View>
+          ) : (
+            <>
+              {projects.length === 1 && selectedProject ? (
+                <View style={styles.singleProjectMeta}>
+                  <Text style={styles.sectionLabel}>PROJECT</Text>
+                  <Text style={styles.singleProjectName}>{selectedProject.projectName}</Text>
+                  <Text style={styles.singleProjectCode}>{selectedProject.projectCode}</Text>
+                </View>
+              ) : null}
+
+              {!projectId ? (
+                <View style={styles.centerState}>
+                  <Text style={styles.emptyText}>Select a project to view chats.</Text>
+                </View>
+              ) : chatsQuery.isLoading ? (
+                <View style={styles.centerState}>
+                  <ActivityIndicator color="#C9A86A" />
+                </View>
+              ) : chatsQuery.isError ? (
+                <View style={styles.centerState}>
+                  <Text style={styles.emptyText}>{getErrorMessage(chatsQuery.error, "Unable to load chats.")}</Text>
+                  <Pressable style={styles.retryButton} onPress={handleRefresh}>
+                    <Text style={styles.retryText}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : isSearching ? (
+                <SearchResults
+                  isLoading={searchResultsQuery.isLoading}
+                  isError={searchResultsQuery.isError}
+                  results={searchResultsQuery.data ?? []}
+                  onOpenResult={handleOpenSearchResult}
+                />
+              ) : activeChat ? (
+                <>
+                  <Text style={styles.sectionLabel}>{getCustomerTabLabel(activeTab).toUpperCase()} CHAT</Text>
+                  <ConversationCard item={activeChat} onPress={() => handleOpenChat(activeChat)} />
+                </>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <View style={styles.emptyIconWrap}>
+                    <AppIcon definition={chatIconDefinition} size={20} color="#C9A86A" strokeWidth={1.8} />
+                  </View>
+                  <Text style={styles.emptyText}>
+                    {activeTab === "DESIGNER"
+                      ? "Design chat will appear after a designer is assigned."
+                      : "Sales chat will appear after your project is accepted."}
+                  </Text>
+                </View>
+              )}
+
+              {!isSearching && chatsQuery.data && chatsQuery.data.length > 0 ? (
+                <Text style={styles.footerText}>{chatsQuery.data.length} chat(s) in this project</Text>
+              ) : null}
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -91,34 +296,113 @@ export function MessagesScreen(): React.JSX.Element {
   );
 }
 
-function ConversationCard({ item, onPress }: { item: ConversationItem; onPress?: () => void }): React.JSX.Element {
+function SearchResults({
+  results,
+  isLoading,
+  isError,
+  onOpenResult,
+}: {
+  results: Array<{
+    messageId: string;
+    chatId: string;
+    senderName: string;
+    content: string;
+    createdAt: string;
+  }>;
+  isLoading: boolean;
+  isError: boolean;
+  onOpenResult: (chatId: string, title: string) => void;
+}): React.JSX.Element {
+  if (isLoading) {
+    return (
+      <View style={styles.centerState}>
+        <ActivityIndicator color="#C9A86A" />
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={styles.centerState}>
+        <Text style={styles.emptyText}>Unable to search messages.</Text>
+      </View>
+    );
+  }
+
+  if (results.length === 0) {
+    return (
+      <View style={styles.centerState}>
+        <Text style={styles.emptyText}>No messages matched your search.</Text>
+      </View>
+    );
+  }
+
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <>
+      <Text style={styles.sectionLabel}>SEARCH RESULTS</Text>
+      {results.map((item) => (
+        <Pressable
+          key={item.messageId}
+          style={styles.card}
+          onPress={() => onOpenResult(item.chatId, item.senderName)}
+        >
+          <View style={styles.cardAccent} />
+          <View style={styles.cardTop}>
+            <View style={styles.nameWrap}>
+              <Text style={styles.name}>{item.senderName}</Text>
+              <Text style={styles.role}>{formatChatTime(item.createdAt)}</Text>
+            </View>
+          </View>
+          <Text style={styles.searchResultContent} numberOfLines={3}>
+            {item.content}
+          </Text>
+        </Pressable>
+      ))}
+    </>
+  );
+}
+
+function ConversationCard({ item, onPress }: { item: ChatListItem; onPress?: () => void }): React.JSX.Element {
+  return (
+    <Pressable style={[styles.card, !item.isOpen && styles.cardClosed]} onPress={onPress}>
+      {item.isOpen ? <View style={styles.cardAccent} /> : null}
+
       <View style={styles.cardTop}>
         <View style={styles.leftInfo}>
           <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
             <Text style={styles.avatarText}>{item.initials}</Text>
           </View>
           <View style={styles.nameWrap}>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.role}>{item.role}</Text>
+            <Text style={styles.name}>{item.staffName || item.title}</Text>
+            <Text style={styles.role}>{item.roleLabel}</Text>
           </View>
         </View>
         <View style={styles.rightInfo}>
-          <Text style={styles.time}>{item.time}</Text>
-          {item.unreadCount ? (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unreadCount}</Text>
+          <Text style={styles.time}>{item.timeLabel}</Text>
+          {item.isOpen ? (
+            <View style={styles.openBadge}>
+              <Text style={styles.openBadgeText}>Open</Text>
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.closedBadge}>
+              <Text style={styles.closedBadgeText}>Closed</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      <View style={styles.messageRow}>
-        {item.showOnlineDot ? <View style={styles.onlineDot} /> : null}
-        <Text style={styles.message} numberOfLines={2}>
-          {item.message}
-        </Text>
+      <View style={styles.previewBox}>
+        <View style={styles.messageRow}>
+          {item.isOpen ? <View style={styles.onlineDot} /> : null}
+          <Text style={styles.message} numberOfLines={2}>
+            {item.preview}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.tapHint}>Open conversation</Text>
+        <AppIcon definition={chevronRightIconDefinition} size={14} color="#C9A86A" strokeWidth={2} />
       </View>
     </Pressable>
   );

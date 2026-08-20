@@ -3,6 +3,8 @@ import { AppError } from "../../../core/errors/AppError";
 import { mapAxiosError } from "../../../core/errors/errorMapper";
 import { clearAuthTokens } from "../../../core/storage/secureStorage";
 import { disconnectNotificationHub } from "../../../core/realtime/notificationHub";
+import { disconnectPaymentHub } from "../../../core/realtime/paymentHub";
+import { disconnectProjectChatHub } from "../../../core/realtime/projectChatHub";
 import {
   changePasswordApi,
   forgotPasswordApi,
@@ -119,6 +121,8 @@ export function useChangePasswordAction() {
     },
     onSuccess: async () => {
       await disconnectNotificationHub();
+      await disconnectPaymentHub();
+      await disconnectProjectChatHub();
       await clearAuthTokens();
       setUser(null);
     },
@@ -138,6 +142,8 @@ export function useLogoutAction() {
     },
     onSettled: async () => {
       await disconnectNotificationHub();
+      await disconnectPaymentHub();
+      await disconnectProjectChatHub();
       await clearAuthTokens();
       setUser(null);
     },

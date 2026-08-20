@@ -10,6 +10,11 @@ import {
   NotificationListItem,
   RealtimeNotificationPayloadDto,
 } from "../models/notification.model";
+import {
+  normalizeNotificationMetadata,
+  parseChatTitleFromMessage,
+  readMetadataString,
+} from "./notification.metadata";
 
 const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   order: "Order",
@@ -117,14 +122,66 @@ export function formatNotificationTime(isoDate: string): string {
   return date.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
 }
 
+function buildChatNotificationPresentation(
+  message: string,
+  metadata: Record<string, unknown> | undefined,
+  projectName?: string,
+): Pick<NotificationListItem, "description" | "projectLabel" | "previewText"> {
+  const chatTitle = parseChatTitleFromMessage(message);
+  const contentPreview = readMetadataString(metadata, "contentPreview");
+  const metadataProjectName = readMetadataString(metadata, "projectName");
+  const resolvedProjectName = metadataProjectName ?? projectName;
+
+  const projectLabel =
+    resolvedProjectName && chatTitle
+      ? `${resolvedProjectName} · ${chatTitle}`
+      : resolvedProjectName ?? chatTitle;
+
+  if (contentPreview) {
+    return {
+      projectLabel,
+      previewText: contentPreview,
+      description: contentPreview,
+    };
+  }
+
+  return {
+    projectLabel,
+    previewText: message,
+    description: message,
+  };
+}
+
+export function enrichNotificationWithProjectName(
+  item: NotificationListItem,
+  projectNameById: Map<string, string>,
+): NotificationListItem {
+  if (item.referenceType !== "PROJECT_CHAT_MESSAGE") {
+    return item;
+  }
+
+  const projectName = item.projectId ? projectNameById.get(item.projectId) : undefined;
+  const presentation = buildChatNotificationPresentation(item.description, item.metadata, projectName);
+
+  return {
+    ...item,
+    ...presentation,
+  };
+}
+
 export function mapNotificationDtoToListItem(dto: NotificationDto): NotificationListItem {
   const visual = resolveNotificationVisual(dto.notificationType, dto.referenceType);
   const category = resolveNotificationCategory(dto.notificationType, dto.referenceType);
+  const metadata = normalizeNotificationMetadata(dto.metadata);
+  const isChatNotification = dto.referenceType === "PROJECT_CHAT_MESSAGE";
+  const chatPresentation = isChatNotification ? buildChatNotificationPresentation(dto.message, metadata) : null;
 
   return {
     id: dto.notificationId,
     title: dto.title,
-    description: dto.message,
+    description: chatPresentation?.description ?? dto.message,
+    projectLabel: chatPresentation?.projectLabel,
+    previewText: chatPresentation?.previewText,
     timeLabel: formatNotificationTime(dto.createdAt),
     iconDefinition: visual.iconDefinition,
     iconColor: visual.iconColor,
@@ -136,6 +193,7 @@ export function mapNotificationDtoToListItem(dto: NotificationDto): Notification
     referenceType: dto.referenceType,
     referenceId: dto.referenceId,
     projectId: dto.projectId,
+    metadata,
   };
 }
 
@@ -146,11 +204,18 @@ export function mapRealtimePayloadToListItem(payload: RealtimeNotificationPayloa
 
   const visual = resolveNotificationVisual(payload.notificationType, payload.referenceType);
   const category = resolveNotificationCategory(payload.notificationType, payload.referenceType);
+  const metadata = normalizeNotificationMetadata(payload.metadata);
+  const isChatNotification = payload.referenceType === "PROJECT_CHAT_MESSAGE";
+  const chatPresentation = isChatNotification
+    ? buildChatNotificationPresentation(payload.message, metadata)
+    : null;
 
   return {
     id: payload.notificationId,
     title: payload.title,
-    description: payload.message,
+    description: chatPresentation?.description ?? payload.message,
+    projectLabel: chatPresentation?.projectLabel,
+    previewText: chatPresentation?.previewText,
     timeLabel: formatNotificationTime(payload.createdAt || payload.occurredAt),
     iconDefinition: visual.iconDefinition,
     iconColor: visual.iconColor,
@@ -162,6 +227,6 @@ export function mapRealtimePayloadToListItem(payload: RealtimeNotificationPayloa
     referenceType: payload.referenceType,
     referenceId: payload.referenceId,
     projectId: payload.projectId,
-    metadata: payload.metadata,
+    metadata,
   };
 }
