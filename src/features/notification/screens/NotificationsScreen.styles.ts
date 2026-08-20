@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 
 export const styles = StyleSheet.create({
   screen: {
@@ -12,7 +12,7 @@ export const styles = StyleSheet.create({
     backgroundColor: "#3A3330",
     paddingHorizontal: 19,
     paddingTop: 38,
-    paddingBottom: 14,
+    paddingBottom: 16,
   },
   headerTopRow: {
     alignItems: "flex-start",
@@ -37,7 +37,7 @@ export const styles = StyleSheet.create({
   brand: {
     color: "rgba(255,255,255,0.55)",
     fontSize: 10,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   title: {
     color: "#FFFFFF",
@@ -66,31 +66,55 @@ export const styles = StyleSheet.create({
   newText: {
     color: "#DCC89A",
     fontSize: 10,
+    fontWeight: "500",
   },
   filterRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
-    marginTop: 11,
+    marginTop: 14,
   },
   filterChip: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderColor: "rgba(255,255,255,0.08)",
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
   },
   filterChipActive: {
     backgroundColor: "#C9A86A",
+    borderColor: "#C9A86A",
   },
   filterChipText: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(255,255,255,0.65)",
     fontSize: 10,
+    fontWeight: "500",
   },
   filterChipTextActive: {
     color: "#FFFFFF",
+    fontWeight: "600",
   },
   content: {
     paddingHorizontal: 19,
-    paddingTop: 12,
+    paddingTop: 14,
+  },
+  listMetaRow: {
+    gap: 4,
+    marginBottom: 10,
+  },
+  listMetaText: {
+    color: "rgba(122,111,104,0.75)",
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  swipeHintText: {
+    color: "rgba(122,111,104,0.55)",
+    fontSize: 9,
+    letterSpacing: 0.2,
+  },
+  swipeArea: {
+    minHeight: 320,
   },
   centerState: {
     alignItems: "center",
@@ -115,51 +139,116 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
-  loadMoreState: {
+  paginationBar: {
     alignItems: "center",
-    paddingVertical: 16,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 8,
+    marginTop: 6,
+    paddingVertical: 4,
+  },
+  paginationButton: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(60,51,48,0.1)",
+    borderRadius: 999,
+    borderWidth: 1,
+    minWidth: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: "rgba(255,255,255,0.65)",
+    borderColor: "rgba(60,51,48,0.05)",
+  },
+  paginationButtonText: {
+    color: "#3A3330",
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  paginationButtonTextDisabled: {
+    color: "rgba(122,111,104,0.45)",
+  },
+  paginationCenter: {
+    alignItems: "center",
+    flex: 1,
+    gap: 4,
+    justifyContent: "center",
+  },
+  paginationLabel: {
+    color: "#7A6F68",
+    fontSize: 11,
+    fontWeight: "500",
   },
   card: {
     backgroundColor: "#FFFFFF",
-    borderColor: "rgba(60,51,48,0.05)",
-    borderRadius: 15,
+    borderColor: "rgba(60,51,48,0.06)",
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: "row",
-    marginBottom: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    marginBottom: 10,
+    overflow: "hidden",
+    paddingHorizontal: 13,
+    paddingVertical: 13,
+    position: "relative",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#3A3330",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   cardUnread: {
-    borderColor: "rgba(201,168,106,0.42)",
+    borderColor: "rgba(201,168,106,0.35)",
+    backgroundColor: "#FFFCF7",
+  },
+  cardUnreadAccent: {
+    backgroundColor: "#C9A86A",
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    top: 0,
+    width: 3,
   },
   cardIconWrap: {
     alignItems: "center",
-    borderRadius: 15,
-    height: 30,
+    borderRadius: 14,
+    height: 36,
     justifyContent: "center",
-    marginTop: 2,
-    width: 30,
+    marginTop: 1,
+    width: 36,
   },
   cardContent: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 11,
     marginRight: 8,
   },
   cardTitleRow: {
     alignItems: "flex-start",
     flexDirection: "row",
-    gap: 6,
+    gap: 8,
     justifyContent: "space-between",
   },
   cardTitle: {
     color: "#2C2420",
     flex: 1,
     fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  cardTitleUnread: {
+    fontWeight: "700",
   },
   categoryBadge: {
     borderRadius: 999,
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
   },
   categoryBadge_order: {
     backgroundColor: "rgba(201,168,106,0.18)",
@@ -187,20 +276,31 @@ export const styles = StyleSheet.create({
   cardDescription: {
     color: "#7A6F68",
     fontSize: 11,
-    lineHeight: 18,
-    marginTop: 2,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  cardProjectLabel: {
+    color: "#3A3330",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    marginTop: 4,
+  },
+  cardNavigatingIndicator: {
+    marginTop: 6,
   },
   cardTime: {
     color: "rgba(122,111,104,0.55)",
     fontSize: 10,
-    marginTop: 6,
+    letterSpacing: 0.4,
+    marginTop: 8,
   },
   unreadDot: {
     backgroundColor: "#C9A86A",
-    borderRadius: 3,
-    height: 6,
+    borderRadius: 4,
+    height: 7,
     marginTop: 6,
-    width: 6,
+    width: 7,
   },
   bottomNav: {
     backgroundColor: "rgba(255,255,255,0.95)",

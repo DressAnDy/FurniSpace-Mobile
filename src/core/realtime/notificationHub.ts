@@ -2,11 +2,15 @@ import {
   HubConnection,
   HubConnectionBuilder,
   HubConnectionState,
-  LogLevel,
 } from "@microsoft/signalr";
-import { env } from "../config/env";
 import { getAccessToken } from "../storage/secureStorage";
 import { RealtimeNotificationPayloadDto } from "../../features/notification/models/notification.model";
+import {
+  getHubUrl,
+  getSignalRTransportOptions,
+  safeHubStart,
+  signalRLogLevel,
+} from "./signalr.config";
 
 export const NOTIFICATION_HUB_EVENTS = [
   "project.request.submitted",
@@ -54,11 +58,11 @@ export const NOTIFICATION_HUB_EVENTS = [
 type NotificationEventHandler = (payload: RealtimeNotificationPayloadDto) => void;
 
 let connection: HubConnection | null = null;
-let connectTask: Promise<void> | null = null;
+let connectTask: Promise<boolean> | null = null;
 const handlers = new Set<NotificationEventHandler>();
 
 function getNotificationHubUrl(): string {
-  return `${env.apiUrl.replace(/\/$/, "")}/hubs/notifications`;
+  return getHubUrl("/hubs/notifications");
 }
 
 function attachEventHandlers(hub: HubConnection): void {
@@ -78,7 +82,7 @@ export function subscribeNotificationHub(handler: NotificationEventHandler): () 
   };
 }
 
-export async function connectNotificationHub(): Promise<void> {
+export async function connectNotificationHub(): Promise<boolean> {
   if (connectTask) {
     return connectTask;
   }
@@ -86,15 +90,15 @@ export async function connectNotificationHub(): Promise<void> {
   connectTask = (async () => {
     const accessToken = await getAccessToken();
     if (!accessToken) {
-      return;
+      return false;
     }
 
     if (connection && connection.state === HubConnectionState.Connected) {
-      return;
+      return true;
     }
 
     if (connection && connection.state === HubConnectionState.Connecting) {
-      return;
+      return false;
     }
 
     if (connection) {
@@ -103,16 +107,14 @@ export async function connectNotificationHub(): Promise<void> {
     }
 
     const hub = new HubConnectionBuilder()
-      .withUrl(getNotificationHubUrl(), {
-        accessTokenFactory: async () => (await getAccessToken()) ?? "",
-      })
-      .withAutomaticReconnect()
-      .configureLogging(__DEV__ ? LogLevel.Information : LogLevel.Warning)
+      .withUrl(getNotificationHubUrl(), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(signalRLogLevel)
       .build();
 
     attachEventHandlers(hub);
     connection = hub;
-    await hub.start();
+    return safeHubStart(() => hub.start());
   })().finally(() => {
     connectTask = null;
   });

@@ -16,7 +16,8 @@
       "package": "com.anonymous.furnispacemobile",
       "permissions": [
         "android.permission.POST_NOTIFICATIONS"
-      ]
+      ],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       [

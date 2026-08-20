@@ -3,6 +3,7 @@ type AppEnv = {
   authApiUrl: string;
   wsUrl: string;
   timeoutMs: number;
+  activeProjectId?: string;
 };
 
 const DEFAULT_TIMEOUT_MS = 15000;
@@ -23,4 +24,5 @@ export const env: AppEnv = {
   authApiUrl: readRequiredEnv("EXPO_PUBLIC_AUTH_API_URL", "VITE_AUTH_API_URL"),
   wsUrl: readRequiredEnv("EXPO_PUBLIC_WS_URL", "VITE_WS_URL"),
   timeoutMs: Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
+  activeProjectId: process.env.EXPO_PUBLIC_ACTIVE_PROJECT_ID?.trim() || undefined,
 };

@@ -23,6 +23,7 @@ export type NotificationDto = {
   isRead: boolean;
   createdAt: string;
   readAt: string | null;
+  metadata?: unknown;
 };
 
 export type NotificationListResponseDto = {
@@ -67,6 +68,8 @@ export type NotificationListItem = {
   id: string;
   title: string;
   description: string;
+  projectLabel?: string;
+  previewText?: string;
   timeLabel: string;
   iconDefinition: IconDefinition;
   iconColor: string;

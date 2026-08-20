@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
@@ -12,11 +13,14 @@ import {
   arrowRightIconDefinition,
   chevronRightIconDefinition,
 } from "../../../icons/navigation/definitions";
+import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { AppBottomNav } from "../../../shared/components/AppBottomNav";
 import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { useAuthStore } from "../../auth/store/auth.store";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
+import { useActiveProjectSummary } from "../../project/hooks/useProjects";
 import { styles } from "./HomeScreen.styles";
 
 type UpdateItem = {
@@ -55,6 +59,11 @@ export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const alertsBadge = useNotificationBadgeLabel();
   const { scrollPaddingBottom } = useBottomNavMetrics();
+  const user = useAuthStore((state) => state.user);
+  const { activeProject, projectsQuery } = useActiveProjectSummary();
+
+  const greeting = getGreetingLabel();
+  const userName = user?.fullName ?? "Guest";
 
   return (
     <View style={styles.screen}>
@@ -65,8 +74,8 @@ export function HomeScreen(): React.JSX.Element {
         <View style={styles.headerWrap}>
           <View style={styles.headerTopRow}>
             <View>
-              <Text style={styles.greetingLabel}>GOOD AFTERNOON</Text>
-              <Text style={styles.userName}>Sarah Anderson</Text>
+              <Text style={styles.greetingLabel}>{greeting}</Text>
+              <Text style={styles.userName}>{userName}</Text>
             </View>
 
             <Pressable style={styles.notifyWrap} onPress={() => navigation.navigate("Notifications")}>
@@ -88,54 +97,97 @@ export function HomeScreen(): React.JSX.Element {
           </View>
         </View>
 
-        <View style={styles.projectCard}>
-          <View style={styles.projectCardTopBorder} />
-          <View style={styles.projectCardBody}>
-            <View style={styles.projectHeadRow}>
-              <View>
-                <Text style={styles.projectTitle}>Urban Coffee House</Text>
-                <Text style={styles.projectCode}>Project #FS-2024-089</Text>
-              </View>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>IN PROGRESS</Text>
-              </View>
+        {projectsQuery.isLoading ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <ActivityIndicator color="#C9A86A" />
             </View>
-
-            <View style={styles.peopleRow}>
-              <View style={styles.avatarRow}>
-                <View style={[styles.avatarCircle, styles.avatarDark]}>
-                  <Text style={styles.avatarText}>MC</Text>
-                </View>
-                <View style={[styles.avatarCircle, styles.avatarGold, styles.avatarOverlap]}>
-                  <Text style={styles.avatarText}>JL</Text>
-                </View>
-              </View>
-              <View>
-                <Text style={styles.peopleName}>Marcus Chen + Jennifer Liu</Text>
-                <Text style={styles.peopleRole}>Designer · Sales Manager</Text>
-              </View>
-            </View>
-
-            <View style={styles.stageCard}>
-              <Text style={styles.stageLabel}>CURRENT STAGE</Text>
-              <View style={styles.stageTitleRow}>
-                <View style={styles.stageDot} />
-                <Text style={styles.stageTitle}>Designer Working</Text>
-              </View>
-              <Text style={styles.stageDescription}>Next: Proposal Ready · Est. Jun 28</Text>
-            </View>
-
-            <Pressable style={styles.projectButton}>
-              <Text style={styles.projectButtonText}>View Project Details</Text>
-              <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
-            </Pressable>
           </View>
-        </View>
+        ) : projectsQuery.isError ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <Text style={styles.projectStateText}>
+                {getErrorMessage(projectsQuery.error, "Unable to load your projects.")}
+              </Text>
+            </View>
+          </View>
+        ) : !activeProject ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <Text style={styles.projectStateText}>No projects yet. Submit your first project to get started.</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.projectCard}>
+            <View style={styles.projectCardTopBorder} />
+            <View style={styles.projectCardBody}>
+              <View style={styles.projectHeadRow}>
+                <View>
+                  <Text style={styles.projectTitle}>{activeProject.projectName}</Text>
+                  <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
+                </View>
+                <View style={styles.statusBadge}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText}>{activeProject.statusLabel.toUpperCase()}</Text>
+                </View>
+              </View>
+
+              <View style={styles.peopleRow}>
+                <View style={styles.avatarRow}>
+                  {activeProject.hasDesignerAssigned ? (
+                    <View style={[styles.avatarCircle, styles.avatarDark]}>
+                      <Text style={styles.avatarText}>DS</Text>
+                    </View>
+                  ) : null}
+                  {activeProject.hasSalesAssigned ? (
+                    <View
+                      style={[
+                        styles.avatarCircle,
+                        styles.avatarGold,
+                        activeProject.hasDesignerAssigned ? styles.avatarOverlap : null,
+                      ]}
+                    >
+                      <Text style={styles.avatarText}>SL</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View>
+                  <Text style={styles.peopleName}>
+                    {activeProject.hasSalesAssigned || activeProject.hasDesignerAssigned
+                      ? [activeProject.hasDesignerAssigned ? "Designer" : null, activeProject.hasSalesAssigned ? "Sales" : null]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "Waiting for team assignment"}
+                  </Text>
+                  <Text style={styles.peopleRole}>{activeProject.businessType}</Text>
+                </View>
+              </View>
+
+              <View style={styles.stageCard}>
+                <Text style={styles.stageLabel}>CURRENT STAGE</Text>
+                <View style={styles.stageTitleRow}>
+                  <View style={styles.stageDot} />
+                  <Text style={styles.stageTitle}>{activeProject.statusLabel}</Text>
+                </View>
+                <Text style={styles.stageDescription}>
+                  Submitted {new Date(activeProject.submittedAt).toLocaleDateString()}
+                </Text>
+              </View>
+
+              <Pressable
+                style={styles.projectButton}
+                onPress={() => navigation.navigate("Tracking", { projectId: activeProject.projectId })}
+              >
+                <Text style={styles.projectButtonText}>View Project Details</Text>
+                <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
+              </Pressable>
+            </View>
+          </View>
+        )}
 
         <View style={styles.updateHeader}>
           <Text style={styles.updateTitle}>Recent Updates</Text>
-          <Pressable style={styles.seeAllButton}>
+          <Pressable style={styles.seeAllButton} onPress={() => navigation.navigate("Notifications")}>
             <Text style={styles.seeAllText}>See all</Text>
             <AppIcon definition={chevronRightIconDefinition} size={11} color="#C9A86A" strokeWidth={2} />
           </Pressable>
@@ -161,4 +213,15 @@ export function HomeScreen(): React.JSX.Element {
       <AppBottomNav activeTab="home" />
     </View>
   );
+}
+
+function getGreetingLabel(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return "GOOD MORNING";
+  }
+  if (hour < 18) {
+    return "GOOD AFTERNOON";
+  }
+  return "GOOD EVENING";
 }

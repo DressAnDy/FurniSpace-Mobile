@@ -13,6 +13,7 @@ import { HomeScreen } from "../../features/home/screens/HomeScreen";
 import { NotificationsScreen } from "../../features/notification/screens/NotificationsScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ProjectTrackingScreen } from "../../features/project/screens/ProjectTrackingScreen";
+import { ProjectChatStatus, ProjectChatType } from "../../features/communication/models/chat.model";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
@@ -20,13 +21,20 @@ export type RootStackParamList = {
   Home: undefined;
   ForgotPassword: undefined;
   Login: undefined;
-  MessageChat: undefined;
-  Messages: undefined;
+  MessageChat: {
+    chatId: string;
+    projectId: string;
+    title: string;
+    staffName: string;
+    chatType: ProjectChatType;
+    status: ProjectChatStatus;
+  };
+  Messages: { projectId?: string } | undefined;
   Notifications: undefined;
   Profile: undefined;
   Register: undefined;
   ResetPassword: { email?: string; token?: string } | undefined;
-  Tracking: undefined;
+  Tracking: { projectId?: string } | undefined;
   VerifyEmail: { email?: string } | undefined;
 };
 

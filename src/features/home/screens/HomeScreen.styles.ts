@@ -94,6 +94,17 @@ export const styles = StyleSheet.create({
   projectCardBody: {
     padding: 18,
   },
+  projectStateBody: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 140,
+  },
+  projectStateText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+  },
   projectHeadRow: {
     flexDirection: "row",
     justifyContent: "space-between",

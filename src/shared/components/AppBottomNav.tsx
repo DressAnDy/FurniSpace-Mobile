@@ -8,6 +8,7 @@ import { chatIconDefinition } from "../../icons/communication/definitions";
 import { dashboardIconDefinition, homeIconDefinition } from "../../icons/navigation/definitions";
 import type { IconDefinition } from "../../icons/types";
 import type { RootStackParamList } from "../../app/navigation/RootNavigator";
+import { useProjectStore } from "../../features/project/store/project.store";
 import { AppIcon } from "./AppIcon";
 import { BASE_NAV_HEIGHT, styles } from "./AppBottomNav.styles";
 
@@ -19,9 +20,10 @@ type AppBottomNavProps = {
   variant?: "fixed" | "inline";
 };
 
-export function AppBottomNav({ activeTab, chatBadge = "3", variant = "fixed" }: AppBottomNavProps): React.JSX.Element {
+export function AppBottomNav({ activeTab, chatBadge, variant = "fixed" }: AppBottomNavProps): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const bottomInset = Math.max(insets.bottom, 8);
   const containerStyle: ViewStyle[] = [
     styles.bottomNav,
@@ -48,7 +50,7 @@ export function AppBottomNav({ activeTab, chatBadge = "3", variant = "fixed" }: 
         badge={chatBadge}
         iconDefinition={chatIconDefinition}
         label="Chat"
-        onPress={() => navigation.navigate("Messages")}
+        onPress={() => navigation.navigate("Messages", activeProjectId ? { projectId: activeProjectId } : undefined)}
       />
       <BottomNavItem
         active={activeTab === "profile"}

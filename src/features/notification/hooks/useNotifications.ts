@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { NotificationFilter } from "../models/notification.model";
@@ -10,35 +10,30 @@ import {
 } from "../services/notification.api";
 import { mapNotificationDtoToListItem } from "../utils/notification.mapper";
 
-function isCategoryFilter(filter: NotificationFilter): filter is Exclude<NotificationFilter, "all"> {
-  return filter !== "all";
-}
+export const NOTIFICATIONS_PAGE_SIZE = 6;
 
-export function useNotificationsQuery(filter: NotificationFilter) {
+export function useNotificationsQuery(filter: NotificationFilter, page: number) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
 
-  return useInfiniteQuery({
-    queryKey: queryKeys.notification.list(filter),
+  return useQuery({
+    queryKey: [...queryKeys.notification.list(filter), page],
     enabled: isLoggedIn,
-    initialPageParam: 1,
-    queryFn: async ({ pageParam }) => {
+    queryFn: async () => {
       const response = await getNotificationsApi({
-        page: pageParam,
-        limit: 20,
+        page,
+        limit: NOTIFICATIONS_PAGE_SIZE,
       });
 
       const items = response.items
         .map(mapNotificationDtoToListItem)
-        .filter((item) => !isCategoryFilter(filter) || item.category === filter);
+        .filter((item) => filter === "all" || item.category === filter);
 
       return {
-        ...response,
         items,
+        page: response.page,
+        limit: response.limit,
+        total: response.total,
       };
-    },
-    getNextPageParam: (lastPage) => {
-      const loadedCount = lastPage.page * lastPage.limit;
-      return loadedCount < lastPage.total ? lastPage.page + 1 : undefined;
     },
   });
 }
