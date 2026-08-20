@@ -1,6 +1,7 @@
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { NotificationListItem } from "../models/notification.model";
+import { readMetadataString } from "./notification.metadata";
 import { resolveChatNotificationTarget } from "./notification.chatResolve";
 
 type NavigateFromNotificationOptions = {
@@ -38,13 +39,39 @@ export async function navigateFromNotification(
     return;
   }
 
-  if (item.referenceType === "QUOTATION" || item.referenceType === "ORDER" || item.referenceType === "PAYMENT") {
+  if (item.referenceType === "PAYMENT") {
+    const paymentId = readMetadataString(item.metadata, "paymentId") ?? item.referenceId ?? undefined;
+    const orderId = readMetadataString(item.metadata, "orderId");
+    const projectId = item.projectId ?? readMetadataString(item.metadata, "projectId");
+
+    if (projectId) {
+      options?.setActiveProjectId?.(projectId);
+    }
+
+    if (paymentId || orderId) {
+      navigation.navigate("PaymentMethod", {
+        paymentId: paymentId ?? undefined,
+        orderId: orderId ?? undefined,
+        projectId: projectId ?? undefined,
+      });
+      return;
+    }
+  }
+
+  if (item.referenceType === "QUOTATION" || item.referenceType === "ORDER") {
+    if (item.projectId) {
+      options?.setActiveProjectId?.(item.projectId);
+      navigation.navigate("Tracking", { projectId: item.projectId });
+      return;
+    }
+
     navigation.navigate("Tracking");
     return;
   }
 
   if (item.projectId) {
-    navigation.navigate("Tracking");
+    options?.setActiveProjectId?.(item.projectId);
+    navigation.navigate("Tracking", { projectId: item.projectId });
     return;
   }
 

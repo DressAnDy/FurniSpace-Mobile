@@ -29,4 +29,17 @@ export const endpoints = {
     updateTargetDate: (projectId: string) => `/projects/${projectId}/target-completion-date`,
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
   },
+  orders: {
+    createDeposit: (orderId: string) => `/orders/${orderId}/payments/deposit`,
+  },
+  payments: {
+    list: "/api/payments",
+    detail: (paymentId: string) => `/api/payments/${paymentId}`,
+    statusByCode: (paymentCode: string) => `/api/payments/code/${paymentCode}/status`,
+    createTransaction: (paymentId: string) => `/api/payments/${paymentId}/transactions`,
+    activeTransaction: (paymentId: string) => `/api/payments/${paymentId}/transactions/active`,
+    cancelTransaction: (paymentId: string, transactionId: string) =>
+      `/api/payments/${paymentId}/transactions/${transactionId}/cancel`,
+    payOsPaymentLink: (paymentId: string) => `/api/payments/${paymentId}/payos/payment-link`,
+  },
 } as const;

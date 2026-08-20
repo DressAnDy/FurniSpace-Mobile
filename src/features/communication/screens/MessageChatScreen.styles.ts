@@ -238,18 +238,23 @@ export const styles = StyleSheet.create({
   },
   emptyThreadState: {
     alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 32,
     paddingVertical: 40,
-    transform: [{ scaleY: -1 }],
   },
   emptyThreadTitle: {
     color: "#2C2420",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
+    textAlign: "center",
   },
   emptyThreadText: {
     color: "#7A6F68",
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+    textAlign: "center",
   },
   errorText: {
     color: "#7A6F68",

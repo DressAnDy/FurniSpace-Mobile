@@ -15,7 +15,21 @@ export const queryKeys = {
     list: (query: ProjectListQueryKey) => ["project", "list", query] as const,
     detail: (projectId: string) => ["project", "detail", projectId] as const,
   },
+  payment: {
+    detail: (paymentId: string) => ["payment", "detail", paymentId] as const,
+    list: (query: PaymentListQueryKey) => ["payment", "list", query] as const,
+    statusByCode: (paymentCode: string) => ["payment", "status-by-code", paymentCode] as const,
+  },
 } as const;
+
+type PaymentListQueryKey = {
+  projectId?: string;
+  orderId?: string;
+  status?: string;
+  paymentType?: string;
+  page?: number;
+  limit?: number;
+};
 
 type ProjectListQueryKey = {
   status?: string;

@@ -25,7 +25,8 @@
         {
           "color": "#C9A86A"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "web": {}
   }

@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bellIconDefinition } from "../../../icons/communication/definitions";
 import {
   arrowRightIconDefinition,
@@ -35,8 +36,8 @@ const updates: UpdateItem[] = [
   {
     id: "u1",
     title: "3D Proposal Ready for Review",
-    description: "Marcus uploaded the initial design concept - v2.1 available now",
-    time: "2 hours ago",
+    description: "Marcus uploaded the initial design concept — v2.1 available now",
+    time: "2h ago",
     tone: "primary",
   },
   {
@@ -57,6 +58,7 @@ const updates: UpdateItem[] = [
 
 export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const alertsBadge = useNotificationBadgeLabel();
   const { scrollPaddingBottom } = useBottomNavMetrics();
   const user = useAuthStore((state) => state.user);
@@ -64,6 +66,14 @@ export function HomeScreen(): React.JSX.Element {
 
   const greeting = getGreetingLabel();
   const userName = user?.fullName ?? "Guest";
+  const firstName = userName.trim().split(/\s+/)[0] || userName;
+
+  const teamLabel =
+    activeProject && (activeProject.hasSalesAssigned || activeProject.hasDesignerAssigned)
+      ? [activeProject.hasDesignerAssigned ? "Designer" : null, activeProject.hasSalesAssigned ? "Sales" : null]
+          .filter(Boolean)
+          .join(" · ")
+      : "Waiting for team assignment";
 
   return (
     <View style={styles.screen}>
@@ -71,16 +81,25 @@ export function HomeScreen(): React.JSX.Element {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerWrap}>
+        <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 12) + 16 }]}>
+          <View style={styles.headerDecorLarge} />
+          <View style={styles.headerDecorMedium} />
+          <View style={styles.headerDecorSmall} />
+
           <View style={styles.headerTopRow}>
-            <View>
+            <View style={styles.headerIntro}>
+              <Text style={styles.brandMark}>FURNISPACE</Text>
               <Text style={styles.greetingLabel}>{greeting}</Text>
-              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.userName}>{firstName}</Text>
+              <Text style={styles.headerSubtitle}>Track progress and stay in sync with your team</Text>
             </View>
 
-            <Pressable style={styles.notifyWrap} onPress={() => navigation.navigate("Notifications")}>
+            <Pressable
+              style={({ pressed }) => [styles.notifyWrap, pressed ? styles.notifyPressed : null]}
+              onPress={() => navigation.navigate("Notifications")}
+            >
               <View style={styles.notifyIcon}>
-                <AppIcon definition={bellIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
+                <AppIcon definition={bellIconDefinition} size={16} color="#FFFFFF" strokeWidth={1.7} />
               </View>
               {alertsBadge ? (
                 <View style={styles.notifyBadge}>
@@ -92,7 +111,10 @@ export function HomeScreen(): React.JSX.Element {
 
           <View style={styles.activeProjectRow}>
             <View style={styles.line} />
-            <Text style={styles.activeProjectText}>ACTIVE PROJECT</Text>
+            <View style={styles.activeProjectPill}>
+              <View style={styles.activeProjectDot} />
+              <Text style={styles.activeProjectText}>ACTIVE PROJECT</Text>
+            </View>
             <View style={styles.line} />
           </View>
         </View>
@@ -101,6 +123,7 @@ export function HomeScreen(): React.JSX.Element {
           <View style={styles.projectCard}>
             <View style={[styles.projectCardBody, styles.projectStateBody]}>
               <ActivityIndicator color="#C9A86A" />
+              <Text style={styles.projectStateHint}>Loading your project…</Text>
             </View>
           </View>
         ) : projectsQuery.isError ? (
@@ -114,21 +137,28 @@ export function HomeScreen(): React.JSX.Element {
         ) : !activeProject ? (
           <View style={styles.projectCard}>
             <View style={[styles.projectCardBody, styles.projectStateBody]}>
-              <Text style={styles.projectStateText}>No projects yet. Submit your first project to get started.</Text>
+              <Text style={styles.projectStateTitle}>No project yet</Text>
+              <Text style={styles.projectStateText}>
+                Submit your first project to start tracking design progress here.
+              </Text>
             </View>
           </View>
         ) : (
           <View style={styles.projectCard}>
-            <View style={styles.projectCardTopBorder} />
+            <View style={styles.projectCardAccent} />
             <View style={styles.projectCardBody}>
               <View style={styles.projectHeadRow}>
-                <View>
-                  <Text style={styles.projectTitle}>{activeProject.projectName}</Text>
+                <View style={styles.projectHeadCopy}>
+                  <Text style={styles.projectTitle} numberOfLines={2}>
+                    {activeProject.projectName}
+                  </Text>
                   <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
                 </View>
                 <View style={styles.statusBadge}>
                   <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>{activeProject.statusLabel.toUpperCase()}</Text>
+                  <Text style={styles.statusText} numberOfLines={1}>
+                    {activeProject.statusLabel.toUpperCase()}
+                  </Text>
                 </View>
               </View>
 
@@ -149,65 +179,94 @@ export function HomeScreen(): React.JSX.Element {
                     >
                       <Text style={styles.avatarText}>SL</Text>
                     </View>
-                  ) : null}
+                  ) : (
+                    !activeProject.hasDesignerAssigned && (
+                      <View style={[styles.avatarCircle, styles.avatarMuted]}>
+                        <Text style={styles.avatarTextMuted}>?</Text>
+                      </View>
+                    )
+                  )}
                 </View>
-                <View>
-                  <Text style={styles.peopleName}>
-                    {activeProject.hasSalesAssigned || activeProject.hasDesignerAssigned
-                      ? [activeProject.hasDesignerAssigned ? "Designer" : null, activeProject.hasSalesAssigned ? "Sales" : null]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : "Waiting for team assignment"}
-                  </Text>
-                  <Text style={styles.peopleRole}>{activeProject.businessType}</Text>
+                <View style={styles.peopleCopy}>
+                  <Text style={styles.peopleName}>{teamLabel}</Text>
+                  <Text style={styles.peopleRole}>{activeProject.businessType || "Project team"}</Text>
                 </View>
               </View>
 
               <View style={styles.stageCard}>
-                <Text style={styles.stageLabel}>CURRENT STAGE</Text>
+                <View style={styles.stageTopRow}>
+                  <Text style={styles.stageLabel}>CURRENT STAGE</Text>
+                  <Text style={styles.stageDate}>
+                    Submitted {formatSubmittedDate(activeProject.submittedAt)}
+                  </Text>
+                </View>
                 <View style={styles.stageTitleRow}>
                   <View style={styles.stageDot} />
                   <Text style={styles.stageTitle}>{activeProject.statusLabel}</Text>
                 </View>
-                <Text style={styles.stageDescription}>
-                  Submitted {new Date(activeProject.submittedAt).toLocaleDateString()}
-                </Text>
               </View>
 
               <Pressable
-                style={styles.projectButton}
+                style={({ pressed }) => [styles.projectButton, pressed ? styles.projectButtonPressed : null]}
                 onPress={() => navigation.navigate("Tracking", { projectId: activeProject.projectId })}
               >
                 <Text style={styles.projectButtonText}>View Project Details</Text>
-                <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
+                <View style={styles.projectButtonIcon}>
+                  <AppIcon definition={arrowRightIconDefinition} size={14} color="#3A3330" strokeWidth={2} />
+                </View>
               </Pressable>
             </View>
           </View>
         )}
 
-        <View style={styles.updateHeader}>
-          <Text style={styles.updateTitle}>Recent Updates</Text>
-          <Pressable style={styles.seeAllButton} onPress={() => navigation.navigate("Notifications")}>
-            <Text style={styles.seeAllText}>See all</Text>
-            <AppIcon definition={chevronRightIconDefinition} size={11} color="#C9A86A" strokeWidth={2} />
-          </Pressable>
-        </View>
-
-        {updates.map((item) => (
-          <View key={item.id} style={styles.updateCard}>
-            <View
-              style={[
-                styles.updateDot,
-                item.tone === "primary" ? styles.updateDotPrimary : styles.updateDotNeutral,
-              ]}
-            />
-            <View style={styles.updateBody}>
-              <Text style={styles.updateCardTitle}>{item.title}</Text>
-              <Text style={styles.updateCardDescription}>{item.description}</Text>
+        <View style={styles.updateSection}>
+          <View style={styles.updateHeader}>
+            <View style={styles.updateHeaderCopy}>
+              <Text style={styles.updateTitle}>Recent Updates</Text>
+              <Text style={styles.updateSubtitle}>Latest activity on your project</Text>
             </View>
-            <Text style={styles.updateTime}>{item.time}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.seeAllButton, pressed ? styles.seeAllPressed : null]}
+              onPress={() => navigation.navigate("Notifications")}
+            >
+              <Text style={styles.seeAllText}>See all</Text>
+              <AppIcon definition={chevronRightIconDefinition} size={11} color="#A8894E" strokeWidth={2} />
+            </Pressable>
           </View>
-        ))}
+
+          <View style={styles.updateList}>
+            {updates.map((item, index) => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.updateCard,
+                  index === updates.length - 1 ? styles.updateCardLast : null,
+                  item.tone === "primary" ? styles.updateCardPrimary : null,
+                  pressed ? styles.updateCardPressed : null,
+                ]}
+                onPress={() => navigation.navigate("Notifications")}
+              >
+                <View
+                  style={[
+                    styles.updateRail,
+                    item.tone === "primary" ? styles.updateRailPrimary : styles.updateRailNeutral,
+                  ]}
+                />
+                <View style={styles.updateBody}>
+                  <View style={styles.updateTitleRow}>
+                    <Text style={styles.updateCardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.updateTime}>{item.time}</Text>
+                  </View>
+                  <Text style={styles.updateCardDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
       </ScrollView>
 
       <AppBottomNav activeTab="home" />
@@ -224,4 +283,16 @@ function getGreetingLabel(): string {
     return "GOOD AFTERNOON";
   }
   return "GOOD EVENING";
+}
+
+function formatSubmittedDate(value: string): string {
+  try {
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
 }

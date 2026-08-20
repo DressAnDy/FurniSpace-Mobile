@@ -208,6 +208,11 @@ export function MessageChatScreen(): React.JSX.Element {
         <View style={styles.centerState}>
           <Text style={styles.errorText}>{getErrorMessage(messagesQuery.error, "Unable to load messages.")}</Text>
         </View>
+      ) : displayMessages.length === 0 ? (
+        <View style={styles.emptyThreadState}>
+          <Text style={styles.emptyThreadTitle}>Start the conversation</Text>
+          <Text style={styles.emptyThreadText}>Say hello to your team member.</Text>
+        </View>
       ) : (
         <FlatList
           ref={listRef}
@@ -229,12 +234,6 @@ export function MessageChatScreen(): React.JSX.Element {
                 <ActivityIndicator color="#C9A86A" size="small" />
               </View>
             ) : null
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyThreadState}>
-              <Text style={styles.emptyThreadTitle}>Start the conversation</Text>
-              <Text style={styles.emptyThreadText}>Say hello to your team member.</Text>
-            </View>
           }
         />
       )}
