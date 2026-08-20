@@ -13,8 +13,19 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.anonymous.furnispacemobile"
+      "package": "com.anonymous.furnispacemobile",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#C9A86A"
+        }
+      ]
+    ],
     "web": {}
   }
 }

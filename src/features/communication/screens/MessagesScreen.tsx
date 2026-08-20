@@ -1,12 +1,13 @@
 import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
-import { dashboardIconDefinition, homeIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
-import type { IconDefinition } from "../../../icons/types";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { searchIconDefinition } from "../../../icons/navigation/definitions";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
+import { styles } from "./MessagesScreen.styles";
 
 type ConversationItem = {
   id: string;
@@ -55,10 +56,14 @@ const conversations: ConversationItem[] = [
 
 export function MessagesScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.brand}>FURNISPACE</Text>
           <Text style={styles.title}>Messages</Text>
@@ -81,16 +86,7 @@ export function MessagesScreen(): React.JSX.Element {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} onPress={() => navigation.navigate("Home")} />
-        <BottomNavItem
-          label="Tracking"
-          iconDefinition={dashboardIconDefinition}
-          onPress={() => navigation.navigate("Tracking")}
-        />
-        <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} active />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge="5" onPress={() => navigation.navigate("Notifications")} />
-      </View>
+      <AppBottomNav activeTab="chat" />
     </View>
   );
 }
@@ -127,223 +123,3 @@ function ConversationCard({ item, onPress }: { item: ConversationItem; onPress?:
     </Pressable>
   );
 }
-
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-}): React.JSX.Element {
-  return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon definition={iconDefinition} size={19} color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"} strokeWidth={1.9} />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: "#FAF8F5",
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  header: {
-    backgroundColor: "#3A3330",
-    paddingHorizontal: 19,
-    paddingTop: 38,
-    paddingBottom: 14,
-  },
-  brand: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  title: {
-    color: "#FFFFFF",
-    fontFamily: "serif",
-    fontSize: 35,
-    marginTop: 2,
-  },
-  searchBox: {
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 12,
-    flexDirection: "row",
-    height: 30,
-    marginTop: 11,
-    paddingHorizontal: 10,
-  },
-  searchInput: {
-    color: "#FFFFFF",
-    flex: 1,
-    fontSize: 12,
-    marginLeft: 6,
-    paddingVertical: 0,
-  },
-  content: {
-    paddingHorizontal: 19,
-    paddingTop: 12,
-  },
-  sectionLabel: {
-    color: "#7A6F68",
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  card: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "rgba(60,51,48,0.05)",
-    borderRadius: 15,
-    borderWidth: 1,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  leftInfo: {
-    alignItems: "center",
-    flexDirection: "row",
-    flex: 1,
-  },
-  avatar: {
-    alignItems: "center",
-    borderRadius: 16,
-    height: 32,
-    justifyContent: "center",
-    width: 32,
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-  },
-  nameWrap: {
-    marginLeft: 10,
-  },
-  name: {
-    color: "#2C2420",
-    fontSize: 13,
-  },
-  role: {
-    color: "#7A6F68",
-    fontSize: 10,
-    marginTop: 1,
-  },
-  rightInfo: {
-    alignItems: "flex-end",
-    marginLeft: 8,
-  },
-  time: {
-    color: "#7A6F68",
-    fontSize: 10,
-  },
-  unreadBadge: {
-    alignItems: "center",
-    backgroundColor: "#C9A86A",
-    borderRadius: 8,
-    height: 15,
-    justifyContent: "center",
-    marginTop: 6,
-    minWidth: 15,
-    paddingHorizontal: 4,
-  },
-  unreadText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-  },
-  messageRow: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    marginTop: 10,
-    paddingLeft: 38,
-  },
-  onlineDot: {
-    backgroundColor: "#10B981",
-    borderRadius: 3,
-    height: 6,
-    marginRight: 8,
-    marginTop: 6,
-    width: 6,
-  },
-  message: {
-    color: "#7A6F68",
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  footerText: {
-    color: "rgba(122,111,104,0.5)",
-    fontSize: 11,
-    marginTop: 20,
-    textAlign: "center",
-  },
-  bottomNav: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderTopColor: "rgba(60,51,48,0.08)",
-    borderTopWidth: 1,
-    bottom: 0,
-    flexDirection: "row",
-    height: 74,
-    left: 0,
-    position: "absolute",
-    right: 0,
-  },
-  bottomItem: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-  },
-  bottomIconWrap: {
-    position: "relative",
-  },
-  bottomBadge: {
-    alignItems: "center",
-    backgroundColor: "#C9A86A",
-    borderRadius: 8,
-    height: 15,
-    justifyContent: "center",
-    position: "absolute",
-    right: -10,
-    top: -5,
-    width: 15,
-  },
-  bottomBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 9,
-  },
-  bottomLabel: {
-    color: "rgba(122,111,104,0.7)",
-    fontSize: 10,
-    marginTop: 4,
-  },
-  bottomLabelActive: {
-    color: "#C9A86A",
-  },
-  bottomActiveIndicator: {
-    backgroundColor: "#C9A86A",
-    borderRadius: 999,
-    height: 2,
-    position: "absolute",
-    top: 6,
-    width: 20,
-  },
-});
