@@ -1,5 +1,7 @@
 import type { IconDefinition } from "../../../icons/types";
 
+export type NotificationCategory = "order" | "payment" | "project";
+
 export type NotificationReferenceType =
   | "QUOTATION"
   | "ORDER"
@@ -21,6 +23,7 @@ export type NotificationDto = {
   isRead: boolean;
   createdAt: string;
   readAt: string | null;
+  metadata?: unknown;
 };
 
 export type NotificationListResponseDto = {
@@ -59,17 +62,21 @@ export type NotificationListQuery = {
   limit?: number;
 };
 
-export type NotificationFilter = "all" | "unread" | "read";
+export type NotificationFilter = "all" | NotificationCategory;
 
 export type NotificationListItem = {
   id: string;
   title: string;
   description: string;
+  projectLabel?: string;
+  previewText?: string;
   timeLabel: string;
   iconDefinition: IconDefinition;
   iconColor: string;
   iconBackground: string;
   unread: boolean;
+  category: NotificationCategory;
+  categoryLabel: string;
   notificationType: string;
   referenceType: NotificationReferenceType;
   referenceId: string | null;

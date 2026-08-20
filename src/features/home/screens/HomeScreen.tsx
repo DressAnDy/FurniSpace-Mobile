@@ -2,23 +2,26 @@ import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { bellIconDefinition, chatIconDefinition } from "../../../icons/communication/definitions";
-import { userIconDefinition } from "../../../icons/auth/definitions";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { bellIconDefinition } from "../../../icons/communication/definitions";
 import {
   arrowRightIconDefinition,
   chevronRightIconDefinition,
-  dashboardIconDefinition,
-  homeIconDefinition,
 } from "../../../icons/navigation/definitions";
-import type { IconDefinition } from "../../../icons/types";
+import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { useAuthStore } from "../../auth/store/auth.store";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
+import { useActiveProjectSummary } from "../../project/hooks/useProjects";
 import { styles } from "./HomeScreen.styles";
 
 type UpdateItem = {
@@ -33,8 +36,8 @@ const updates: UpdateItem[] = [
   {
     id: "u1",
     title: "3D Proposal Ready for Review",
-    description: "Marcus uploaded the initial design concept - v2.1 available now",
-    time: "2 hours ago",
+    description: "Marcus uploaded the initial design concept — v2.1 available now",
+    time: "2h ago",
     tone: "primary",
   },
   {
@@ -55,21 +58,48 @@ const updates: UpdateItem[] = [
 
 export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
   const alertsBadge = useNotificationBadgeLabel();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
+  const user = useAuthStore((state) => state.user);
+  const { activeProject, projectsQuery } = useActiveProjectSummary();
+
+  const greeting = getGreetingLabel();
+  const userName = user?.fullName ?? "Guest";
+  const firstName = userName.trim().split(/\s+/)[0] || userName;
+
+  const teamLabel =
+    activeProject && (activeProject.hasSalesAssigned || activeProject.hasDesignerAssigned)
+      ? [activeProject.hasDesignerAssigned ? "Designer" : null, activeProject.hasSalesAssigned ? "Sales" : null]
+          .filter(Boolean)
+          .join(" · ")
+      : "Waiting for team assignment";
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerWrap}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.headerWrap, { paddingTop: Math.max(insets.top, 12) + 16 }]}>
+          <View style={styles.headerDecorLarge} />
+          <View style={styles.headerDecorMedium} />
+          <View style={styles.headerDecorSmall} />
+
           <View style={styles.headerTopRow}>
-            <View>
-              <Text style={styles.greetingLabel}>GOOD AFTERNOON</Text>
-              <Text style={styles.userName}>Sarah Anderson</Text>
+            <View style={styles.headerIntro}>
+              <Text style={styles.brandMark}>FURNISPACE</Text>
+              <Text style={styles.greetingLabel}>{greeting}</Text>
+              <Text style={styles.userName}>{firstName}</Text>
+              <Text style={styles.headerSubtitle}>Track progress and stay in sync with your team</Text>
             </View>
 
-            <Pressable style={styles.notifyWrap} onPress={() => navigation.navigate("Notifications")}>
+            <Pressable
+              style={({ pressed }) => [styles.notifyWrap, pressed ? styles.notifyPressed : null]}
+              onPress={() => navigation.navigate("Notifications")}
+            >
               <View style={styles.notifyIcon}>
-                <AppIcon definition={bellIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
+                <AppIcon definition={bellIconDefinition} size={16} color="#FFFFFF" strokeWidth={1.7} />
               </View>
               {alertsBadge ? (
                 <View style={styles.notifyBadge}>
@@ -81,128 +111,188 @@ export function HomeScreen(): React.JSX.Element {
 
           <View style={styles.activeProjectRow}>
             <View style={styles.line} />
-            <Text style={styles.activeProjectText}>ACTIVE PROJECT</Text>
+            <View style={styles.activeProjectPill}>
+              <View style={styles.activeProjectDot} />
+              <Text style={styles.activeProjectText}>ACTIVE PROJECT</Text>
+            </View>
             <View style={styles.line} />
           </View>
         </View>
 
-        <View style={styles.projectCard}>
-          <View style={styles.projectCardTopBorder} />
-          <View style={styles.projectCardBody}>
-            <View style={styles.projectHeadRow}>
-              <View>
-                <Text style={styles.projectTitle}>Urban Coffee House</Text>
-                <Text style={styles.projectCode}>Project #FS-2024-089</Text>
-              </View>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>IN PROGRESS</Text>
-              </View>
+        {projectsQuery.isLoading ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <ActivityIndicator color="#C9A86A" />
+              <Text style={styles.projectStateHint}>Loading your project…</Text>
             </View>
-
-            <View style={styles.peopleRow}>
-              <View style={styles.avatarRow}>
-                <View style={[styles.avatarCircle, styles.avatarDark]}>
-                  <Text style={styles.avatarText}>MC</Text>
+          </View>
+        ) : projectsQuery.isError ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <Text style={styles.projectStateText}>
+                {getErrorMessage(projectsQuery.error, "Unable to load your projects.")}
+              </Text>
+            </View>
+          </View>
+        ) : !activeProject ? (
+          <View style={styles.projectCard}>
+            <View style={[styles.projectCardBody, styles.projectStateBody]}>
+              <Text style={styles.projectStateTitle}>No project yet</Text>
+              <Text style={styles.projectStateText}>
+                Submit your first project to start tracking design progress here.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.projectCard}>
+            <View style={styles.projectCardAccent} />
+            <View style={styles.projectCardBody}>
+              <View style={styles.projectHeadRow}>
+                <View style={styles.projectHeadCopy}>
+                  <Text style={styles.projectTitle} numberOfLines={2}>
+                    {activeProject.projectName}
+                  </Text>
+                  <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
                 </View>
-                <View style={[styles.avatarCircle, styles.avatarGold, styles.avatarOverlap]}>
-                  <Text style={styles.avatarText}>JL</Text>
+                <View style={styles.statusBadge}>
+                  <View style={styles.statusDot} />
+                  <Text style={styles.statusText} numberOfLines={1}>
+                    {activeProject.statusLabel.toUpperCase()}
+                  </Text>
                 </View>
               </View>
-              <View>
-                <Text style={styles.peopleName}>Marcus Chen + Jennifer Liu</Text>
-                <Text style={styles.peopleRole}>Designer · Sales Manager</Text>
-              </View>
-            </View>
 
-            <View style={styles.stageCard}>
-              <Text style={styles.stageLabel}>CURRENT STAGE</Text>
-              <View style={styles.stageTitleRow}>
-                <View style={styles.stageDot} />
-                <Text style={styles.stageTitle}>Designer Working</Text>
+              <View style={styles.peopleRow}>
+                <View style={styles.avatarRow}>
+                  {activeProject.hasDesignerAssigned ? (
+                    <View style={[styles.avatarCircle, styles.avatarDark]}>
+                      <Text style={styles.avatarText}>DS</Text>
+                    </View>
+                  ) : null}
+                  {activeProject.hasSalesAssigned ? (
+                    <View
+                      style={[
+                        styles.avatarCircle,
+                        styles.avatarGold,
+                        activeProject.hasDesignerAssigned ? styles.avatarOverlap : null,
+                      ]}
+                    >
+                      <Text style={styles.avatarText}>SL</Text>
+                    </View>
+                  ) : (
+                    !activeProject.hasDesignerAssigned && (
+                      <View style={[styles.avatarCircle, styles.avatarMuted]}>
+                        <Text style={styles.avatarTextMuted}>?</Text>
+                      </View>
+                    )
+                  )}
+                </View>
+                <View style={styles.peopleCopy}>
+                  <Text style={styles.peopleName}>{teamLabel}</Text>
+                  <Text style={styles.peopleRole}>{activeProject.businessType || "Project team"}</Text>
+                </View>
               </View>
-              <Text style={styles.stageDescription}>Next: Proposal Ready · Est. Jun 28</Text>
-            </View>
 
-            <Pressable style={styles.projectButton}>
-              <Text style={styles.projectButtonText}>View Project Details</Text>
-              <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
+              <View style={styles.stageCard}>
+                <View style={styles.stageTopRow}>
+                  <Text style={styles.stageLabel}>CURRENT STAGE</Text>
+                  <Text style={styles.stageDate}>
+                    Submitted {formatSubmittedDate(activeProject.submittedAt)}
+                  </Text>
+                </View>
+                <View style={styles.stageTitleRow}>
+                  <View style={styles.stageDot} />
+                  <Text style={styles.stageTitle}>{activeProject.statusLabel}</Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={({ pressed }) => [styles.projectButton, pressed ? styles.projectButtonPressed : null]}
+                onPress={() => navigation.navigate("Tracking", { projectId: activeProject.projectId })}
+              >
+                <Text style={styles.projectButtonText}>View Project Details</Text>
+                <View style={styles.projectButtonIcon}>
+                  <AppIcon definition={arrowRightIconDefinition} size={14} color="#3A3330" strokeWidth={2} />
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.updateSection}>
+          <View style={styles.updateHeader}>
+            <View style={styles.updateHeaderCopy}>
+              <Text style={styles.updateTitle}>Recent Updates</Text>
+              <Text style={styles.updateSubtitle}>Latest activity on your project</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.seeAllButton, pressed ? styles.seeAllPressed : null]}
+              onPress={() => navigation.navigate("Notifications")}
+            >
+              <Text style={styles.seeAllText}>See all</Text>
+              <AppIcon definition={chevronRightIconDefinition} size={11} color="#A8894E" strokeWidth={2} />
             </Pressable>
           </View>
-        </View>
 
-        <View style={styles.updateHeader}>
-          <Text style={styles.updateTitle}>Recent Updates</Text>
-          <Pressable style={styles.seeAllButton}>
-            <Text style={styles.seeAllText}>See all</Text>
-            <AppIcon definition={chevronRightIconDefinition} size={11} color="#C9A86A" strokeWidth={2} />
-          </Pressable>
-        </View>
-
-        {updates.map((item) => (
-          <View key={item.id} style={styles.updateCard}>
-            <View
-              style={[
-                styles.updateDot,
-                item.tone === "primary" ? styles.updateDotPrimary : styles.updateDotNeutral,
-              ]}
-            />
-            <View style={styles.updateBody}>
-              <Text style={styles.updateCardTitle}>{item.title}</Text>
-              <Text style={styles.updateCardDescription}>{item.description}</Text>
-            </View>
-            <Text style={styles.updateTime}>{item.time}</Text>
+          <View style={styles.updateList}>
+            {updates.map((item, index) => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.updateCard,
+                  index === updates.length - 1 ? styles.updateCardLast : null,
+                  item.tone === "primary" ? styles.updateCardPrimary : null,
+                  pressed ? styles.updateCardPressed : null,
+                ]}
+                onPress={() => navigation.navigate("Notifications")}
+              >
+                <View
+                  style={[
+                    styles.updateRail,
+                    item.tone === "primary" ? styles.updateRailPrimary : styles.updateRailNeutral,
+                  ]}
+                />
+                <View style={styles.updateBody}>
+                  <View style={styles.updateTitleRow}>
+                    <Text style={styles.updateCardTitle} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.updateTime}>{item.time}</Text>
+                  </View>
+                  <Text style={styles.updateCardDescription} numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
           </View>
-        ))}
+        </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} active />
-        <BottomNavItem
-          label="Tracking"
-          iconDefinition={dashboardIconDefinition}
-          onPress={() => navigation.navigate("Tracking")}
-        />
-        <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
-        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
-      </View>
+      <AppBottomNav activeTab="home" />
     </View>
   );
 }
 
-type BottomNavItemProps = {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-};
+function getGreetingLabel(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) {
+    return "GOOD MORNING";
+  }
+  if (hour < 18) {
+    return "GOOD AFTERNOON";
+  }
+  return "GOOD EVENING";
+}
 
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: BottomNavItemProps): React.JSX.Element {
-  return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon
-          definition={iconDefinition}
-          size={19}
-          color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"}
-          strokeWidth={1.9}
-        />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
-    </Pressable>
-  );
+function formatSubmittedDate(value: string): string {
+  try {
+    return new Date(value).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return value;
+  }
 }

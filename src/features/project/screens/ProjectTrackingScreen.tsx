@@ -2,19 +2,17 @@ import React from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { mailIconDefinition, phoneIconDefinition, chatIconDefinition, bellIconDefinition } from "../../../icons/communication/definitions";
-import { userIconDefinition } from "../../../icons/auth/definitions";
+import { mailIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
 import {
   arrowLeftIconDefinition,
-  dashboardIconDefinition,
-  homeIconDefinition,
 } from "../../../icons/navigation/definitions";
 import { calendarIconDefinition } from "../../../icons/project/definitions";
 import { checkIconDefinition, pendingIconDefinition } from "../../../icons/status/definitions";
 import type { IconDefinition } from "../../../icons/types";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
-import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./ProjectTrackingScreen.styles";
 
 type TimelineStatus = "done" | "active" | "pending";
@@ -90,11 +88,14 @@ const timelineItems: TimelineItem[] = [
 
 export function ProjectTrackingScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const alertsBadge = useNotificationBadgeLabel();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerTitleRow}>
             <Pressable style={styles.backButton} onPress={() => navigation.navigate("Home")}>
@@ -162,18 +163,7 @@ export function ProjectTrackingScreen(): React.JSX.Element {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} onPress={() => navigation.navigate("Home")} />
-        <BottomNavItem label="Tracking" iconDefinition={dashboardIconDefinition} active />
-        <BottomNavItem
-          label="Chat"
-          iconDefinition={chatIconDefinition}
-          badge="3"
-          onPress={() => navigation.navigate("Messages")}
-        />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
-        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} onPress={() => navigation.navigate("Profile")} />
-      </View>
+      <AppBottomNav activeTab="tracking" />
     </View>
   );
 }
@@ -265,34 +255,5 @@ function TimelineRow({ item, isLast }: { item: TimelineItem; isLast: boolean }):
         ) : null}
       </View>
     </View>
-  );
-}
-
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-}): React.JSX.Element {
-  return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon definition={iconDefinition} size={19} color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"} strokeWidth={1.9} />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
-    </Pressable>
   );
 }

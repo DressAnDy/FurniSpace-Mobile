@@ -4,24 +4,25 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { getAccessToken } from "../../../core/storage/secureStorage";
 import { lockIconDefinition, logoutIconDefinition, mailIconDefinition, userIconDefinition } from "../../../icons/auth/definitions";
-import { bellIconDefinition, chatIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
+import { bellIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
-import { dashboardIconDefinition, chevronRightIconDefinition, homeIconDefinition } from "../../../icons/navigation/definitions";
+import { chevronRightIconDefinition } from "../../../icons/navigation/definitions";
 import { projectIconDefinition } from "../../../icons/project/definitions";
 import { helpIconDefinition, locationIconDefinition } from "../../../icons/common/definitions";
 import type { IconDefinition } from "../../../icons/types";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { AppBottomNav } from "../../../shared/components/AppBottomNav";
+import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import { useLogoutAction } from "../../auth/hooks/useAuthActions";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { styles } from "./ProfileScreen.styles";
 
 export function ProfileScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const logoutMutation = useLogoutAction();
   const currentUser = useAuthStore((state) => state.user);
-  const alertsBadge = useNotificationBadgeLabel();
+  const { scrollPaddingBottom } = useBottomNavMetrics();
 
   const handleChangePassword = async () => {
     const accessToken = await getAccessToken();
@@ -37,7 +38,7 @@ export function ProfileScreen(): React.JSX.Element {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollPaddingBottom }]} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.brand}>FURNISPACE</Text>
           <Text style={styles.title}>My Profile</Text>
@@ -116,17 +117,7 @@ export function ProfileScreen(): React.JSX.Element {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <BottomNavItem label="Home" iconDefinition={homeIconDefinition} onPress={() => navigation.navigate("Home")} />
-        <BottomNavItem
-          label="Tracking"
-          iconDefinition={dashboardIconDefinition}
-          onPress={() => navigation.navigate("Tracking")}
-        />
-        <BottomNavItem label="Chat" iconDefinition={chatIconDefinition} badge="3" onPress={() => navigation.navigate("Messages")} />
-        <BottomNavItem label="Alerts" iconDefinition={bellIconDefinition} badge={alertsBadge} onPress={() => navigation.navigate("Notifications")} />
-        <BottomNavItem label="Profile" iconDefinition={userIconDefinition} active />
-      </View>
+      <AppBottomNav activeTab="profile" />
     </View>
   );
 }
@@ -185,35 +176,6 @@ function SettingRow({
   return (
     <Pressable accessibilityRole="button" style={rowStyle} onPress={onPress}>
       {content}
-    </Pressable>
-  );
-}
-
-function BottomNavItem({
-  label,
-  iconDefinition,
-  active = false,
-  badge,
-  onPress,
-}: {
-  label: string;
-  iconDefinition: IconDefinition;
-  active?: boolean;
-  badge?: string;
-  onPress?: () => void;
-}): React.JSX.Element {
-  return (
-    <Pressable style={styles.bottomItem} onPress={onPress}>
-      <View style={styles.bottomIconWrap}>
-        <AppIcon definition={iconDefinition} size={18} color={active ? "#C9A86A" : "rgba(122,111,104,0.8)"} strokeWidth={1.9} />
-        {badge ? (
-          <View style={styles.bottomBadge}>
-            <Text style={styles.bottomBadgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{label}</Text>
-      {active ? <View style={styles.bottomActiveIndicator} /> : null}
     </Pressable>
   );
 }

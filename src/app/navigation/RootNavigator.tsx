@@ -13,6 +13,11 @@ import { HomeScreen } from "../../features/home/screens/HomeScreen";
 import { NotificationsScreen } from "../../features/notification/screens/NotificationsScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ProjectTrackingScreen } from "../../features/project/screens/ProjectTrackingScreen";
+import { SePayPaymentScreen } from "../../features/payment/screens/SePayPaymentScreen";
+import { PayOSPaymentScreen } from "../../features/payment/screens/PayOSPaymentScreen";
+import { PaymentMethodScreen } from "../../features/payment/screens/PaymentMethodScreen";
+import { ProjectChatStatus, ProjectChatType } from "../../features/communication/models/chat.model";
+import { PaymentRouteParams } from "../../features/payment/models/payment.model";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
@@ -20,13 +25,23 @@ export type RootStackParamList = {
   Home: undefined;
   ForgotPassword: undefined;
   Login: undefined;
-  MessageChat: undefined;
-  Messages: undefined;
+  MessageChat: {
+    chatId: string;
+    projectId: string;
+    title: string;
+    staffName: string;
+    chatType: ProjectChatType;
+    status: ProjectChatStatus;
+  };
+  Messages: { projectId?: string } | undefined;
   Notifications: undefined;
   Profile: undefined;
   Register: undefined;
   ResetPassword: { email?: string; token?: string } | undefined;
-  Tracking: undefined;
+  PaymentMethod: PaymentRouteParams;
+  SePayPayment: PaymentRouteParams;
+  PayOSPayment: PaymentRouteParams;
+  Tracking: { projectId?: string } | undefined;
   VerifyEmail: { email?: string } | undefined;
 };
 
@@ -46,6 +61,9 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+        <Stack.Screen name="PaymentMethod" component={PaymentMethodScreen} />
+        <Stack.Screen name="SePayPayment" component={SePayPaymentScreen} />
+        <Stack.Screen name="PayOSPayment" component={PayOSPaymentScreen} />
         <Stack.Screen name="Tracking" component={ProjectTrackingScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
       </Stack.Navigator>
