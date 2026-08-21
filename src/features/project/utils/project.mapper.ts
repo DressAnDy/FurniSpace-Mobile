@@ -37,6 +37,16 @@ export function mapProjectListItemToSummary(dto: ProjectListItemDto): ProjectSum
   };
 }
 
+export function pickLatestProject(projects: ProjectSummaryItem[]): ProjectSummaryItem | null {
+  if (projects.length === 0) {
+    return null;
+  }
+
+  return [...projects].sort(
+    (left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime(),
+  )[0];
+}
+
 export function pickDefaultActiveProject(projects: ProjectSummaryItem[]): ProjectSummaryItem | null {
   if (projects.length === 0) {
     return null;

@@ -3,7 +3,6 @@ import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -27,8 +26,6 @@ import { ChatListItem, CustomerChatTab } from "../models/chat.model";
 import { formatChatTime, getCustomerTabLabel } from "../utils/chat.mapper";
 import { styles } from "./MessagesScreen.styles";
 
-const CUSTOMER_TABS: CustomerChatTab[] = ["SALES", "DESIGNER"];
-
 type MessagesRoute = RouteProp<RootStackParamList, "Messages">;
 
 export function MessagesScreen(): React.JSX.Element {
@@ -39,7 +36,6 @@ export function MessagesScreen(): React.JSX.Element {
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const projectsQuery = useProjectsQuery({ limit: 100 });
   const projectId = activeProjectId;
-  const [activeTab, setActiveTab] = useState<CustomerChatTab>("SALES");
   const [searchQuery, setSearchQuery] = useState("");
   const chatsQuery = useProjectChatsQuery(projectId);
   const searchResultsQuery = useChatSearchQuery(projectId, searchQuery);
@@ -71,9 +67,13 @@ export function MessagesScreen(): React.JSX.Element {
     navigation.setParams({ projectId: nextProjectId });
   };
 
-  const activeChat = useMemo(
-    () => chatsQuery.data?.find((item) => item.chatType === activeTab) ?? null,
-    [activeTab, chatsQuery.data],
+  const salesChat = useMemo(
+    () => chatsQuery.data?.find((item) => item.chatType === "SALES") ?? null,
+    [chatsQuery.data],
+  );
+  const designChat = useMemo(
+    () => chatsQuery.data?.find((item) => item.chatType === "DESIGNER") ?? null,
+    [chatsQuery.data],
   );
 
   const isSearching = searchQuery.trim().length >= 2;
@@ -127,20 +127,6 @@ export function MessagesScreen(): React.JSX.Element {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
-        </View>
-
-        <View style={styles.tabRow}>
-          {CUSTOMER_TABS.map((tab) => (
-            <Pressable
-              key={tab}
-              style={[styles.tabChip, activeTab === tab && styles.tabChipActive]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text style={[styles.tabChipText, activeTab === tab && styles.tabChipTextActive]}>
-                {getCustomerTabLabel(tab)}
-              </Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 
@@ -265,22 +251,11 @@ export function MessagesScreen(): React.JSX.Element {
                   results={searchResultsQuery.data ?? []}
                   onOpenResult={handleOpenSearchResult}
                 />
-              ) : activeChat ? (
-                <>
-                  <Text style={styles.sectionLabel}>{getCustomerTabLabel(activeTab).toUpperCase()} CHAT</Text>
-                  <ConversationCard item={activeChat} onPress={() => handleOpenChat(activeChat)} />
-                </>
               ) : (
-                <View style={styles.emptyCard}>
-                  <View style={styles.emptyIconWrap}>
-                    <AppIcon definition={chatIconDefinition} size={20} color="#C9A86A" strokeWidth={1.8} />
-                  </View>
-                  <Text style={styles.emptyText}>
-                    {activeTab === "DESIGNER"
-                      ? "Design chat will appear after a designer is assigned."
-                      : "Sales chat will appear after your project is accepted."}
-                  </Text>
-                </View>
+                <>
+                  <ChatSection tab="SALES" chat={salesChat} onOpenChat={handleOpenChat} />
+                  <ChatSection tab="DESIGNER" chat={designChat} onOpenChat={handleOpenChat} />
+                </>
               )}
 
               {!isSearching && chatsQuery.data && chatsQuery.data.length > 0 ? (
@@ -292,6 +267,38 @@ export function MessagesScreen(): React.JSX.Element {
       </ScrollView>
 
       <AppBottomNav activeTab="chat" />
+    </View>
+  );
+}
+
+function ChatSection({
+  tab,
+  chat,
+  onOpenChat,
+}: {
+  tab: CustomerChatTab;
+  chat: ChatListItem | null;
+  onOpenChat: (chat: ChatListItem) => void;
+}): React.JSX.Element {
+  const label = `${getCustomerTabLabel(tab).toUpperCase()} CHAT`;
+  const emptyMessage =
+    tab === "DESIGNER"
+      ? "Design chat will appear after a designer is assigned."
+      : "Sales chat will appear after your project is accepted.";
+
+  return (
+    <View style={styles.chatSection}>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      {chat ? (
+        <ConversationCard item={chat} onPress={() => onOpenChat(chat)} />
+      ) : (
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconWrap}>
+            <AppIcon definition={chatIconDefinition} size={18} color="#C9A86A" strokeWidth={1.8} />
+          </View>
+          <Text style={styles.emptyText}>{emptyMessage}</Text>
+        </View>
+      )}
     </View>
   );
 }

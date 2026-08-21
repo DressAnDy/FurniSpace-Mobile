@@ -13,7 +13,7 @@ export const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: "#3A3330",
-    paddingBottom: 16,
+    paddingBottom: 18,
     paddingHorizontal: 19,
     paddingTop: 38,
   },
@@ -46,37 +46,12 @@ export const styles = StyleSheet.create({
     marginLeft: 8,
     paddingVertical: 0,
   },
-  tabRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 14,
-  },
-  tabChip: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderColor: "rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    borderWidth: 1,
-    flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  tabChipActive: {
-    backgroundColor: "#C9A86A",
-    borderColor: "#C9A86A",
-  },
-  tabChipText: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 11,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  tabChipTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
   content: {
     paddingHorizontal: 19,
     paddingTop: 10,
+  },
+  chatSection: {
+    marginBottom: 6,
   },
   projectPickerSection: {
     marginTop: 10,

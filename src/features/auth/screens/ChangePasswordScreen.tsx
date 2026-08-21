@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,7 +17,6 @@ import {
   eyeOffIconDefinition,
   lockIconDefinition,
 } from "../../../icons/auth/definitions";
-import { arrowRightIconDefinition, dashboardIconDefinition } from "../../../icons/navigation/definitions";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { getAccessToken } from "../../../core/storage/secureStorage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
@@ -24,6 +24,8 @@ import { AppIcon } from "../../../shared/components/AppIcon";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useChangePasswordAction } from "../hooks/useAuthActions";
 import { styles } from "./RegisterScreen.styles";
+
+const brandLogo = require("../../../../assets/brand/furnispace-logo.png");
 
 export function ChangePasswordScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -113,15 +115,15 @@ export function ChangePasswordScreen(): React.JSX.Element {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroSection}>
-            <View style={styles.heroBackground} />
-            <View style={styles.heroOverlay} />
+            <View style={styles.heroDecorLarge} />
+            <View style={styles.heroDecorSmall} />
             <View style={styles.heroContent}>
-              <View style={styles.heroLogoBox}>
-                <AppIcon definition={dashboardIconDefinition} size={20} color="#C9A86A" strokeWidth={1.8} />
+              <View style={styles.heroLogoFrame}>
+                <Image source={brandLogo} style={styles.heroLogo} resizeMode="cover" />
               </View>
-              <Text style={styles.heroTitle}>FurniSpace</Text>
-              <Text style={styles.heroSubtitle}>ACCOUNT SECURITY</Text>
+              <Text style={styles.heroTagline}>ACCOUNT SECURITY</Text>
             </View>
+            <View style={styles.heroCurve} />
           </View>
 
           <View style={styles.formSection}>
@@ -162,7 +164,6 @@ export function ChangePasswordScreen(): React.JSX.Element {
               <Text style={styles.buttonText}>
                 {changePasswordMutation.isPending ? "Updating..." : "Update password"}
               </Text>
-              <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
             </Pressable>
 
             <Pressable style={styles.footerRow} onPress={() => navigation.goBack()}>

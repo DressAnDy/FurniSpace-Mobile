@@ -211,15 +211,8 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  projectHeadRow: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 12,
-    justifyContent: "space-between",
-  },
-  projectHeadCopy: {
-    flex: 1,
-    minWidth: 0,
+  projectHead: {
+    gap: 0,
   },
   projectTitle: {
     color: INK,
@@ -243,22 +236,24 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: 6,
-    maxWidth: 128,
-    paddingHorizontal: 10,
+    marginTop: 10,
+    maxWidth: "100%",
+    paddingHorizontal: 11,
     paddingVertical: 6,
   },
   statusDot: {
     backgroundColor: GOLD,
     borderRadius: 3,
+    flexShrink: 0,
     height: 6,
     width: 6,
   },
   statusText: {
     color: "#8A6E3A",
     flexShrink: 1,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.35,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.1,
   },
   peopleRow: {
     alignItems: "center",

@@ -3,12 +3,28 @@ import { httpClient } from "../../../core/api/httpClient";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   CreateProjectRequestDto,
+  ProjectByUserListResponseDto,
   ProjectDetailDto,
+  ProjectListItemDto,
   ProjectListQuery,
   ProjectListResponseDto,
   UpdateProjectBasicInfoRequestDto,
   UpdateTargetCompletionDateRequestDto,
 } from "../models/project.model";
+
+function mapByUserItemToListItem(item: ProjectByUserListResponseDto["items"][number]): ProjectListItemDto {
+  return {
+    projectId: item.projectId,
+    projectCode: item.projectCode,
+    projectName: item.projectName,
+    businessType: item.businessType,
+    status: item.status,
+    customerId: item.customer?.accountId ?? "",
+    assignedSalesId: item.assignedSales?.accountId ?? null,
+    assignedDesignerId: item.assignedDesigner?.accountId ?? null,
+    submittedAt: item.submittedAt,
+  };
+}
 
 export async function getProjectsApi(query: ProjectListQuery = {}): Promise<ProjectListResponseDto> {
   const response = await httpClient.get<ApiResponse<ProjectListResponseDto>>(endpoints.projects.list, {
@@ -29,16 +45,22 @@ export async function getProjectByIdApi(projectId: string): Promise<ProjectDetai
 }
 
 export async function getProjectsByUserApi(userId: string, query: ProjectListQuery = {}): Promise<ProjectListResponseDto> {
-  const response = await httpClient.get<ApiResponse<ProjectListResponseDto>>(endpoints.projects.byUser(userId), {
+  const response = await httpClient.get<ApiResponse<ProjectByUserListResponseDto>>(endpoints.projects.byUser(userId), {
     params: {
       ...(query.status ? { status: query.status } : {}),
-      ...(query.search ? { search: query.search } : {}),
+      ...(query.search ? { keyword: query.search } : {}),
       page: query.page ?? 1,
-      limit: query.limit ?? 20,
+      pageSize: query.limit ?? 10,
     },
   });
 
-  return response.data.data;
+  const data = response.data.data;
+  return {
+    items: (data.items ?? []).map(mapByUserItemToListItem),
+    page: data.page,
+    limit: data.pageSize,
+    total: data.totalItems,
+  };
 }
 
 export async function createProjectApi(payload: CreateProjectRequestDto): Promise<ProjectDetailDto> {

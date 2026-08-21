@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FurniSpace Mobile",
-    "slug": "furnispace-mobile",
+    "slug": "dressandy2203",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -28,6 +28,12 @@
       ],
       "expo-web-browser"
     ],
-    "web": {}
+    "web": {},
+    "extra": {
+      "eas": {
+        "projectId": "a480df44-fb9d-4854-a7c9-67b2674f5925"
+      }
+    },
+    "owner": "dressandy2203s-team"
   }
 }

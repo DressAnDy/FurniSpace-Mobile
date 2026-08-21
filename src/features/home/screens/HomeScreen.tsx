@@ -147,18 +147,14 @@ export function HomeScreen(): React.JSX.Element {
           <View style={styles.projectCard}>
             <View style={styles.projectCardAccent} />
             <View style={styles.projectCardBody}>
-              <View style={styles.projectHeadRow}>
-                <View style={styles.projectHeadCopy}>
-                  <Text style={styles.projectTitle} numberOfLines={2}>
-                    {activeProject.projectName}
-                  </Text>
-                  <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
-                </View>
+              <View style={styles.projectHead}>
+                <Text style={styles.projectTitle} numberOfLines={2}>
+                  {activeProject.projectName}
+                </Text>
+                <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
                 <View style={styles.statusBadge}>
                   <View style={styles.statusDot} />
-                  <Text style={styles.statusText} numberOfLines={1}>
-                    {activeProject.statusLabel.toUpperCase()}
-                  </Text>
+                  <Text style={styles.statusText}>{activeProject.statusLabel}</Text>
                 </View>
               </View>
 

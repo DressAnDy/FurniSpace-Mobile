@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { getAccessToken } from "../../../core/storage/secureStorage";
-import { lockIconDefinition, logoutIconDefinition, mailIconDefinition, userIconDefinition } from "../../../icons/auth/definitions";
+import { lockIconDefinition, logoutIconDefinition, mailIconDefinition } from "../../../icons/auth/definitions";
 import { bellIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
 import { chevronRightIconDefinition } from "../../../icons/navigation/definitions";
@@ -16,6 +16,7 @@ import { AppBottomNav } from "../../../shared/components/AppBottomNav";
 import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import { useLogoutAction } from "../../auth/hooks/useAuthActions";
 import { useAuthStore } from "../../auth/store/auth.store";
+import { useLatestUserProject } from "../../project/hooks/useProjects";
 import { styles } from "./ProfileScreen.styles";
 
 export function ProfileScreen(): React.JSX.Element {
@@ -23,6 +24,13 @@ export function ProfileScreen(): React.JSX.Element {
   const logoutMutation = useLogoutAction();
   const currentUser = useAuthStore((state) => state.user);
   const { scrollPaddingBottom } = useBottomNavMetrics();
+  const { latestProject, totalProjects, projectsQuery } = useLatestUserProject(currentUser?.accountId);
+
+  const displayName = currentUser?.fullName ?? "Guest";
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+  const projectLabel = latestProject?.projectName ?? (projectsQuery.isLoading ? "Loading project…" : "No project yet");
+  const projectMeta = latestProject ? `${latestProject.projectCode} · ${latestProject.businessType}` : undefined;
+  const projectCountLabel = totalProjects > 0 ? String(totalProjects) : projectsQuery.isLoading ? "…" : "0";
 
   const handleChangePassword = async () => {
     const accessToken = await getAccessToken();
@@ -45,10 +53,10 @@ export function ProfileScreen(): React.JSX.Element {
 
           <View style={styles.profileRow}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>SA</Text>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
-            <View>
-              <Text style={styles.name}>{currentUser?.fullName ?? "Sarah Anderson"}</Text>
+            <View style={styles.profileCopy}>
+              <Text style={styles.name}>{displayName}</Text>
               <Text style={styles.role}>Business Owner</Text>
               <View style={styles.statusChip}>
                 <View style={styles.statusDot} />
@@ -61,16 +69,25 @@ export function ProfileScreen(): React.JSX.Element {
         <View style={styles.content}>
           <View style={styles.card}>
             <Text style={styles.cardLabel}>CONTACT INFORMATION</Text>
-            <ContactRow icon={mailIconDefinition} text={currentUser?.email ?? "sarah.anderson@urbancafe.co"} />
-            <ContactRow icon={phoneIconDefinition} text={currentUser?.phone ?? "+84 901 234 567"} />
-            <ContactRow icon={projectIconDefinition} text="Urban Coffee House" />
-            <ContactRow icon={locationIconDefinition} text="Downtown Plaza, Ho Chi Minh City" />
+            <ContactRow icon={mailIconDefinition} text={currentUser?.email ?? "—"} />
+            <ContactRow icon={phoneIconDefinition} text={currentUser?.phone ?? "—"} />
+            <ContactRow
+              icon={projectIconDefinition}
+              text={projectLabel}
+              meta={projectMeta}
+              loading={projectsQuery.isLoading}
+            />
+            <ContactRow
+              icon={locationIconDefinition}
+              text="Downtown Plaza, Ho Chi Minh City"
+              isLast
+            />
           </View>
 
           <View style={[styles.card, styles.mt15]}>
             <Text style={styles.cardLabel}>ACCOUNT SUMMARY</Text>
             <View style={styles.summaryRow}>
-              <SummaryBox value="1" label="ACTIVE PROJECT" />
+              <SummaryBox value={projectCountLabel} label="TOTAL PROJECTS" />
               <SummaryBox value="Jan 2026" label="MEMBER SINCE" />
             </View>
           </View>
@@ -107,9 +124,9 @@ export function ProfileScreen(): React.JSX.Element {
             <View style={styles.signOutIconWrap}>
               <AppIcon definition={logoutIconDefinition} size={15} color="#FB2C36" />
             </View>
-            <View>
+            <View style={styles.signOutCopy}>
               <Text style={styles.signOutTitle}>Sign Out</Text>
-              <Text style={styles.signOutSub}>{currentUser?.email ?? "sarah.anderson@urbancafe.co"}</Text>
+              <Text style={styles.signOutSub}>{currentUser?.email ?? "—"}</Text>
             </View>
           </Pressable>
 
@@ -122,13 +139,38 @@ export function ProfileScreen(): React.JSX.Element {
   );
 }
 
-function ContactRow({ icon, text }: { icon: IconDefinition; text: string }): React.JSX.Element {
+function ContactRow({
+  icon,
+  text,
+  meta,
+  loading = false,
+  isLast = false,
+}: {
+  icon: IconDefinition;
+  text: string;
+  meta?: string;
+  loading?: boolean;
+  isLast?: boolean;
+}): React.JSX.Element {
   return (
-    <View style={styles.contactRow}>
+    <View style={[styles.contactRow, isLast ? styles.contactRowLast : null]}>
       <View style={styles.iconWrap}>
-        <AppIcon definition={icon} size={15} color="#7A6F68" />
+        {loading ? (
+          <ActivityIndicator color="#C9A86A" size="small" />
+        ) : (
+          <AppIcon definition={icon} size={15} color="#7A6F68" />
+        )}
       </View>
-      <Text style={styles.contactText}>{text}</Text>
+      <View style={styles.contactCopy}>
+        <Text style={styles.contactText} numberOfLines={1}>
+          {text}
+        </Text>
+        {meta ? (
+          <Text style={styles.contactMeta} numberOfLines={1}>
+            {meta}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -136,7 +178,9 @@ function ContactRow({ icon, text }: { icon: IconDefinition; text: string }): Rea
 function SummaryBox({ value, label }: { value: string; label: string }): React.JSX.Element {
   return (
     <View style={styles.summaryBox}>
-      <Text style={styles.summaryValue}>{value}</Text>
+      <Text style={styles.summaryValue} numberOfLines={1}>
+        {value}
+      </Text>
       <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
@@ -178,4 +222,15 @@ function SettingRow({
       {content}
     </Pressable>
   );
+}
+
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return "FS";
+  }
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
