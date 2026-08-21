@@ -13,6 +13,7 @@ export const queryKeys = {
   },
   project: {
     list: (query: ProjectListQueryKey) => ["project", "list", query] as const,
+    byUser: (userId: string, query: ProjectListQueryKey) => ["project", "by-user", userId, query] as const,
     detail: (projectId: string) => ["project", "detail", projectId] as const,
   },
   payment: {

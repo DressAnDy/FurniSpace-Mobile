@@ -56,6 +56,39 @@ export type ProjectListResponseDto = {
   total: number;
 };
 
+export type ProjectAssigneeDto = {
+  accountId: string;
+  fullName: string;
+};
+
+export type ProjectByUserItemDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  businessType: string;
+  projectAddress?: string | null;
+  status: ProjectStatus;
+  customer?: {
+    accountId: string;
+    fullName: string;
+    email?: string;
+    phone?: string;
+  } | null;
+  assignedSales: ProjectAssigneeDto | null;
+  assignedDesigner: ProjectAssigneeDto | null;
+  submittedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ProjectByUserListResponseDto = {
+  items: ProjectByUserItemDto[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
 export type ProjectListQuery = {
   status?: ProjectStatus;
   search?: string;

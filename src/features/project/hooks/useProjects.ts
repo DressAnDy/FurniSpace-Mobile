@@ -4,9 +4,9 @@ import { queryKeys } from "../../../shared/constants/queryKeys";
 import { env } from "../../../core/config/env";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { ProjectListQuery } from "../models/project.model";
-import { getProjectByIdApi, getProjectsApi } from "../services/project.api";
+import { getProjectByIdApi, getProjectsApi, getProjectsByUserApi } from "../services/project.api";
 import { useProjectStore } from "../store/project.store";
-import { mapProjectListItemToSummary, pickDefaultActiveProject } from "../utils/project.mapper";
+import { mapProjectListItemToSummary, pickDefaultActiveProject, pickLatestProject } from "../utils/project.mapper";
 
 export function useProjectsQuery(query: ProjectListQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -22,6 +22,37 @@ export function useProjectsQuery(query: ProjectListQuery = {}) {
       };
     },
   });
+}
+
+export function useProjectsByUserQuery(userId: string | null | undefined, query: ProjectListQuery = {}) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: queryKeys.project.byUser(userId ?? "none", query),
+    enabled: isLoggedIn && Boolean(userId),
+    queryFn: async () => {
+      const response = await getProjectsByUserApi(userId!, query);
+      return {
+        ...response,
+        items: response.items.map(mapProjectListItemToSummary),
+      };
+    },
+  });
+}
+
+export function useLatestUserProject(userId: string | null | undefined) {
+  const projectsQuery = useProjectsByUserQuery(userId, { page: 1, limit: 10 });
+
+  const latestProject = useMemo(
+    () => pickLatestProject(projectsQuery.data?.items ?? []),
+    [projectsQuery.data?.items],
+  );
+
+  return {
+    latestProject,
+    totalProjects: projectsQuery.data?.total ?? 0,
+    projectsQuery,
+  };
 }
 
 export function useProjectDetailQuery(projectId: string | null) {

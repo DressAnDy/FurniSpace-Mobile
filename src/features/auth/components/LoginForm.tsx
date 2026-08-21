@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   eyeIconDefinition,
   eyeOffIconDefinition,
   lockIconDefinition,
   mailIconDefinition,
 } from "../../../icons/auth/definitions";
-import { arrowRightIconDefinition, dashboardIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { styles } from "./LoginForm.styles";
+
+const brandLogo = require("../../../../assets/brand/furnispace-logo.png");
 
 type LoginFormProps = {
   isSubmitting: boolean;
@@ -32,17 +33,22 @@ export function LoginForm({ isSubmitting, onSubmit, onForgotPassword, onRegister
   };
 
   return (
-    <View style={styles.screen}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.heroSection}>
-        <View style={styles.heroBackground} />
-        <View style={styles.heroOverlay} />
+        <View style={styles.heroDecorLarge} />
+        <View style={styles.heroDecorSmall} />
         <View style={styles.heroContent}>
-          <View style={styles.heroLogoBox}>
-            <AppIcon definition={dashboardIconDefinition} size={24} color="#C9A86A" strokeWidth={1.8} />
+          <View style={styles.heroLogoFrame}>
+            <Image source={brandLogo} style={styles.heroLogo} resizeMode="cover" />
           </View>
-          <Text style={styles.heroTitle}>FurniSpace</Text>
-          <Text style={styles.heroSubtitle}>INTERIOR · 3D · FURNITURE</Text>
+          <Text style={styles.heroTagline}>THI CÔNG NỘI THẤT GỖ · HỖ TRỢ 3D · TRỰC QUAN HÓA</Text>
         </View>
+        <View style={styles.heroCurve} />
       </View>
 
       <View style={styles.formSection}>
@@ -94,20 +100,23 @@ export function LoginForm({ isSubmitting, onSubmit, onForgotPassword, onRegister
           </View>
         </View>
 
-        <Pressable style={[styles.button, disabled && styles.buttonDisabled]} disabled={disabled} onPress={handleSubmit}>
+        <Pressable
+          style={({ pressed }) => [styles.button, disabled && styles.buttonDisabled, pressed && !disabled && styles.buttonPressed]}
+          disabled={disabled}
+          onPress={handleSubmit}
+        >
           <Text style={styles.buttonText}>{isSubmitting ? "Signing In..." : "Sign In"}</Text>
-          <AppIcon definition={arrowRightIconDefinition} size={15} color="#FFFFFF" strokeWidth={1.8} />
         </Pressable>
 
         <View style={styles.contactRow}>
           <Text style={styles.contactText}>Don&apos;t have an account? </Text>
-          <Pressable onPress={onRegister}>
-            <Text style={styles.contactAction}>Contact your sales team</Text>
+          <Pressable onPress={onRegister} hitSlop={8}>
+            <Text style={styles.contactAction}>Sign up</Text>
           </Pressable>
         </View>
 
         <Text style={styles.copyright}>© 2026 FURNISPACE</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
