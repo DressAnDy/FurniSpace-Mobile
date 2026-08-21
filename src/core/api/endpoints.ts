@@ -25,12 +25,21 @@ export const endpoints = {
     byUser: (userId: string) => `/projects/by-user/${userId}`,
     detail: (projectId: string) => `/projects/${projectId}`,
     publishedProposal: (projectId: string) => `/projects/${projectId}/published-proposal`,
+    phaseDeadlines: (projectId: string) => `/projects/${projectId}/phase-deadlines`,
     updateBasicInfo: (projectId: string) => `/projects/${projectId}/basic-information`,
     updateTargetDate: (projectId: string) => `/projects/${projectId}/target-completion-date`,
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
+    orders: (projectId: string) => `/projects/${projectId}/orders`,
   },
   orders: {
+    detail: (orderId: string) => `/orders/${orderId}`,
     createDeposit: (orderId: string) => `/orders/${orderId}/payments/deposit`,
+    confirmDelivery: (orderId: string) => `/orders/${orderId}/confirm-delivery`,
+  },
+  projectSchedules: {
+    list: "/project-schedules",
+    detail: (scheduleId: string) => `/project-schedules/${scheduleId}`,
+    updateStatus: (scheduleId: string) => `/project-schedules/${scheduleId}/status`,
   },
   payments: {
     list: "/api/payments",

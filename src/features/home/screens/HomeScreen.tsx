@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { bellIconDefinition } from "../../../icons/communication/definitions";
 import {
   arrowRightIconDefinition,
+  chevronDownIconDefinition,
   chevronRightIconDefinition,
 } from "../../../icons/navigation/definitions";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
@@ -21,7 +22,9 @@ import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
+import { ProjectSwitcherModal } from "../../project/components/ProjectSwitcherModal";
 import { useActiveProjectSummary } from "../../project/hooks/useProjects";
+import { useProjectStore } from "../../project/store/project.store";
 import { styles } from "./HomeScreen.styles";
 
 type UpdateItem = {
@@ -62,7 +65,12 @@ export function HomeScreen(): React.JSX.Element {
   const alertsBadge = useNotificationBadgeLabel();
   const { scrollPaddingBottom } = useBottomNavMetrics();
   const user = useAuthStore((state) => state.user);
-  const { activeProject, projectsQuery } = useActiveProjectSummary();
+  const { activeProject, activeProjectId, projectsQuery } = useActiveProjectSummary();
+  const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
+  const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+
+  const projects = projectsQuery.data?.items ?? [];
+  const hasMultipleProjects = projects.length > 1;
 
   const greeting = getGreetingLabel();
   const userName = user?.fullName ?? "Guest";
@@ -141,6 +149,12 @@ export function HomeScreen(): React.JSX.Element {
               <Text style={styles.projectStateText}>
                 Submit your first project to start tracking design progress here.
               </Text>
+              <Pressable
+                style={({ pressed }) => [styles.newProjectButton, pressed ? styles.newProjectButtonPressed : null]}
+                onPress={() => navigation.navigate("CreateProjectRequest")}
+              >
+                <Text style={styles.newProjectButtonText}>Submit Project Request</Text>
+              </Pressable>
             </View>
           </View>
         ) : (
@@ -211,6 +225,23 @@ export function HomeScreen(): React.JSX.Element {
                   <AppIcon definition={arrowRightIconDefinition} size={14} color="#3A3330" strokeWidth={2} />
                 </View>
               </Pressable>
+
+              {hasMultipleProjects ? (
+                <Pressable
+                  style={({ pressed }) => [styles.switchProjectButton, pressed ? styles.switchProjectButtonPressed : null]}
+                  onPress={() => setIsProjectSwitcherOpen(true)}
+                >
+                  <Text style={styles.switchProjectButtonText}>Switch Project</Text>
+                  <AppIcon definition={chevronDownIconDefinition} size={14} color="#B89558" strokeWidth={2} />
+                </Pressable>
+              ) : null}
+
+              <Pressable
+                style={({ pressed }) => [styles.newProjectButton, pressed ? styles.newProjectButtonPressed : null]}
+                onPress={() => navigation.navigate("CreateProjectRequest")}
+              >
+                <Text style={styles.newProjectButtonText}>New Project Request</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -264,6 +295,14 @@ export function HomeScreen(): React.JSX.Element {
           </View>
         </View>
       </ScrollView>
+
+      <ProjectSwitcherModal
+        visible={isProjectSwitcherOpen}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onClose={() => setIsProjectSwitcherOpen(false)}
+        onSelect={setActiveProjectId}
+      />
 
       <AppBottomNav activeTab="home" />
     </View>

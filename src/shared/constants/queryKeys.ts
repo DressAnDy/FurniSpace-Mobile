@@ -15,6 +15,9 @@ export const queryKeys = {
     list: (query: ProjectListQueryKey) => ["project", "list", query] as const,
     byUser: (userId: string, query: ProjectListQueryKey) => ["project", "by-user", userId, query] as const,
     detail: (projectId: string) => ["project", "detail", projectId] as const,
+    phaseDeadlines: (projectId: string) => ["project", "phase-deadlines", projectId] as const,
+    schedules: (projectId: string) => ["project", "schedules", projectId] as const,
+    orders: (projectId: string) => ["project", "orders", projectId] as const,
   },
   payment: {
     detail: (paymentId: string) => ["payment", "detail", paymentId] as const,

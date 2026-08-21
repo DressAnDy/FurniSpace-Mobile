@@ -10,6 +10,7 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   PROPOSAL_CONSULTING: "Proposal Consulting",
   PROPOSAL_SELECTED: "Proposal Selected",
   QUOTATION_SENT: "Quotation Sent",
+  QUOTATION_REVISION_REQUESTED: "Quotation Revision",
   ORDER_CONFIRMED: "Order Confirmed",
   IN_PRODUCTION: "In Production",
   READY_FOR_DELIVERY: "Ready for Delivery",

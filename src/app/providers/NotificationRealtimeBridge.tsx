@@ -3,6 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ensureNotificationPermissions, showLocalNotification } from "../../core/notifications/localNotifications";
 import { connectNotificationHub, disconnectNotificationHub, subscribeNotificationHub } from "../../core/realtime/notificationHub";
 import { useAuthStore } from "../../features/auth/store/auth.store";
+import { invalidateProjectTrackingQueries } from "../../features/project/hooks/useProjectTracking";
+import { useProjectStore } from "../../features/project/store/project.store";
+import { shouldRefreshProjectTracking } from "../../features/project/utils/project.tracking.realtime";
 import { RealtimeNotificationPayloadDto } from "../../features/notification/models/notification.model";
 import { resolveNotificationCategory } from "../../features/notification/utils/notification.mapper";
 import { queryKeys } from "../../shared/constants/queryKeys";
@@ -42,6 +45,11 @@ export function NotificationRealtimeBridge(): null {
 
       if (payload.referenceType === "PROJECT_CHAT_MESSAGE" && payload.projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(payload.projectId) });
+      }
+
+      const activeProjectId = useProjectStore.getState().activeProjectId;
+      if (activeProjectId && shouldRefreshProjectTracking(payload, activeProjectId)) {
+        invalidateProjectTrackingQueries(queryClient, activeProjectId);
       }
     });
 

@@ -26,7 +26,8 @@
           "color": "#C9A86A"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "web": {},
     "extra": {

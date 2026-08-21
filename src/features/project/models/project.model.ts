@@ -8,6 +8,7 @@ export type ProjectStatus =
   | "PROPOSAL_CONSULTING"
   | "PROPOSAL_SELECTED"
   | "QUOTATION_SENT"
+  | "QUOTATION_REVISION_REQUESTED"
   | "ORDER_CONFIRMED"
   | "IN_PRODUCTION"
   | "READY_FOR_DELIVERY"
@@ -33,6 +34,8 @@ export type ProjectDetailDto = {
   customerId: string;
   assignedSalesId: string | null;
   assignedDesignerId: string | null;
+  assignedSales?: ProjectAssigneeDto | null;
+  assignedDesigner?: ProjectAssigneeDto | null;
   projectCode: string;
   projectName: string;
   businessType: string;

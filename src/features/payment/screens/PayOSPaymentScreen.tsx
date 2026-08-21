@@ -297,7 +297,7 @@ export function PayOSPaymentScreen(): React.JSX.Element {
                     </View>
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Method</Text>
-                      <Text style={styles.infoValue}>Payment link</Text>
+                      <Text style={styles.infoValue}>QR Code</Text>
                     </View>
                     {checkout?.attempt?.transactionCode ? (
                       <View style={styles.infoRow}>
