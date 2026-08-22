@@ -37,8 +37,14 @@ export function MessagesScreen(): React.JSX.Element {
   const projectsQuery = useProjectsQuery({ limit: 100 });
   const projectId = activeProjectId;
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const chatsQuery = useProjectChatsQuery(projectId);
-  const searchResultsQuery = useChatSearchQuery(projectId, searchQuery);
+  const searchResultsQuery = useChatSearchQuery(projectId, debouncedSearchQuery);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const projects = projectsQuery.data?.items ?? [];
   const selectedProject = projects.find((project) => project.projectId === projectId) ?? null;
@@ -76,7 +82,7 @@ export function MessagesScreen(): React.JSX.Element {
     [chatsQuery.data],
   );
 
-  const isSearching = searchQuery.trim().length >= 2;
+  const isSearching = debouncedSearchQuery.trim().length >= 2;
 
   const handleOpenChat = (chat: ChatListItem) => {
     navigation.navigate("MessageChat", {

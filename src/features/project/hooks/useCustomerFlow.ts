@@ -96,11 +96,12 @@ export function useProposalDetailQuery(proposalId: string | null) {
     queryKey: queryKeys.proposal.detail(proposalId ?? "none"),
     enabled: isLoggedIn && Boolean(proposalId),
     queryFn: async () => {
-      const [detail, itemsResponse] = await Promise.all([
-        getProposalByIdApi(proposalId!),
-        getProposalItemsApi(proposalId!, { limit: 50 }).catch(() => null),
-      ]);
+      const detail = await getProposalByIdApi(proposalId!);
+      if (detail.items.length > 0) {
+        return detail;
+      }
 
+      const itemsResponse = await getProposalItemsApi(proposalId!, { limit: 50 }).catch(() => null);
       if (!itemsResponse) {
         return detail;
       }
@@ -133,25 +134,9 @@ export function useProjectQuotationsQuery(projectId: string | null, query: Quota
     enabled: isLoggedIn && Boolean(projectId),
     queryFn: async () => {
       const response = await getProjectQuotationsApi(projectId!, query);
-      const enrichedItems = await Promise.all(
-        response.items.map(async (quotation) => {
-          if (quotation.depositAmount > 0) {
-            return quotation;
-          }
-
-          try {
-            const detail = await getQuotationByIdApi(quotation.quotationId);
-            const depositAmount = await resolveQuotationDepositAmount(detail);
-            return enrichQuotationDeposit(detail.depositAmount > 0 ? detail : quotation, depositAmount);
-          } catch {
-            return enrichQuotationDeposit(quotation);
-          }
-        }),
-      );
-
       return {
         ...response,
-        items: enrichedItems,
+        items: response.items.map((quotation) => enrichQuotationDeposit(quotation)),
       };
     },
     staleTime: 30_000,
@@ -180,6 +165,17 @@ export function useOrderDetailQuery(orderId: string | null) {
     queryKey: queryKeys.order.detail(orderId ?? "none"),
     enabled: isLoggedIn && Boolean(orderId),
     queryFn: () => getOrderByIdApi(orderId!),
+    staleTime: 30_000,
+  });
+}
+
+export function prefetchOrderDetailQuery(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orderId: string,
+): Promise<void> {
+  return queryClient.prefetchQuery({
+    queryKey: queryKeys.order.detail(orderId),
+    queryFn: () => getOrderByIdApi(orderId),
     staleTime: 30_000,
   });
 }

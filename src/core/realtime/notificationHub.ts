@@ -7,6 +7,7 @@ import { getAccessToken } from "../storage/secureStorage";
 import { RealtimeNotificationPayloadDto } from "../../features/notification/models/notification.model";
 import {
   getHubUrl,
+  getSignalRRetryDelay,
   getSignalRTransportOptions,
   safeHubStart,
   signalRLogLevel,
@@ -66,11 +67,6 @@ const handlers = new Set<NotificationEventHandler>();
 
 function getNotificationHubUrl(): string {
   return getHubUrl("/hubs/notifications");
-}
-
-function isStaleConnectionError(error: Error | undefined): boolean {
-  const message = error?.message ?? "";
-  return message.includes("404") || message.includes("No Connection with that ID");
 }
 
 function clearReconnectTimer(): void {
@@ -178,12 +174,7 @@ export async function connectNotificationHub(): Promise<boolean> {
       .withUrl(getNotificationHubUrl(), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: (retryContext) => {
-          if (isStaleConnectionError(retryContext.retryReason)) {
-            return null;
-          }
-
-          const delays = [0, 2000, 5000, 10000, 30000];
-          return delays[retryContext.previousRetryCount] ?? 30000;
+          return getSignalRRetryDelay(retryContext.previousRetryCount, retryContext.retryReason);
         },
       })
       .configureLogging(signalRLogLevel)
@@ -221,6 +212,15 @@ export async function disconnectNotificationHub(): Promise<void> {
   const hub = connection;
   connection = null;
   await disposeConnection(hub);
+}
+
+export async function restartNotificationHub(): Promise<boolean> {
+  clearReconnectTimer();
+  allowReconnect = true;
+  const hub = connection;
+  connection = null;
+  await disposeConnection(hub);
+  return connectNotificationHub();
 }
 
 export function getNotificationHubState(): HubConnectionState | null {

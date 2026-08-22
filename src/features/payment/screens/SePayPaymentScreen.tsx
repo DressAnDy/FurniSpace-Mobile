@@ -4,6 +4,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   Pressable,
   ScrollView,
@@ -82,6 +83,26 @@ export function SePayPaymentScreen(): React.JSX.Element {
   useEffect(() => {
     void loadCheckout();
   }, [loadCheckout]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || !payment?.paymentCode || payment.status === "PAID") {
+        return;
+      }
+
+      void getPaymentStatusByCodeApi(payment.paymentCode).then((status) => {
+        if (status.status === "PAID") {
+          setCheckout((current) =>
+            current
+              ? { ...current, payment: { ...current.payment, status: status.status, paidAt: status.paidAt } }
+              : current,
+          );
+          setIsWaitingConfirmation(false);
+        }
+      }).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [payment?.paymentCode, payment?.status]);
 
   useEffect(() => {
     return () => {

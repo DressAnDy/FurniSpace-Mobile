@@ -56,6 +56,7 @@ export async function navigateFromNotification(
     const paymentId = readMetadataString(item.metadata, "paymentId") ?? item.referenceId ?? undefined;
     const orderId = readMetadataString(item.metadata, "orderId");
     const projectId = item.projectId ?? readMetadataString(item.metadata, "projectId");
+    const paymentType = readMetadataString(item.metadata, "paymentType") ?? undefined;
 
     if (projectId) {
       options?.setActiveProjectId?.(projectId);
@@ -66,6 +67,7 @@ export async function navigateFromNotification(
         paymentId: paymentId ?? undefined,
         orderId: orderId ?? undefined,
         projectId: projectId ?? undefined,
+        paymentType,
       });
       return;
     }

@@ -7,6 +7,7 @@ import { ChatMessageDto, ProjectChatMessageSentPayload } from "../../features/co
 import { getAccessToken } from "../storage/secureStorage";
 import {
   getHubUrl,
+  getSignalRRetryDelay,
   getSignalRTransportOptions,
   safeHubStart,
   signalRLogLevel,
@@ -18,6 +19,7 @@ type ProjectChatEventHandler = (payload: ProjectChatMessageSentPayload) => void;
 
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const handlers = new Set<ProjectChatEventHandler>();
 const joinedChatIds = new Set<string>();
 
@@ -119,6 +121,18 @@ function attachEventHandlers(hub: HubConnection): void {
   hub.onreconnected(async () => {
     await rejoinActiveChats();
   });
+
+  hub.onclose((error) => {
+    if (connection === hub) {
+      connection = null;
+    }
+    if (error && joinedChatIds.size > 0 && !reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void connectProjectChatHub();
+      }, 2000);
+    }
+  });
 }
 
 async function rejoinActiveChats(): Promise<void> {
@@ -187,7 +201,10 @@ export async function connectProjectChatHub(): Promise<boolean> {
 
     const hub = new HubConnectionBuilder()
       .withUrl(getHubUrl("/hubs/project-chat"), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (context) =>
+          getSignalRRetryDelay(context.previousRetryCount, context.retryReason),
+      })
       .configureLogging(signalRLogLevel)
       .build();
 
@@ -209,6 +226,10 @@ export async function connectProjectChatHub(): Promise<boolean> {
 
 export async function disconnectProjectChatHub(): Promise<void> {
   joinedChatIds.clear();
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 
   if (!connection) {
     return;
@@ -217,6 +238,21 @@ export async function disconnectProjectChatHub(): Promise<void> {
   const hub = connection;
   connection = null;
   await hub.stop().catch(() => undefined);
+}
+
+export async function restartProjectChatHub(): Promise<boolean> {
+  if (joinedChatIds.size === 0) {
+    return false;
+  }
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const hub = connection;
+  connection = null;
+  await hub?.stop().catch(() => undefined);
+  return connectProjectChatHub();
 }
 
 export async function joinProjectChat(chatId: string): Promise<void> {

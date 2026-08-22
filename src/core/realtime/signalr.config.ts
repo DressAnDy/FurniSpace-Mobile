@@ -35,6 +35,20 @@ export function getSignalRTransportOptions(accessTokenFactory: () => Promise<str
 
 export const signalRLogLevel = LogLevel.Critical;
 
+export function isStaleSignalRConnectionError(error: Error | undefined): boolean {
+  const message = error?.message ?? "";
+  return message.includes("404") || message.includes("No Connection with that ID");
+}
+
+export function getSignalRRetryDelay(previousRetryCount: number, error?: Error): number | null {
+  if (isStaleSignalRConnectionError(error)) {
+    return null;
+  }
+
+  const delays = [0, 2000, 5000, 10000, 30000];
+  return delays[previousRetryCount] ?? 30000;
+}
+
 export async function safeHubStart(start: () => Promise<void>): Promise<boolean> {
   try {
     await start();

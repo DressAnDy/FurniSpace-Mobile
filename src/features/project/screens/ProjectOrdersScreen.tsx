@@ -3,12 +3,13 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
 import { formatVndAmount } from "../../payment/utils/payment.mapper";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
-import { useProjectOrdersQuery } from "../hooks/useCustomerFlow";
+import { prefetchOrderDetailQuery, useProjectOrdersQuery } from "../hooks/useCustomerFlow";
 import { resolveOrderDisplayTotal } from "../utils/order.mapper";
 import { canPayOrderDeposit } from "../utils/project.customer-flow.mapper";
 import { OrderStatus } from "../models/order.model";
@@ -55,6 +56,7 @@ export function ProjectOrdersScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Route>();
   const { projectId, projectName } = route.params;
+  const queryClient = useQueryClient();
   const ordersQuery = useProjectOrdersQuery(projectId);
 
   const orders = ordersQuery.data ?? [];
@@ -102,6 +104,9 @@ export function ProjectOrdersScreen(): React.JSX.Element {
                   <Pressable
                     key={order.orderId}
                     style={styles.orderCard}
+                    onPressIn={() => {
+                      void prefetchOrderDetailQuery(queryClient, order.orderId);
+                    }}
                     onPress={() =>
                       navigation.navigate("OrderDetail", {
                         orderId: order.orderId,

@@ -21,7 +21,7 @@ import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
 import { calendarIconDefinition } from "../../../icons/project/definitions";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useUpdateProjectBasicInfoMutation } from "../hooks/useCustomerFlow";
-import { useProjectTrackingQueries } from "../hooks/useProjectTracking";
+import { useProjectDetailQuery } from "../hooks/useProjects";
 import { CreateProjectRequestDto } from "../models/project.model";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { styles } from "./CreateProjectRequestScreen.styles";
@@ -54,7 +54,7 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Route>();
   const { projectId } = route.params;
-  const { data, isLoading } = useProjectTrackingQueries(projectId);
+  const { data: project, isLoading } = useProjectDetailQuery(projectId);
   const updateMutation = useUpdateProjectBasicInfoMutation(projectId);
 
   const [projectName, setProjectName] = useState("");
@@ -69,8 +69,7 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (!data?.project || initialized) return;
-    const project = data.project;
+    if (!project || initialized) return;
     setProjectName(project.projectName ?? "");
     setBusinessType(project.businessType ?? "");
     setFurnitureRequirement(project.furnitureRequirement ?? "");
@@ -78,7 +77,7 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     setDescription(project.description ?? "");
     setTargetCompletionDate(parseApiDate(project.targetCompletionDate));
     setInitialized(true);
-  }, [data?.project, initialized]);
+  }, [project, initialized]);
 
   const formValues = useMemo<CreateProjectRequestDto>(
     () => ({

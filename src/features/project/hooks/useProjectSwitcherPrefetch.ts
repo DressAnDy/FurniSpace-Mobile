@@ -1,27 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { ProjectSummaryItem } from "../models/project.model";
-import { prefetchProjectDetailQuery, prefetchProjectTrackingQueries } from "./useProjectTracking";
+import { prefetchProjectTrackingQueries } from "./useProjectTracking";
 
-export function useProjectSwitcherPrefetch(projects: ProjectSummaryItem[]) {
+export function useProjectSwitcherPrefetch(_projects: ProjectSummaryItem[]) {
   const queryClient = useQueryClient();
-  const prefetchedProjectIdsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      return;
-    }
-
-    for (const project of projects) {
-      if (prefetchedProjectIdsRef.current.has(project.projectId)) {
-        continue;
-      }
-
-      prefetchedProjectIdsRef.current.add(project.projectId);
-      void prefetchProjectDetailQuery(queryClient, project.projectId);
-    }
-  }, [projects, queryClient]);
-
   const prefetchProject = useCallback(
     (projectId: string) => {
       void prefetchProjectTrackingQueries(queryClient, projectId);
@@ -30,10 +13,8 @@ export function useProjectSwitcherPrefetch(projects: ProjectSummaryItem[]) {
   );
 
   const prefetchAllProjects = useCallback(() => {
-    for (const project of projects) {
-      void prefetchProjectTrackingQueries(queryClient, project.projectId);
-    }
-  }, [projects, queryClient]);
+    // Rows prefetch individually via onPressIn; avoid N × 5 request bursts.
+  }, []);
 
   return {
     prefetchProject,
