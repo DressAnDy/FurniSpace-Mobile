@@ -383,6 +383,44 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     width: 34,
   },
+  newProjectButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(201,168,106,0.08)",
+    borderColor: "rgba(201,168,106,0.35)",
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 10,
+    paddingVertical: 12,
+  },
+  newProjectButtonPressed: {
+    opacity: 0.88,
+  },
+  newProjectButtonText: {
+    color: GOLD_DEEP,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.1,
+  },
+  switchProjectButton: {
+    alignItems: "center",
+    backgroundColor: PAPER,
+    borderColor: "rgba(184,149,88,0.35)",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    marginTop: 10,
+    paddingVertical: 11,
+  },
+  switchProjectButtonPressed: {
+    opacity: 0.88,
+  },
+  switchProjectButtonText: {
+    color: GOLD_DEEP,
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   /* ——— Updates ——— */
   updateSection: {

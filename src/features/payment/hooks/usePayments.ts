@@ -57,7 +57,11 @@ export function useCreateDepositPaymentMutation() {
   });
 }
 
-export async function ensurePayment(input: { orderId?: string; paymentId?: string }): Promise<PaymentDetailDto> {
+export async function ensurePayment(input: {
+  orderId?: string;
+  paymentId?: string;
+  paymentType?: PaymentDetailDto["paymentType"];
+}): Promise<PaymentDetailDto> {
   if (input.paymentId) {
     return getPaymentDetailApi(input.paymentId);
   }
@@ -66,7 +70,34 @@ export async function ensurePayment(input: { orderId?: string; paymentId?: strin
     throw new Error("Missing order or payment information.");
   }
 
+  const existingPayment = await findExistingPaymentForOrder(input.orderId, input.paymentType);
+  if (existingPayment) {
+    return existingPayment;
+  }
+
   return createOrderDepositPaymentApi(input.orderId);
+}
+
+async function findExistingPaymentForOrder(
+  orderId: string,
+  paymentType?: PaymentDetailDto["paymentType"],
+): Promise<PaymentDetailDto | null> {
+  const response = await getPaymentsApi({ orderId, limit: 20 });
+  const items = response.items ?? [];
+  const scopedItems = paymentType ? items.filter((item) => item.paymentType === paymentType) : items;
+  const candidates = scopedItems.length > 0 ? scopedItems : items;
+
+  const paidPayment = candidates.find((item) => item.status === "PAID");
+  if (paidPayment) {
+    return getPaymentDetailApi(paidPayment.paymentId);
+  }
+
+  const activePayment = candidates.find((item) => item.status === "PENDING" || item.status === "PROCESSING");
+  if (activePayment) {
+    return getPaymentDetailApi(activePayment.paymentId);
+  }
+
+  return null;
 }
 
 export async function prepareSePayCheckout(paymentId: string) {
@@ -158,6 +189,10 @@ export async function bootstrapPayOsCheckout(input: { orderId?: string; paymentI
   return preparePayOsCheckout(payment.paymentId);
 }
 
-export async function bootstrapPaymentMethod(input: { orderId?: string; paymentId?: string }) {
+export async function bootstrapPaymentMethod(input: {
+  orderId?: string;
+  paymentId?: string;
+  paymentType?: PaymentDetailDto["paymentType"];
+}) {
   return ensurePayment(input);
 }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { env } from "../../../core/config/env";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { ProjectListQuery } from "../models/project.model";
-import { getProjectByIdApi, getProjectsApi, getProjectsByUserApi } from "../services/project.api";
+import { CreateProjectRequestDto, ProjectListQuery } from "../models/project.model";
+import { createProjectApi, getProjectByIdApi, getProjectsApi, getProjectsByUserApi } from "../services/project.api";
 import { useProjectStore } from "../store/project.store";
 import { mapProjectListItemToSummary, pickDefaultActiveProject, pickLatestProject } from "../utils/project.mapper";
 
@@ -126,4 +126,19 @@ export function useActiveProjectSummary() {
     activeProjectId,
     projectsQuery,
   };
+}
+
+export function useCreateProjectMutation() {
+  const queryClient = useQueryClient();
+  const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
+
+  return useMutation({
+    mutationFn: (payload: CreateProjectRequestDto) => createProjectApi(payload),
+    onSuccess: (project) => {
+      setActiveProjectId(project.projectId);
+      queryClient.setQueryData(queryKeys.project.detail(project.projectId), project);
+      void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
+      void queryClient.invalidateQueries({ queryKey: ["project", "by-user"] });
+    },
+  });
 }

@@ -1,24 +1,56 @@
 import { Platform, StyleSheet } from "react-native";
 
+const GOLD = "#C9A86A";
+const CREAM = "#FAF8F5";
+const INK = "#1A1614";
+const SEPAY = "#22B14C";
+const PAYOS = "#2B66D5";
+
+export const paymentBrandColors = {
+  sepay: SEPAY,
+  payos: PAYOS,
+  gold: GOLD,
+} as const;
+
 export const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "#FAF8F5",
+    backgroundColor: CREAM,
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 32,
   },
-  header: {
-    backgroundColor: "#3A3330",
+  heroSection: {
+    backgroundColor: INK,
+    minHeight: Platform.OS === "ios" ? 210 : 196,
+    overflow: "hidden",
+    position: "relative",
+  },
+  heroDecorLarge: {
+    backgroundColor: "rgba(201,168,106,0.08)",
+    borderRadius: 999,
+    height: 180,
+    position: "absolute",
+    right: -70,
+    top: -80,
+    width: 180,
+  },
+  heroDecorSmall: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 999,
+    bottom: 36,
+    height: 100,
+    left: -50,
+    position: "absolute",
+    width: 100,
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
     paddingHorizontal: 19,
     paddingTop: Platform.OS === "ios" ? 54 : 38,
-    paddingBottom: 20,
-  },
-  headerRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 12,
+    zIndex: 2,
   },
   backButton: {
     alignItems: "center",
@@ -28,25 +60,62 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     width: 36,
   },
-  brandText: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 10,
-    letterSpacing: 1.2,
+  heroContent: {
+    alignItems: "center",
+    paddingBottom: 28,
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    zIndex: 1,
   },
-  headerTitle: {
-    color: "#FFFFFF",
-    fontFamily: "serif",
-    fontSize: 28,
-    marginTop: 2,
+  heroLogoFrame: {
+    backgroundColor: "#0E0C0B",
+    borderColor: "rgba(201,168,106,0.45)",
+    borderRadius: 18,
+    borderWidth: 1,
+    height: 88,
+    overflow: "hidden",
+    width: 88,
   },
-  headerSubtitle: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 11,
-    marginTop: 4,
+  heroLogo: {
+    height: "100%",
+    transform: [{ scale: 1.34 }],
+    width: "100%",
+  },
+  heroTagline: {
+    color: "rgba(201,168,106,0.72)",
+    fontSize: 8,
+    fontWeight: "600",
+    letterSpacing: 0.6,
+    marginTop: 10,
+    textAlign: "center",
+  },
+  heroCurve: {
+    backgroundColor: CREAM,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    bottom: -1,
+    height: 24,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    zIndex: 2,
   },
   content: {
+    marginTop: -4,
     paddingHorizontal: 19,
-    paddingTop: 18,
+    paddingTop: 8,
+  },
+  pageTitle: {
+    color: "#2C2420",
+    fontFamily: "serif",
+    fontSize: 28,
+  },
+  pageSubtitle: {
+    color: "#7A6F68",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 18,
+    marginTop: 4,
   },
   centerState: {
     alignItems: "center",
@@ -65,11 +134,15 @@ export const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderColor: "rgba(58,51,48,0.08)",
     borderRadius: 18,
-    borderTopColor: "#C9A86A",
+    borderTopColor: GOLD,
     borderTopWidth: 3,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 18,
     padding: 18,
+    shadowColor: "#1C1612",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
   },
   summaryLabel: {
     color: "#7A6F68",
@@ -79,7 +152,7 @@ export const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   summaryAmount: {
-    color: "#3A3330",
+    color: "#2C2420",
     fontFamily: "serif",
     fontSize: 34,
     marginTop: 8,
@@ -90,7 +163,7 @@ export const styles = StyleSheet.create({
     marginTop: 6,
   },
   sectionTitle: {
-    color: "#3A3330",
+    color: "#2C2420",
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 12,
@@ -102,9 +175,20 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 12,
     overflow: "hidden",
+    shadowColor: "#1C1612",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  methodCardSePay: {
+    borderColor: "rgba(34,177,76,0.22)",
+  },
+  methodCardPayOs: {
+    borderColor: "rgba(43,102,213,0.22)",
   },
   methodCardPressed: {
-    borderColor: "rgba(201,168,106,0.45)",
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
   },
   methodCardTop: {
     alignItems: "center",
@@ -112,24 +196,22 @@ export const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
   },
-  methodIconWrap: {
-    alignItems: "center",
+  methodLogoWrap: {
     borderRadius: 14,
     height: 48,
-    justifyContent: "center",
+    overflow: "hidden",
     width: 48,
   },
-  methodIconSePay: {
-    backgroundColor: "rgba(201,168,106,0.16)",
-  },
-  methodIconPayOs: {
-    backgroundColor: "rgba(37,99,235,0.12)",
+  methodLogo: {
+    height: 48,
+    width: 48,
   },
   methodTextWrap: {
     flex: 1,
+    minWidth: 0,
   },
   methodTitle: {
-    color: "#3A3330",
+    color: "#2C2420",
     fontSize: 15,
     fontWeight: "700",
   },
@@ -139,31 +221,117 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4,
   },
-  methodBadge: {
-    backgroundColor: "#F5F2ED",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  methodFooterSePay: {
+    backgroundColor: "rgba(34,177,76,0.06)",
+    borderTopColor: "rgba(34,177,76,0.12)",
   },
-  methodBadgeText: {
-    color: "#7A6F68",
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
+  methodFooterPayOs: {
+    backgroundColor: "rgba(43,102,213,0.06)",
+    borderTopColor: "rgba(43,102,213,0.12)",
   },
   methodFooter: {
-    backgroundColor: "#FAF8F5",
-    borderTopColor: "rgba(58,51,48,0.06)",
     borderTopWidth: 1,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  methodFooterText: {
-    color: "#A8843E",
+  methodFooterTextSePay: {
+    color: SEPAY,
     fontSize: 11,
     fontWeight: "600",
+  },
+  methodFooterTextPayOs: {
+    color: PAYOS,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  methodBadgeSePay: {
+    backgroundColor: "rgba(34,177,76,0.12)",
+  },
+  methodBadgePayOs: {
+    backgroundColor: "rgba(43,102,213,0.12)",
+  },
+  methodBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  methodBadgeTextSePay: {
+    color: SEPAY,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  methodBadgeTextPayOs: {
+    color: PAYOS,
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  statusPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(122,111,104,0.12)",
+    borderRadius: 999,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusPillPaid: {
+    backgroundColor: "rgba(21,128,61,0.12)",
+  },
+  statusPillText: {
+    color: "#7A6F68",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  statusPillTextPaid: {
+    color: "#15803D",
+  },
+  successCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(21,128,61,0.18)",
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  successTitle: {
+    color: "#15803D",
+    fontFamily: "serif",
+    fontSize: 20,
+    marginTop: 10,
+  },
+  successText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6,
+    textAlign: "center",
+  },
+  primaryActionButton: {
+    alignItems: "center",
+    backgroundColor: "#3A3330",
+    borderRadius: 14,
+    marginTop: 4,
+    paddingVertical: 14,
+  },
+  primaryActionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  terminalText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 12,
+    textAlign: "center",
   },
 });

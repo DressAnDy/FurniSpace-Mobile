@@ -1,16 +1,21 @@
-import React, { useEffect, useState } from "react";
-import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
-import { paymentIconDefinition, walletIconDefinition } from "../../../icons/commerce/definitions";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
+import { checkIconDefinition } from "../../../icons/status/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { bootstrapPaymentMethod } from "../hooks/usePayments";
+import { isPaymentTerminalStatus } from "../hooks/usePaymentRealtime";
 import { PaymentDetailDto } from "../models/payment.model";
-import { formatVndAmount, getPaymentTypeLabel } from "../utils/payment.mapper";
-import { styles } from "./PaymentMethodScreen.styles";
+import { formatVndAmount, getPaymentStatusLabel, getPaymentTypeLabel } from "../utils/payment.mapper";
+import { paymentBrandColors, styles } from "./PaymentMethodScreen.styles";
+
+const brandLogo = require("../../../../assets/brand/furnispace-logo.png");
+const sepayLogo = require("../../../../assets/brand/sepay-logo.png");
+const payosLogo = require("../../../../assets/brand/payos-logo.png");
 
 type PaymentMethodRoute = RouteProp<RootStackParamList, "PaymentMethod">;
 
@@ -21,33 +26,29 @@ export function PaymentMethodScreen(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  const loadPayment = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-    void bootstrapPaymentMethod({
-      orderId: route.params.orderId,
-      paymentId: route.params.paymentId,
-    })
-      .then((result) => {
-        if (active) {
-          setPayment(result);
-        }
-      })
-      .catch((loadError: unknown) => {
-        if (active) {
-          setError(getErrorMessage(loadError, "Unable to load payment."));
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setIsLoading(false);
-        }
+    try {
+      const result = await bootstrapPaymentMethod({
+        orderId: route.params.orderId,
+        paymentId: route.params.paymentId,
+        paymentType: route.params.paymentType,
       });
+      setPayment(result);
+    } catch (loadError: unknown) {
+      setError(getErrorMessage(loadError, "Unable to load payment."));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [route.params.orderId, route.params.paymentId, route.params.paymentType]);
 
-    return () => {
-      active = false;
-    };
-  }, [route.params.orderId, route.params.paymentId]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadPayment();
+    }, [loadPayment]),
+  );
 
   const sharedParams = {
     orderId: route.params.orderId,
@@ -56,26 +57,47 @@ export function PaymentMethodScreen(): React.JSX.Element {
     paymentType: route.params.paymentType,
   };
 
+  const isPaid = payment?.status === "PAID";
+  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status) && payment.isPayable !== false);
+
+  const handleBackToTracking = () => {
+    if (route.params.projectId) {
+      navigation.navigate("Tracking", { projectId: route.params.projectId });
+      return;
+    }
+
+    navigation.navigate("Tracking");
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
+        <View style={styles.heroSection}>
+          <View style={styles.heroDecorLarge} />
+          <View style={styles.heroDecorSmall} />
+          <View style={styles.heroTopRow}>
             <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
               <AppIcon definition={arrowLeftIconDefinition} size={18} color="#FFFFFF" strokeWidth={1.8} />
             </Pressable>
-            <View>
-              <Text style={styles.brandText}>FURNISPACE</Text>
-              <Text style={styles.headerTitle}>Choose payment</Text>
-              <Text style={styles.headerSubtitle}>Select how you want to pay</Text>
-            </View>
           </View>
+          <View style={styles.heroContent}>
+            <View style={styles.heroLogoFrame}>
+              <Image source={brandLogo} style={styles.heroLogo} resizeMode="cover" />
+            </View>
+            <Text style={styles.heroTagline}>SECURE PAYMENT · FURNISPACE</Text>
+          </View>
+          <View style={styles.heroCurve} />
         </View>
 
         <View style={styles.content}>
+          <Text style={styles.pageTitle}>{isPaid ? "Payment completed" : "Choose payment"}</Text>
+          <Text style={styles.pageSubtitle}>
+            {isPaid ? "This payment has already been confirmed." : "Select how you want to pay"}
+          </Text>
+
           {isLoading ? (
             <View style={styles.centerState}>
-              <ActivityIndicator color="#C9A86A" />
+              <ActivityIndicator color={paymentBrandColors.gold} />
               <Text style={styles.stateText}>Loading payment details...</Text>
             </View>
           ) : error ? (
@@ -88,57 +110,107 @@ export function PaymentMethodScreen(): React.JSX.Element {
                 <Text style={styles.summaryLabel}>{getPaymentTypeLabel(payment.paymentType)}</Text>
                 <Text style={styles.summaryAmount}>{formatVndAmount(payment.amount, payment.currency)}</Text>
                 <Text style={styles.summaryMeta}>Reference: {payment.paymentCode}</Text>
+                <View style={[styles.statusPill, isPaid && styles.statusPillPaid]}>
+                  <Text style={[styles.statusPillText, isPaid && styles.statusPillTextPaid]}>
+                    {getPaymentStatusLabel(payment.status)}
+                  </Text>
+                </View>
               </View>
 
-              <Text style={styles.sectionTitle}>Payment method</Text>
-
-              <Pressable
-                style={({ pressed }) => [styles.methodCard, pressed && styles.methodCardPressed]}
-                onPress={() => navigation.navigate("SePayPayment", sharedParams)}
-              >
-                <View style={styles.methodCardTop}>
-                  <View style={[styles.methodIconWrap, styles.methodIconSePay]}>
-                    <AppIcon definition={walletIconDefinition} size={22} color="#A8843E" strokeWidth={1.8} />
-                  </View>
-                  <View style={styles.methodTextWrap}>
-                    <Text style={styles.methodTitle}>SePay · Bank transfer</Text>
-                    <Text style={styles.methodDescription}>
-                      Scan VietQR or copy account details to transfer manually.
+              {isPaid ? (
+                <>
+                  <View style={styles.successCard}>
+                    <AppIcon definition={checkIconDefinition} size={28} color="#15803D" strokeWidth={2} />
+                    <Text style={styles.successTitle}>Payment successful</Text>
+                    <Text style={styles.successText}>
+                      This order has already been paid. No further action is required.
                     </Text>
                   </View>
-                  <AppIcon definition={chevronRightIconDefinition} size={16} color="#7A6F68" strokeWidth={2} />
-                </View>
-                <View style={styles.methodFooter}>
-                  <Text style={styles.methodFooterText}>Manual transfer</Text>
-                  <View style={styles.methodBadge}>
-                    <Text style={styles.methodBadgeText}>QR Code</Text>
-                  </View>
-                </View>
-              </Pressable>
+                  <Pressable style={styles.primaryActionButton} onPress={handleBackToTracking}>
+                    <Text style={styles.primaryActionButtonText}>Back to tracking</Text>
+                  </Pressable>
+                </>
+              ) : !canChooseMethod ? (
+                <>
+                  <Text style={styles.terminalText}>
+                    This payment is {getPaymentStatusLabel(payment.status).toLowerCase()} and cannot be processed
+                    again.
+                  </Text>
+                  <Pressable style={styles.primaryActionButton} onPress={handleBackToTracking}>
+                    <Text style={styles.primaryActionButtonText}>Back to tracking</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.sectionTitle}>Payment method</Text>
 
-              <Pressable
-                style={({ pressed }) => [styles.methodCard, pressed && styles.methodCardPressed]}
-                onPress={() => navigation.navigate("PayOSPayment", sharedParams)}
-              >
-                <View style={styles.methodCardTop}>
-                  <View style={[styles.methodIconWrap, styles.methodIconPayOs]}>
-                    <AppIcon definition={paymentIconDefinition} size={22} color="#2563EB" strokeWidth={1.8} />
-                  </View>
-                  <View style={styles.methodTextWrap}>
-                    <Text style={styles.methodTitle}>PayOS · Online checkout</Text>
-                    <Text style={styles.methodDescription}>
-                      Open PayOS checkout to pay with bank, e-wallet, or card.
-                    </Text>
-                  </View>
-                  <AppIcon definition={chevronRightIconDefinition} size={16} color="#7A6F68" strokeWidth={2} />
-                </View>
-                <View style={styles.methodFooter}>
-                  <Text style={[styles.methodFooterText, { color: "#2563EB" }]}>Fast checkout</Text>
-                  <View style={styles.methodBadge}>
-                    <Text style={styles.methodBadgeText}>Payment link</Text>
-                  </View>
-                </View>
-              </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.methodCard,
+                      styles.methodCardSePay,
+                      pressed && styles.methodCardPressed,
+                    ]}
+                    onPress={() => navigation.navigate("SePayPayment", sharedParams)}
+                  >
+                    <View style={styles.methodCardTop}>
+                      <View style={styles.methodLogoWrap}>
+                        <Image source={sepayLogo} style={styles.methodLogo} resizeMode="cover" />
+                      </View>
+                      <View style={styles.methodTextWrap}>
+                        <Text style={styles.methodTitle}>SePay · Bank transfer</Text>
+                        <Text style={styles.methodDescription}>
+                          Scan VietQR or copy account details to transfer manually.
+                        </Text>
+                      </View>
+                      <AppIcon
+                        definition={chevronRightIconDefinition}
+                        size={16}
+                        color={paymentBrandColors.sepay}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <View style={[styles.methodFooter, styles.methodFooterSePay]}>
+                      <Text style={styles.methodFooterTextSePay}>Manual transfer</Text>
+                      <View style={[styles.methodBadge, styles.methodBadgeSePay]}>
+                        <Text style={styles.methodBadgeTextSePay}>QR Code</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.methodCard,
+                      styles.methodCardPayOs,
+                      pressed && styles.methodCardPressed,
+                    ]}
+                    onPress={() => navigation.navigate("PayOSPayment", sharedParams)}
+                  >
+                    <View style={styles.methodCardTop}>
+                      <View style={styles.methodLogoWrap}>
+                        <Image source={payosLogo} style={styles.methodLogo} resizeMode="cover" />
+                      </View>
+                      <View style={styles.methodTextWrap}>
+                        <Text style={styles.methodTitle}>PayOS · Online checkout</Text>
+                        <Text style={styles.methodDescription}>
+                          Open PayOS checkout to pay with bank, e-wallet, or card.
+                        </Text>
+                      </View>
+                      <AppIcon
+                        definition={chevronRightIconDefinition}
+                        size={16}
+                        color={paymentBrandColors.payos}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <View style={[styles.methodFooter, styles.methodFooterPayOs]}>
+                      <Text style={styles.methodFooterTextPayOs}>Fast checkout</Text>
+                      <View style={[styles.methodBadge, styles.methodBadgePayOs]}>
+                        <Text style={styles.methodBadgeTextPayOs}>Payment link</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                </>
+              )}
             </>
           ) : null}
         </View>

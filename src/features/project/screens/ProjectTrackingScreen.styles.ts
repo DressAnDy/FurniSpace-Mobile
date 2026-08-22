@@ -19,6 +19,10 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 11,
   },
+  headerTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
   backButton: {
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -49,6 +53,11 @@ export const styles = StyleSheet.create({
   summaryTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 12,
+  },
+  summaryTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   projectName: {
     color: "#FFFFFF",
@@ -106,7 +115,80 @@ export const styles = StyleSheet.create({
   progressFill: {
     backgroundColor: "#C9A86A",
     height: 4,
-    width: "25%",
+  },
+  currentStatusText: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 11,
+    marginTop: 8,
+  },
+  switchProjectButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(201,168,106,0.35)",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  switchProjectButtonText: {
+    color: "#E8D4A8",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  rejectedPill: {
+    backgroundColor: "rgba(220,38,38,0.18)",
+    borderColor: "rgba(220,38,38,0.35)",
+  },
+  rejectedPillDot: {
+    backgroundColor: "#F87171",
+  },
+  rejectedPillText: {
+    color: "#FCA5A5",
+  },
+  rejectedMessage: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 12,
+  },
+  loadingWrap: {
+    alignItems: "center",
+    paddingVertical: 48,
+  },
+  loadingText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    marginTop: 12,
+  },
+  stateCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(60,51,48,0.08)",
+    borderRadius: 15,
+    borderWidth: 1,
+    padding: 20,
+  },
+  stateCardText: {
+    color: "#7A6F68",
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  submitRequestButton: {
+    alignItems: "center",
+    backgroundColor: "#3A3330",
+    borderRadius: 12,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  submitRequestButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
   },
   content: {
     padding: 19,
@@ -127,7 +209,8 @@ export const styles = StyleSheet.create({
   metricValue: {
     color: "#C9A86A",
     fontFamily: "serif",
-    fontSize: 18,
+    fontSize: 16,
+    textAlign: "center",
   },
   metricLabel: {
     color: "#7A6F68",
@@ -147,6 +230,103 @@ export const styles = StyleSheet.create({
     color: "#7A6F68",
     fontSize: 10,
     letterSpacing: 1,
+    marginBottom: 2,
+  },
+  actionButton: {
+    alignItems: "center",
+    backgroundColor: "#3A3330",
+    borderRadius: 12,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  emptyHint: {
+    color: "#7A6F68",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+  },
+  deadlineRow: {
+    alignItems: "center",
+    borderTopColor: "rgba(60,51,48,0.06)",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  deadlineTextWrap: {
+    flex: 1,
+  },
+  deadlinePhase: {
+    color: "#2C2420",
+    fontSize: 13,
+  },
+  deadlineDate: {
+    color: "#7A6F68",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  deadlineStatus: {
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.25,
+    marginLeft: 8,
+    textAlign: "right",
+  },
+  scheduleRow: {
+    alignItems: "center",
+    borderTopColor: "rgba(60,51,48,0.06)",
+    borderTopWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  scheduleTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  scheduleTitle: {
+    color: "#2C2420",
+    fontSize: 13,
+  },
+  scheduleMeta: {
+    color: "#7A6F68",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  scheduleConfirmButton: {
+    backgroundColor: "rgba(201,168,106,0.12)",
+    borderColor: "rgba(201,168,106,0.35)",
+    borderRadius: 999,
+    borderWidth: 1,
+    marginLeft: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  scheduleConfirmText: {
+    color: "#C9A86A",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  orderStatusText: {
+    color: "#2C2420",
+    fontSize: 14,
+    marginTop: 8,
+  },
+  orderMetaText: {
+    color: "#7A6F68",
+    fontSize: 11,
+    marginTop: 4,
   },
   teamRow: {
     alignItems: "center",
@@ -243,6 +423,11 @@ export const styles = StyleSheet.create({
   timelineHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 8,
+  },
+  timelineTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   timelineTitle: {
     color: "#2C2420",
@@ -297,6 +482,10 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     width: 30,
+  },
+  completionTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   completionLabel: {
     color: "rgba(255,255,255,0.6)",

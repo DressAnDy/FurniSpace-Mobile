@@ -13,6 +13,7 @@ import { HomeScreen } from "../../features/home/screens/HomeScreen";
 import { NotificationsScreen } from "../../features/notification/screens/NotificationsScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ProjectTrackingScreen } from "../../features/project/screens/ProjectTrackingScreen";
+import { CreateProjectRequestScreen } from "../../features/project/screens/CreateProjectRequestScreen";
 import { SePayPaymentScreen } from "../../features/payment/screens/SePayPaymentScreen";
 import { PayOSPaymentScreen } from "../../features/payment/screens/PayOSPaymentScreen";
 import { PaymentMethodScreen } from "../../features/payment/screens/PaymentMethodScreen";
@@ -42,6 +43,7 @@ export type RootStackParamList = {
   SePayPayment: PaymentRouteParams;
   PayOSPayment: PaymentRouteParams;
   Tracking: { projectId?: string } | undefined;
+  CreateProjectRequest: undefined;
   VerifyEmail: { email?: string } | undefined;
 };
 
@@ -65,6 +67,7 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="SePayPayment" component={SePayPaymentScreen} />
         <Stack.Screen name="PayOSPayment" component={PayOSPaymentScreen} />
         <Stack.Screen name="Tracking" component={ProjectTrackingScreen} />
+        <Stack.Screen name="CreateProjectRequest" component={CreateProjectRequestScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
