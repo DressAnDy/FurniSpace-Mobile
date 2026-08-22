@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ensureNotificationPermissions, showLocalNotification } from "../../core/notifications/localNotifications";
 import { connectNotificationHub, disconnectNotificationHub, subscribeNotificationHub } from "../../core/realtime/notificationHub";
 import { useAuthStore } from "../../features/auth/store/auth.store";
+import { prefetchNotificationQueries } from "../../features/notification/hooks/useNotifications";
 import { invalidateProjectTrackingQueries } from "../../features/project/hooks/useProjectTracking";
 import { useProjectStore } from "../../features/project/store/project.store";
 import { shouldRefreshProjectTracking } from "../../features/project/utils/project.tracking.realtime";
@@ -21,6 +22,7 @@ export function NotificationRealtimeBridge(): null {
     }
 
     void ensureNotificationPermissions().catch(() => undefined);
+    prefetchNotificationQueries(queryClient);
     void connectNotificationHub().catch(() => undefined);
 
     const unsubscribe = subscribeNotificationHub((payload: RealtimeNotificationPayloadDto) => {

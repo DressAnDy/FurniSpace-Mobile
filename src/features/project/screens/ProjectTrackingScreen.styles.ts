@@ -304,20 +304,6 @@ export const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-  scheduleConfirmButton: {
-    backgroundColor: "rgba(201,168,106,0.12)",
-    borderColor: "rgba(201,168,106,0.35)",
-    borderRadius: 999,
-    borderWidth: 1,
-    marginLeft: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  scheduleConfirmText: {
-    color: "#C9A86A",
-    fontSize: 11,
-    fontWeight: "600",
-  },
   orderStatusText: {
     color: "#2C2420",
     fontSize: 14,

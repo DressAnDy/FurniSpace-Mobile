@@ -13,6 +13,7 @@ import {
   getProjectPhaseDeadlinesApi,
   getProjectSchedulesApi,
 } from "../services/project.tracking.api";
+import { isSchedulePendingConfirmation } from "../utils/schedule.mapper";
 import { buildProjectTrackingSummary } from "../utils/project.tracking.mapper";
 
 export type ProjectTrackingData = {
@@ -26,7 +27,7 @@ export type ProjectTrackingData = {
 
 const TRACKING_STALE_MS = 30_000;
 
-function buildTrackingQueryOptions(projectId: string, isLoggedIn: boolean) {
+export function buildProjectTrackingQueryOptions(projectId: string, isLoggedIn = true) {
   const enabled = isLoggedIn && Boolean(projectId);
 
   return [
@@ -73,6 +74,54 @@ function buildTrackingQueryOptions(projectId: string, isLoggedIn: boolean) {
   ] as const;
 }
 
+export async function prefetchProjectTrackingQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.project.detail(projectId),
+      queryFn: () => getProjectByIdApi(projectId),
+      staleTime: TRACKING_STALE_MS,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.project.phaseDeadlines(projectId),
+      queryFn: () => getProjectPhaseDeadlinesApi(projectId),
+      staleTime: TRACKING_STALE_MS,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.project.schedules(projectId),
+      queryFn: () => getProjectSchedulesApi(projectId),
+      staleTime: TRACKING_STALE_MS,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.project.orders(projectId),
+      queryFn: () => getProjectOrdersApi(projectId),
+      staleTime: TRACKING_STALE_MS,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.payment.list({ projectId, limit: 20 }),
+      queryFn: () => getPaymentsApi({ projectId, limit: 20 }),
+      staleTime: TRACKING_STALE_MS,
+    }),
+  ]);
+}
+
+export function prefetchProjectDetailQuery(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string,
+): Promise<void> {
+  return queryClient.prefetchQuery({
+    queryKey: queryKeys.project.detail(projectId),
+    queryFn: () => getProjectByIdApi(projectId),
+    staleTime: TRACKING_STALE_MS,
+  });
+}
+
+function buildTrackingQueryOptions(projectId: string, isLoggedIn: boolean) {
+  return buildProjectTrackingQueryOptions(projectId, isLoggedIn);
+}
+
 export function refetchProjectTrackingQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string,
@@ -86,8 +135,10 @@ export function refetchProjectTrackingQueries(
       queryKey: queryKeys.payment.list({ projectId }),
       type: "active",
     }),
-    queryClient.invalidateQueries({ queryKey: ["project", "list"] }),
-    queryClient.invalidateQueries({ queryKey: ["project", "by-user"] }),
+    queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] }),
+    queryClient.invalidateQueries({ queryKey: ["project", "quotations", projectId] }),
+    queryClient.refetchQueries({ queryKey: ["project", "list"], type: "active" }),
+    queryClient.refetchQueries({ queryKey: ["project", "by-user"], type: "active" }),
   ]).then(() => undefined);
 }
 
@@ -110,8 +161,8 @@ export function useProjectTrackingQueries(projectId: string | null) {
 
   const [projectQuery, phaseDeadlinesQuery, schedulesQuery, ordersQuery, paymentsQuery] = results;
 
-  const isLoading = enabled && results.some((query) => query.isLoading);
-  const isRefetching = enabled && results.some((query) => query.isFetching && !query.isLoading);
+  const isLoading = enabled && projectQuery.isPending && !projectQuery.data;
+  const isRefetching = enabled && !isLoading && results.some((query) => query.isFetching);
   const isError = results.some((query) => query.isError);
   const error = results.find((query) => query.error)?.error ?? null;
 
@@ -204,16 +255,20 @@ export function canReopenProposal(status: ProjectStatus): boolean {
 }
 
 export function getPendingConfirmationSchedules(schedules: ProjectScheduleDto[]): ProjectScheduleDto[] {
-  return schedules.filter((schedule) => schedule.status === "PENDING_CONFIRMATION");
+  return schedules.filter((schedule) => isSchedulePendingConfirmation(schedule.status));
 }
 
 export function getUpcomingSchedules(schedules: ProjectScheduleDto[]): ProjectScheduleDto[] {
   const now = Date.now();
   return schedules
     .filter((schedule) => schedule.status !== "CANCELLED" && schedule.status !== "COMPLETED")
-    .filter((schedule) => new Date(schedule.scheduledAt).getTime() >= now - 24 * 60 * 60 * 1000)
+    .filter(
+      (schedule) =>
+        isSchedulePendingConfirmation(schedule.status) ||
+        new Date(schedule.scheduledAt).getTime() >= now - 24 * 60 * 60 * 1000,
+    )
     .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime())
-    .slice(0, 5);
+    .slice(0, 8);
 }
 
 export function getPrimaryOrder(orders: OrderDto[]): OrderDto | null {

@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { env } from "../config/env";
 
@@ -23,12 +24,16 @@ export function getHubUrl(hubPath: string): string {
 export function getSignalRTransportOptions(accessTokenFactory: () => Promise<string>) {
   return {
     accessTokenFactory,
-    transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+    // Native WebSocket often fails against ASP.NET SignalR (proxy/TLS). Long polling is reliable on mobile.
+    transport:
+      Platform.OS === "web"
+        ? HttpTransportType.WebSockets | HttpTransportType.LongPolling
+        : HttpTransportType.LongPolling,
     skipNegotiation: false,
   };
 }
 
-export const signalRLogLevel = __DEV__ ? LogLevel.Warning : LogLevel.Error;
+export const signalRLogLevel = LogLevel.Critical;
 
 export async function safeHubStart(start: () => Promise<void>): Promise<boolean> {
   try {
