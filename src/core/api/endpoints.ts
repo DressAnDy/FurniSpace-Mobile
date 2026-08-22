@@ -30,6 +30,21 @@ export const endpoints = {
     updateTargetDate: (projectId: string) => `/projects/${projectId}/target-completion-date`,
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
     orders: (projectId: string) => `/projects/${projectId}/orders`,
+    proposals: (projectId: string) => `/projects/${projectId}/proposals`,
+    quotations: (projectId: string) => `/projects/${projectId}/quotations`,
+  },
+  proposals: {
+    detail: (proposalId: string) => `/proposals/${proposalId}`,
+    scenes: (proposalId: string) => `/proposals/${proposalId}/scenes`,
+    items: (proposalId: string) => `/proposals/${proposalId}/items`,
+    selectFinal: (proposalId: string) => `/proposals/${proposalId}/select-final`,
+    requestRevision: (proposalId: string) => `/proposals/${proposalId}/request-revision`,
+  },
+  quotations: {
+    detail: (quotationId: string) => `/quotations/${quotationId}`,
+    accept: (quotationId: string) => `/quotations/${quotationId}/accept`,
+    requestRevision: (quotationId: string) => `/quotations/${quotationId}/request-revision`,
+    reject: (quotationId: string) => `/quotations/${quotationId}/reject`,
   },
   orders: {
     detail: (orderId: string) => `/orders/${orderId}`,

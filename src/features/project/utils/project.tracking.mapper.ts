@@ -92,16 +92,19 @@ export function buildProjectTrackingSummary(status: ProjectStatus): ProjectTrack
   }
 
   const activeStageIndex = resolveActiveStageIndex(status);
+  const isFullyCompleted = status === "COMPLETED";
   const stages: MacroStageItem[] = PROJECT_WORKFLOW_STAGE_CATALOG.map((stage, index) => ({
     id: stage.id,
     label: stage.label,
     statuses: [...stage.statuses],
-    uiState: resolveStageUiState(index, activeStageIndex),
+    uiState: isFullyCompleted ? "COMPLETED" : resolveStageUiState(index, activeStageIndex),
   }));
 
   const completedCount = stages.filter((stage) => stage.uiState === "COMPLETED").length;
-  const activeCount = stages.some((stage) => stage.uiState === "ACTIVE") ? 0.5 : 0;
-  const progressPercent = Math.round(((completedCount + activeCount) / stages.length) * 100);
+  const activeCount = isFullyCompleted ? 0 : stages.some((stage) => stage.uiState === "ACTIVE") ? 0.5 : 0;
+  const progressPercent = isFullyCompleted
+    ? 100
+    : Math.round(((completedCount + activeCount) / stages.length) * 100);
 
   return {
     isRejected: false,
@@ -123,6 +126,25 @@ export function formatTrackingDate(value: string | null | undefined): string {
   }
 
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function formatTrackingDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export function computeDaysUntil(value: string | null | undefined): number | null {

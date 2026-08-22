@@ -70,9 +70,14 @@ export async function ensurePayment(input: {
     throw new Error("Missing order or payment information.");
   }
 
-  const existingPayment = await findExistingPaymentForOrder(input.orderId, input.paymentType);
+  const paymentType = input.paymentType ?? "DEPOSIT";
+  const existingPayment = await findExistingPaymentForOrder(input.orderId, paymentType);
   if (existingPayment) {
     return existingPayment;
+  }
+
+  if (paymentType === "REMAINING_PAYMENT") {
+    throw new Error("Remaining payment has not been issued yet. Please contact sales after delivery.");
   }
 
   return createOrderDepositPaymentApi(input.orderId);
