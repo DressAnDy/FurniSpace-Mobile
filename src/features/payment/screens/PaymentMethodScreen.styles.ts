@@ -23,7 +23,7 @@ export const styles = StyleSheet.create({
   },
   heroSection: {
     backgroundColor: INK,
-    minHeight: Platform.OS === "ios" ? 210 : 196,
+    minHeight: Platform.OS === "ios" ? 150 : 136,
     overflow: "hidden",
     position: "relative",
   },
@@ -62,19 +62,19 @@ export const styles = StyleSheet.create({
   },
   heroContent: {
     alignItems: "center",
-    paddingBottom: 28,
+    paddingBottom: 18,
     paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingTop: 2,
     zIndex: 1,
   },
   heroLogoFrame: {
     backgroundColor: "#0E0C0B",
     borderColor: "rgba(201,168,106,0.45)",
-    borderRadius: 18,
+    borderRadius: 13,
     borderWidth: 1,
-    height: 88,
+    height: 58,
     overflow: "hidden",
-    width: 88,
+    width: 58,
   },
   heroLogo: {
     height: "100%",
@@ -94,7 +94,7 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     bottom: -1,
-    height: 24,
+    height: 18,
     left: 0,
     position: "absolute",
     right: 0,
@@ -108,7 +108,7 @@ export const styles = StyleSheet.create({
   pageTitle: {
     color: "#2C2420",
     fontFamily: "serif",
-    fontSize: 28,
+    fontSize: 26,
   },
   pageSubtitle: {
     color: "#7A6F68",
@@ -121,7 +121,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     justifyContent: "center",
-    minHeight: 280,
+    minHeight: 180,
     paddingHorizontal: 24,
   },
   stateText: {
@@ -133,12 +133,10 @@ export const styles = StyleSheet.create({
   summaryCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "rgba(58,51,48,0.08)",
-    borderRadius: 18,
-    borderTopColor: GOLD,
-    borderTopWidth: 3,
+    borderRadius: 20,
     borderWidth: 1,
     marginBottom: 18,
-    padding: 18,
+    padding: 20,
     shadowColor: "#1C1612",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
@@ -150,6 +148,11 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
+  },
+  summaryTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   summaryAmount: {
     color: "#2C2420",
@@ -164,9 +167,21 @@ export const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: "#2C2420",
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 19,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 12,
+  },
+  sectionEyebrow: {
+    color: GOLD,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.2,
   },
   methodCard: {
     backgroundColor: "#FFFFFF",
@@ -272,10 +287,8 @@ export const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   statusPill: {
-    alignSelf: "flex-start",
     backgroundColor: "rgba(122,111,104,0.12)",
     borderRadius: 999,
-    marginTop: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
@@ -291,6 +304,12 @@ export const styles = StyleSheet.create({
   },
   statusPillTextPaid: {
     color: "#15803D",
+  },
+  statusPillProcessing: {
+    backgroundColor: "rgba(201,168,106,0.16)",
+  },
+  statusPillTextProcessing: {
+    color: "#8A6D3B",
   },
   successCard: {
     alignItems: "center",
@@ -331,7 +350,33 @@ export const styles = StyleSheet.create({
     color: "#7A6F68",
     fontSize: 13,
     lineHeight: 20,
-    marginBottom: 12,
     textAlign: "center",
+  },
+  noticeCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E8DFD4",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 6,
+    marginBottom: 12,
+    padding: 18,
+  },
+  noticeTitle: {
+    color: "#2C2420",
+    fontSize: 15,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  retryButton: {
+    backgroundColor: "#3A3330",
+    borderRadius: 12,
+    marginTop: 4,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+  },
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

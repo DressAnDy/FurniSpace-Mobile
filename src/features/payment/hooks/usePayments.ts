@@ -63,7 +63,24 @@ export async function ensurePayment(input: {
   paymentType?: PaymentDetailDto["paymentType"];
 }): Promise<PaymentDetailDto> {
   if (input.paymentId) {
-    return getPaymentDetailApi(input.paymentId);
+    const payment = await getPaymentDetailApi(input.paymentId);
+    if (
+      payment.status === "PAID" ||
+      !input.orderId ||
+      (payment.status !== "EXPIRED" && payment.status !== "CANCELLED")
+    ) {
+      return payment;
+    }
+
+    const replacement = await findExistingPaymentForOrder(
+      input.orderId,
+      input.paymentType ?? payment.paymentType,
+    );
+    if (replacement) {
+      return replacement;
+    }
+
+    return payment;
   }
 
   if (!input.orderId) {
@@ -89,8 +106,7 @@ async function findExistingPaymentForOrder(
 ): Promise<PaymentDetailDto | null> {
   const response = await getPaymentsApi({ orderId, limit: 20 });
   const items = response.items ?? [];
-  const scopedItems = paymentType ? items.filter((item) => item.paymentType === paymentType) : items;
-  const candidates = scopedItems.length > 0 ? scopedItems : items;
+  const candidates = paymentType ? items.filter((item) => item.paymentType === paymentType) : items;
 
   const paidPayment = candidates.find((item) => item.status === "PAID");
   if (paidPayment) {

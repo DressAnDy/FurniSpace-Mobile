@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import {
-  connectNotificationHub,
   subscribeNotificationHub,
 } from "../../../core/realtime/notificationHub";
 import { useAuthStore } from "../../auth/store/auth.store";
@@ -19,8 +18,11 @@ export function useHomeProjectRealtime({
   refetchProjects,
 }: UseHomeProjectRealtimeOptions): void {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const isFocused = useIsFocused();
   const refetchProjectsRef = useRef(refetchProjects);
   const hasFocusedRef = useRef(false);
+  const lastRefreshAtRef = useRef(Date.now());
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   refetchProjectsRef.current = refetchProjects;
 
@@ -35,7 +37,10 @@ export function useHomeProjectRealtime({
       }
 
       hasFocusedRef.current = true;
-      void refetchProjectsRef.current();
+      if (Date.now() - lastRefreshAtRef.current >= 30_000) {
+        lastRefreshAtRef.current = Date.now();
+        void refetchProjectsRef.current();
+      }
 
       return () => {
         hasFocusedRef.current = false;
@@ -44,11 +49,9 @@ export function useHomeProjectRealtime({
   );
 
   useEffect(() => {
-    if (!enabled || !isLoggedIn) {
+    if (!enabled || !isLoggedIn || !isFocused) {
       return;
     }
-
-    void connectNotificationHub().catch(() => undefined);
 
     const unsubscribe = subscribeNotificationHub((payload) => {
       if (projectId) {
@@ -59,9 +62,21 @@ export function useHomeProjectRealtime({
         return;
       }
 
-      void refetchProjectsRef.current();
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+      }
+      refreshTimerRef.current = setTimeout(() => {
+        lastRefreshAtRef.current = Date.now();
+        void refetchProjectsRef.current();
+      }, 350);
     });
 
-    return unsubscribe;
-  }, [enabled, isLoggedIn, projectId]);
+    return () => {
+      unsubscribe();
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [enabled, isFocused, isLoggedIn, projectId]);
 }

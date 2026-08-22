@@ -56,7 +56,7 @@ export function buildProjectTrackingQueryOptions(projectId: string, isLoggedIn =
       queryFn: () => getProjectSchedulesApi(projectId),
     },
     {
-      queryKey: queryKeys.project.orders(projectId),
+      queryKey: queryKeys.project.trackingOrders(projectId),
       enabled,
       staleTime: TRACKING_STALE_MS,
       retry: false,
@@ -95,7 +95,7 @@ export async function prefetchProjectTrackingQueries(
       staleTime: TRACKING_STALE_MS,
     }),
     queryClient.prefetchQuery({
-      queryKey: queryKeys.project.orders(projectId),
+      queryKey: queryKeys.project.trackingOrders(projectId),
       queryFn: () => getProjectOrdersApi(projectId),
       staleTime: TRACKING_STALE_MS,
     }),
@@ -130,9 +130,9 @@ export function refetchProjectTrackingQueries(
     queryClient.refetchQueries({ queryKey: queryKeys.project.detail(projectId), type: "active" }),
     queryClient.refetchQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId), type: "active" }),
     queryClient.refetchQueries({ queryKey: queryKeys.project.schedules(projectId), type: "active" }),
-    queryClient.refetchQueries({ queryKey: queryKeys.project.orders(projectId), type: "active" }),
+    queryClient.refetchQueries({ queryKey: queryKeys.project.trackingOrders(projectId), type: "active" }),
     queryClient.refetchQueries({
-      queryKey: queryKeys.payment.list({ projectId }),
+      queryKey: ["payment", "list"],
       type: "active",
     }),
     queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] }),
@@ -227,9 +227,12 @@ export function useConfirmOrderDeliveryMutation(projectId: string | null) {
 
   return useMutation({
     mutationFn: (orderId: string) => confirmOrderDeliveryApi(orderId),
-    onSuccess: () => {
+    onSuccess: (_order, orderId) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(orderId) });
+      void queryClient.invalidateQueries({ queryKey: ["payment", "list"] });
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.orders(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.trackingOrders(projectId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
       }
     },

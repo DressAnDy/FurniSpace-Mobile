@@ -5,6 +5,8 @@ const ACCESS_TOKEN_SERVICE = "furnispace.auth.access-token";
 const REFRESH_TOKEN_SERVICE = "furnispace.auth.refresh-token";
 const ACCESS_TOKEN_FALLBACK_KEY = "furnispace.auth.access-token.fallback";
 const REFRESH_TOKEN_FALLBACK_KEY = "furnispace.auth.refresh-token.fallback";
+let accessTokenCache: string | null | undefined;
+let refreshTokenCache: string | null | undefined;
 
 async function safeSetGenericPassword(username: string, token: string, service: string, fallbackKey: string): Promise<void> {
   try {
@@ -39,22 +41,34 @@ async function safeResetGenericPassword(service: string, fallbackKey: string): P
 }
 
 export async function setAccessToken(token: string): Promise<void> {
+  accessTokenCache = token;
   await safeSetGenericPassword("accessToken", token, ACCESS_TOKEN_SERVICE, ACCESS_TOKEN_FALLBACK_KEY);
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  return safeGetGenericPassword(ACCESS_TOKEN_SERVICE, ACCESS_TOKEN_FALLBACK_KEY);
+  if (accessTokenCache !== undefined) {
+    return accessTokenCache;
+  }
+  accessTokenCache = await safeGetGenericPassword(ACCESS_TOKEN_SERVICE, ACCESS_TOKEN_FALLBACK_KEY);
+  return accessTokenCache;
 }
 
 export async function setRefreshToken(token: string): Promise<void> {
+  refreshTokenCache = token;
   await safeSetGenericPassword("refreshToken", token, REFRESH_TOKEN_SERVICE, REFRESH_TOKEN_FALLBACK_KEY);
 }
 
 export async function getRefreshToken(): Promise<string | null> {
-  return safeGetGenericPassword(REFRESH_TOKEN_SERVICE, REFRESH_TOKEN_FALLBACK_KEY);
+  if (refreshTokenCache !== undefined) {
+    return refreshTokenCache;
+  }
+  refreshTokenCache = await safeGetGenericPassword(REFRESH_TOKEN_SERVICE, REFRESH_TOKEN_FALLBACK_KEY);
+  return refreshTokenCache;
 }
 
 export async function clearAuthTokens(): Promise<void> {
+  accessTokenCache = null;
+  refreshTokenCache = null;
   await Promise.all([
     safeResetGenericPassword(ACCESS_TOKEN_SERVICE, ACCESS_TOKEN_FALLBACK_KEY),
     safeResetGenericPassword(REFRESH_TOKEN_SERVICE, REFRESH_TOKEN_FALLBACK_KEY),

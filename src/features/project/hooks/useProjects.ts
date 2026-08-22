@@ -62,6 +62,7 @@ export function useProjectDetailQuery(projectId: string | null) {
     queryKey: queryKeys.project.detail(projectId ?? "none"),
     enabled: isLoggedIn && Boolean(projectId),
     queryFn: () => getProjectByIdApi(projectId!),
+    staleTime: 30_000,
   });
 }
 
