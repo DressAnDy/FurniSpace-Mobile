@@ -27,6 +27,15 @@ import { PayOSPaymentScreen } from "../../features/payment/screens/PayOSPaymentS
 import { PaymentMethodScreen } from "../../features/payment/screens/PaymentMethodScreen";
 import { ProjectChatStatus, ProjectChatType } from "../../features/communication/models/chat.model";
 import { PaymentRouteParams } from "../../features/payment/models/payment.model";
+import {
+  SaleDashboardScreen,
+  SaleMessagesScreen,
+  SaleMoreScreen,
+  SaleProjectsScreen,
+  SaleRequestsScreen,
+} from "../../features/sale/screens/SaleMainScreens";
+import { SaleChatScreen, SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
+import type { ProjectDetailTab } from "../../features/sale/data/sale.mock";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
@@ -61,6 +70,13 @@ export type RootStackParamList = {
   OrderDetail: { orderId: string; projectId: string; projectName?: string };
   ProjectSchedules: { projectId: string; projectName?: string };
   VerifyEmail: { email?: string } | undefined;
+  SaleDashboard: undefined;
+  SaleRequests: undefined;
+  SaleProjects: undefined;
+  SaleMessages: undefined;
+  SaleMore: undefined;
+  SaleChat: { conversationId: string };
+  SaleProjectDetail: { tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -93,6 +109,13 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
         <Stack.Screen name="ProjectSchedules" component={ProjectSchedulesScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+        <Stack.Screen name="SaleDashboard" component={SaleDashboardScreen} />
+        <Stack.Screen name="SaleRequests" component={SaleRequestsScreen} />
+        <Stack.Screen name="SaleProjects" component={SaleProjectsScreen} />
+        <Stack.Screen name="SaleMessages" component={SaleMessagesScreen} />
+        <Stack.Screen name="SaleMore" component={SaleMoreScreen} />
+        <Stack.Screen name="SaleChat" component={SaleChatScreen} />
+        <Stack.Screen name="SaleProjectDetail" component={SaleProjectDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
