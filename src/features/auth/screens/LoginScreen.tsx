@@ -20,7 +20,11 @@ export function LoginScreen(): React.JSX.Element {
         onRegister={() => navigation.navigate("Register")}
         onSubmit={(payload) => {
           loginMutation.mutate(payload, {
-            onSuccess: () => navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
+            onSuccess: (user) =>
+              navigation.reset({
+                index: 0,
+                routes: [{ name: user.role === "SALES" ? "SaleDashboard" : "Home" }],
+              }),
             onError: (error) => {
               Alert.alert("Login failed", getErrorMessage(error, "Unable to login. Please try again."));
             },
