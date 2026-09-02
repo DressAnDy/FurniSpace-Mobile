@@ -22,6 +22,14 @@ export const queryKeys = {
   sale: {
     kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,
     actionQueue: (query: SaleActionQueueQueryKey) => ["sale", "action-queue", query] as const,
+    areas: (projectId: string) => ["sale", "areas", projectId] as const,
+    files: (projectId: string, query: Record<string, unknown> = {}) => ["sale", "files", projectId, query] as const,
+    proposals: (projectId: string) => ["sale", "proposals", projectId] as const,
+    quotations: (projectId: string, status?: string) => ["sale", "quotations", projectId, status ?? "all"] as const,
+    orders: (projectId: string) => ["sale", "orders", projectId] as const,
+    productionRequests: (query: Record<string, unknown> = {}) => ["sale", "production-requests", query] as const,
+    deliveries: (orderId: string) => ["sale", "deliveries", orderId] as const,
+    deliveryTracking: (orderId: string) => ["sale", "delivery-tracking", orderId] as const,
   },
   payment: {
     detail: (paymentId: string) => ["payment", "detail", paymentId] as const,

@@ -1,24 +1,80 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { plusIconDefinition } from "../../../icons/action/definitions";
-import { mailIconDefinition, sendIconDefinition, paperclipIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
+import {
+  sendIconDefinition,
+  paperclipIconDefinition,
+  phoneIconDefinition,
+} from "../../../icons/communication/definitions";
 import { calendarIconDefinition, clockIconDefinition } from "../../../icons/project/definitions";
-import { downloadIconDefinition, fileTextIconDefinition, imageIconDefinition, pdfIconDefinition, uploadIconDefinition } from "../../../icons/file/definitions";
+import {
+  downloadIconDefinition,
+  fileTextIconDefinition,
+  imageIconDefinition,
+  pdfIconDefinition,
+  uploadIconDefinition,
+} from "../../../icons/file/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { useProjectDetailQuery } from "../../project/hooks/useProjects";
 import type { ProjectDetailDto } from "../../project/models/project.model";
+import type { ProjectScheduleDto, ProjectScheduleType } from "../../project/models/project.tracking.model";
 import { getProjectStatusLabel } from "../../project/utils/project.mapper";
+import { getScheduleStartAt } from "../../project/services/project.tracking.api";
 import { saleConversations, type ProjectDetailTab } from "../data/sale.mock";
+import { useSaleProposalsQuery, useSaleQuotationsQuery, useSendQuotationMutation } from "../hooks/useSaleCommercial";
+import { useSaleOrdersQuery } from "../hooks/useSaleFulfillment";
+import {
+  pickAndUploadProjectFile,
+  useCreateProjectScheduleMutation,
+  useSalePhaseDeadlinesQuery,
+  useSaleProjectAreasQuery,
+  useSaleProjectFilesQuery,
+  useSaleProjectSchedulesQuery,
+  useUploadProjectFileMutation,
+} from "../hooks/useSaleOps";
+import type { ProjectFileDto } from "../models/sale.ops.model";
 import { formatSaleDate } from "../utils/sale.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
 type ProjectProps = NativeStackScreenProps<RootStackParamList, "SaleProjectDetail">;
 type ChatProps = NativeStackScreenProps<RootStackParamList, "SaleChat">;
+
+function formatScheduleTimeRange(schedule: ProjectScheduleDto): string {
+  const start = getScheduleStartAt(schedule);
+  const end = schedule.scheduledEnd || schedule.endAt;
+  const startLabel = start
+    ? new Date(start).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+    : "—";
+  const endLabel = end
+    ? new Date(end).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  return endLabel ? `${startLabel}–${endLabel}` : startLabel;
+}
+
+function defaultScheduleWindow(): { start: string; end: string } {
+  const start = new Date();
+  start.setDate(start.getDate() + 1);
+  start.setHours(9, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(11, 0, 0, 0);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
 
 export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Element {
   const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
@@ -39,28 +95,51 @@ export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Elem
       {activeTab === "Chat" ? (
         <ProjectChat />
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, s.contentGap, { paddingTop: 15, paddingBottom: 105 }]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[s.content, s.contentGap, { paddingTop: 15, paddingBottom: 105 }]}
+        >
           {activeTab === "Overview" ? (
             projectQuery.isLoading ? (
               <ActivityIndicator color={SALE.gold} />
             ) : projectQuery.isError ? (
               <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
             ) : (
-              <OverviewTab project={project} />
+              <OverviewTab project={project} projectId={projectId} />
             )
           ) : null}
           {activeTab === "Member" ? <MemberTab /> : null}
-          {activeTab === "Files" ? <FilesTab /> : null}
-          {activeTab === "Schedules" ? <SchedulesTab onCreate={() => setScheduleModal(true)} /> : null}
+          {activeTab === "Files" ? <FilesTab projectId={projectId} /> : null}
+          {activeTab === "Schedules" ? (
+            <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
+          ) : null}
         </ScrollView>
       )}
       {activeTab !== "Chat" ? <DetailFixedActions /> : null}
-      <CreateScheduleModal visible={scheduleModal} onClose={() => setScheduleModal(false)} />
+      <CreateScheduleModal
+        visible={scheduleModal}
+        projectId={projectId}
+        project={project}
+        onClose={() => setScheduleModal(false)}
+      />
     </SaleFrame>
   );
 }
 
-function OverviewTab({ project }: { project: ProjectDetailDto | null }): React.JSX.Element {
+function OverviewTab({
+  project,
+  projectId,
+}: {
+  project: ProjectDetailDto | null;
+  projectId: string | null;
+}): React.JSX.Element {
+  const phaseQuery = useSalePhaseDeadlinesQuery(projectId);
+  const areasQuery = useSaleProjectAreasQuery(projectId);
+  const proposalsQuery = useSaleProposalsQuery(projectId);
+  const quotationsQuery = useSaleQuotationsQuery(projectId);
+  const ordersQuery = useSaleOrdersQuery(projectId);
+  const sendQuotationMutation = useSendQuotationMutation(projectId);
+
   if (!project) {
     return <Text style={s.centerMuted}>Select a project to view details.</Text>;
   }
@@ -77,6 +156,11 @@ function OverviewTab({ project }: { project: ProjectDetailDto | null }): React.J
       ? `₫ ${(project.budgetMin ?? 0).toLocaleString()} – ${(project.budgetMax ?? 0).toLocaleString()}`
       : "—";
 
+  const draftQuotation = (quotationsQuery.data ?? []).find(
+    (item) => item.status === "DRAFT" || item.status === "REVISED",
+  );
+  const primaryOrder = (ordersQuery.data ?? [])[0] ?? null;
+
   return (
     <>
       <View style={s.alert}>
@@ -85,6 +169,62 @@ function OverviewTab({ project }: { project: ProjectDetailDto | null }): React.J
           <Text style={s.alertBody}>{getProjectStatusLabel(project.status)}</Text>
         </View>
       </View>
+
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Ops snapshot</Text>
+        <View style={s.infoGrid}>
+          <Info label="Areas" value={String(areasQuery.data?.length ?? "—")} />
+          <Info label="Proposals" value={String(proposalsQuery.data?.length ?? "—")} />
+          <Info label="Quotations" value={String(quotationsQuery.data?.length ?? "—")} />
+          <Info label="Orders" value={String(ordersQuery.data?.length ?? "—")} />
+        </View>
+        {(phaseQuery.data?.deadlines?.length ?? 0) > 0 ? (
+          <Text style={[s.cardMeta, { marginTop: 10 }]}>
+            Phase:{" "}
+            {(phaseQuery.data?.deadlines ?? [])
+              .map((item) => `${item.phase} ${formatSaleDate(item.dueDate)}`)
+              .join(" · ")}
+          </Text>
+        ) : (
+          <Text style={[s.cardMeta, { marginTop: 10 }]}>Phase deadlines not set yet.</Text>
+        )}
+      </View>
+
+      {draftQuotation ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Quotation ready</Text>
+          <Text style={s.cardTitle}>{draftQuotation.quotationCode ?? "Draft quotation"}</Text>
+          <Text style={s.cardMeta}>
+            {draftQuotation.status} · ₫ {(draftQuotation.totalAmount ?? 0).toLocaleString()}
+          </Text>
+          <Pressable
+            style={[s.buttonPrimary, { marginTop: 12 }]}
+            disabled={sendQuotationMutation.isPending}
+            onPress={() =>
+              sendQuotationMutation.mutate(draftQuotation.quotationId, {
+                onSuccess: () => Alert.alert("Sent", "Quotation sent to customer."),
+                onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to send quotation.")),
+              })
+            }
+          >
+            <Text style={s.buttonPrimaryText}>
+              {sendQuotationMutation.isPending ? "Sending…" : "Send quotation"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {primaryOrder ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Latest order</Text>
+          <Text style={s.cardTitle}>{primaryOrder.orderCode ?? primaryOrder.orderId}</Text>
+          <Text style={s.cardMeta}>
+            {primaryOrder.status} · Deposit ₫ {(primaryOrder.depositAmount ?? 0).toLocaleString()} · Paid ₫{" "}
+            {(primaryOrder.paidAmount ?? 0).toLocaleString()}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={s.card}>
         <Text style={s.sectionLabel}>Project Brief</Text>
         <Text style={[s.bodyText, { marginTop: 8 }]}>{brief}</Text>
@@ -112,8 +252,26 @@ function OverviewTab({ project }: { project: ProjectDetailDto | null }): React.J
   );
 }
 
-function RequirementCard({ title, items, bullets = false }: { title: string; items: string[]; bullets?: boolean }): React.JSX.Element {
-  return <View style={s.card}><Text style={s.sectionLabel}>{title}</Text>{items.map((item, index) => <View style={s.bulletRow} key={item}>{bullets ? <View style={s.bullet} /> : <Text style={s.cardMeta}>{index + 1}.</Text>}<Text style={[s.bodyText, { flex: 1 }]}>{item}</Text></View>)}</View>;
+function RequirementCard({
+  title,
+  items,
+  bullets = false,
+}: {
+  title: string;
+  items: string[];
+  bullets?: boolean;
+}): React.JSX.Element {
+  return (
+    <View style={s.card}>
+      <Text style={s.sectionLabel}>{title}</Text>
+      {items.map((item, index) => (
+        <View style={s.bulletRow} key={item}>
+          {bullets ? <View style={s.bullet} /> : <Text style={s.cardMeta}>{index + 1}.</Text>}
+          <Text style={[s.bodyText, { flex: 1 }]}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function MemberTab(): React.JSX.Element {
@@ -121,101 +279,360 @@ function MemberTab(): React.JSX.Element {
     <>
       <View style={s.card}>
         <Text style={s.sectionLabel}>Customer</Text>
-        <View style={s.memberRow}><Avatar initials="NA" color={SALE.charcoal} /><View style={s.memberCopy}><Text style={s.memberName}>Nguyen Minh Anh</Text><Text style={s.memberRole}>Personal</Text></View></View>
-        <Contact icon="mail" value="minh.anh@gmail.com" /><Contact icon="phone" value="+84 901 234 567" />
-      </View>
-      <View style={s.card}>
-        <Text style={s.sectionLabel}>Sales In Charge</Text>
-        <View style={s.memberRow}><Avatar initials="VN" color={SALE.gold} /><View style={s.memberCopy}><Text style={s.memberName}>Viet Nguyen</Text><Text style={s.memberRole}>Sales Manager</Text></View><Text style={s.availability}>● Online</Text></View>
+        <View style={s.memberRow}>
+          <Avatar initials="NA" color={SALE.charcoal} />
+          <View style={s.memberCopy}>
+            <Text style={s.memberName}>Customer profile</Text>
+            <Text style={s.memberRole}>Loaded from project detail next</Text>
+          </View>
+        </View>
       </View>
       <View style={s.card}>
         <Text style={s.sectionLabel}>Designer Assignment</Text>
-        <Text style={[s.infoLabel, { marginTop: 15 }]}>SPACE DATA STATUS</Text>
-        <View style={[s.typeRow, { marginTop: 8 }]}>{["Not Available", "Basic Photos", "Floor Plan Ready"].map((item, index) => <View key={item} style={[s.typeOption, index === 2 && { borderColor: SALE.gold, backgroundColor: "rgba(201,168,106,.08)" }]}><Text style={[s.chipText, index === 2 && { color: SALE.gold }]}>{item}</Text></View>)}</View>
-        <Text style={[s.infoLabel, { marginTop: 16 }]}>AVAILABLE DESIGNERS</Text>
-        <Designer initials="LT" name="Linh Tran" role="Senior Designer" projects="4 projects" available />
-        <Designer initials="KP" name="Khoa Pham" role="Mid Designer" projects="7 projects" />
-        <Designer initials="AN" name="An Nguyen" role="Junior Designer" projects="2 projects" available />
-        <Pressable style={[s.buttonSecondary, { marginTop: 15, height: 41 }]}><Text style={s.buttonSecondaryText}>Select a Designer</Text></Pressable>
+        <Text style={[s.bodyText, { marginTop: 8 }]}>
+          Use start-fee eligibility + available designers APIs (wired in services). UI picker coming next.
+        </Text>
       </View>
     </>
   );
 }
 
-function Contact({ icon, value }: { icon: "mail" | "phone"; value: string }): React.JSX.Element {
-  return <View style={s.memberRow}><View style={s.settingIcon}><AppIcon definition={icon === "mail" ? mailIconDefinition : phoneIconDefinition} size={14} color={SALE.muted} /></View><Text style={s.infoValue}>{value}</Text></View>;
-}
+function FilesTab({ projectId }: { projectId: string | null }): React.JSX.Element {
+  const filesQuery = useSaleProjectFilesQuery(projectId);
+  const uploadMutation = useUploadProjectFileMutation(projectId);
+  const files = filesQuery.data?.items ?? [];
 
-function Designer({ initials, name, role, projects, available = false }: { initials: string; name: string; role: string; projects: string; available?: boolean }): React.JSX.Element {
-  return <View style={[s.memberRow, !available && { opacity: .5 }]}><Avatar initials={initials} color={initials === "LT" ? "#4A7A5A" : initials === "KP" ? "#7B5EA7" : "#3A6B9A"} size={34} /><View style={s.memberCopy}><Text style={s.memberName}>{name}</Text><Text style={s.memberRole}>{role}</Text></View><View><Text style={s.infoValue}>{projects}</Text><Text style={[s.availability, !available && { color: SALE.red }]}>{available ? "Available" : "At capacity"}</Text></View></View>;
-}
+  const handleUpload = async () => {
+    if (!projectId) {
+      return;
+    }
+    try {
+      await pickAndUploadProjectFile(projectId, (input) => uploadMutation.mutateAsync(input));
+    } catch (error) {
+      Alert.alert("Upload failed", getErrorMessage(error, "Unable to upload file."));
+    }
+  };
 
-function FilesTab(): React.JSX.Element {
-  const sections = [
-    { title: "Customer Uploads", files: [["Apartment floor plan.pdf", "PDF · 2.4 MB · Aug 18", "pdf"], ["Living room reference.jpg", "JPG · 1.8 MB · Aug 18", "image"], ["Kitchen measurements.docx", "DOCX · 540 KB · Aug 19", "text"]] },
-    { title: "Sales Documents", files: [["Initial consultation notes.pdf", "PDF · 820 KB · Aug 20", "pdf"], ["Project brief v2.docx", "DOCX · 1.1 MB · Aug 21", "text"]] },
-    { title: "Design References", files: [["Moodboard - warm minimal.jpg", "JPG · 3.2 MB · Aug 22", "image"], ["Material palette.pdf", "PDF · 4.7 MB · Aug 22", "pdf"]] },
-  ];
   return (
     <>
-      <View style={[s.card, s.dashed]}><AppIcon definition={uploadIconDefinition} size={20} color={SALE.gold} /><Text style={[s.cardTitle, { marginTop: 8 }]}>Upload project files</Text><Text style={s.centerMuted}>PDF, images or documents up to 20 MB</Text></View>
-      {sections.map((section) => <View style={s.card} key={section.title}><Text style={s.sectionLabel}>{section.title}</Text>{section.files.map(([name, meta, type]) => <View style={s.fileRow} key={name}><View style={s.fileIcon}><AppIcon definition={type === "pdf" ? pdfIconDefinition : type === "image" ? imageIconDefinition : fileTextIconDefinition} size={17} color={SALE.muted} /></View><View style={s.fileCopy}><Text style={s.fileName}>{name}</Text><Text style={s.fileMeta}>{meta}</Text></View><AppIcon definition={downloadIconDefinition} size={15} color={SALE.muted} /></View>)}</View>)}
+      <Pressable style={[s.card, s.dashed]} onPress={() => void handleUpload()} disabled={uploadMutation.isPending}>
+        <AppIcon definition={uploadIconDefinition} size={20} color={SALE.gold} />
+        <Text style={[s.cardTitle, { marginTop: 8 }]}>
+          {uploadMutation.isPending ? "Uploading…" : "Upload project files"}
+        </Text>
+        <Text style={s.centerMuted}>PDF, images or documents up to 20 MB</Text>
+      </Pressable>
+
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>{files.length} files</Text>
+        {filesQuery.isLoading ? (
+          <ActivityIndicator color={SALE.gold} />
+        ) : filesQuery.isError ? (
+          <Text style={s.centerMuted}>{getErrorMessage(filesQuery.error, "Unable to load files.")}</Text>
+        ) : files.length === 0 ? (
+          <Text style={s.centerMuted}>No files uploaded yet.</Text>
+        ) : (
+          files.map((file) => <FileRow key={file.fileId} file={file} />)
+        )}
+      </View>
     </>
+  );
+}
+
+function FileRow({ file }: { file: ProjectFileDto }): React.JSX.Element {
+  const isImage = (file.mimeType ?? "").startsWith("image/");
+  const isPdf = (file.mimeType ?? "").includes("pdf") || file.originalFileName.toLowerCase().endsWith(".pdf");
+  return (
+    <View style={s.fileRow}>
+      <View style={s.fileIcon}>
+        <AppIcon
+          definition={isPdf ? pdfIconDefinition : isImage ? imageIconDefinition : fileTextIconDefinition}
+          size={17}
+          color={SALE.muted}
+        />
+      </View>
+      <View style={s.fileCopy}>
+        <Text style={s.fileName}>{file.originalFileName}</Text>
+        <Text style={s.fileMeta}>
+          {file.fileType} · {file.visibility} · {formatSaleDate(file.uploadedAt)}
+        </Text>
+      </View>
+      <AppIcon definition={downloadIconDefinition} size={15} color={SALE.muted} />
+    </View>
   );
 }
 
 function ProjectChat(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState(["Hi Minh Anh, your start fee has been confirmed.", "Thank you. When will the designer be assigned?", "We are matching your project with an available senior designer now."]);
-  const send = () => { if (message.trim()) { setMessages((current) => [...current, message.trim()]); setMessage(""); } };
+  const [messages, setMessages] = useState([
+    "Hi, your start fee has been confirmed.",
+    "Thank you. When will the designer be assigned?",
+  ]);
+  const send = () => {
+    if (message.trim()) {
+      setMessages((current) => [...current, message.trim()]);
+      setMessage("");
+    }
+  };
   return (
     <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView style={s.fill} contentContainerStyle={s.messageArea}>
-        <Text style={s.centerMuted}>TODAY · AUG 24</Text>
-        {messages.map((item, index) => <View key={`${item}-${index}`} style={[s.bubble, index % 2 ? s.bubbleOther : s.bubbleOwn]}><Text style={[s.bubbleText, index % 2 ? null : s.bubbleOwnText]}>{item}</Text><Text style={[s.bubbleTime, index % 2 ? null : { color: "rgba(255,255,255,.55)" }]}>{index === messages.length - 1 ? "10:42" : "10:30"}</Text></View>)}
+        <Text style={s.centerMuted}>CHAT API · COMING NEXT</Text>
+        {messages.map((item, index) => (
+          <View key={`${item}-${index}`} style={[s.bubble, index % 2 ? s.bubbleOther : s.bubbleOwn]}>
+            <Text style={[s.bubbleText, index % 2 ? null : s.bubbleOwnText]}>{item}</Text>
+          </View>
+        ))}
       </ScrollView>
       <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 9) }]}>
         <AppIcon definition={paperclipIconDefinition} size={19} color={SALE.muted} />
-        <TextInput multiline value={message} onChangeText={setMessage} placeholder="Write a message…" placeholderTextColor="rgba(122,111,104,.5)" style={s.composerInput} />
-        <Pressable style={s.send} onPress={send}><AppIcon definition={sendIconDefinition} size={16} color={SALE.white} /></Pressable>
+        <TextInput
+          multiline
+          value={message}
+          onChangeText={setMessage}
+          placeholder="Write a message…"
+          placeholderTextColor="rgba(122,111,104,.5)"
+          style={s.composerInput}
+        />
+        <Pressable style={s.send} onPress={send}>
+          <AppIcon definition={sendIconDefinition} size={16} color={SALE.white} />
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-function SchedulesTab({ onCreate }: { onCreate: () => void }): React.JSX.Element {
+function SchedulesTab({
+  projectId,
+  project,
+  onCreate,
+}: {
+  projectId: string | null;
+  project: ProjectDetailDto | null;
+  onCreate: () => void;
+}): React.JSX.Element {
+  const schedulesQuery = useSaleProjectSchedulesQuery(projectId);
+  const schedules = schedulesQuery.data ?? [];
+
   return (
     <>
-      <View style={s.sectionRow}><Text style={s.sectionLabel}>2 schedules</Text><Pressable style={{ flexDirection: "row", gap: 4 }} onPress={onCreate}><AppIcon definition={plusIconDefinition} size={13} color={SALE.gold} /><Text style={s.sectionAction}>Create Schedule</Text></Pressable></View>
-      <ScheduleCard title="Initial Consultation" status="Completed" date="Aug 18, 2026" time="10:00–11:30" type="Consultation" />
-      <ScheduleCard title="Site Measurement Visit" status="Pending Confirmation" date="Aug 26, 2026" time="09:00–12:00" type="Measurement" />
-      <Pressable style={[s.card, s.dashed]} onPress={onCreate}><Text style={s.bodyText}>Schedule a site measurement visit</Text><Text style={[s.sectionAction, { marginTop: 7 }]}>＋ Add Measurement Schedule</Text></Pressable>
+      <View style={s.sectionRow}>
+        <Text style={s.sectionLabel}>{schedules.length} schedules</Text>
+        <Pressable style={{ flexDirection: "row", gap: 4 }} onPress={onCreate}>
+          <AppIcon definition={plusIconDefinition} size={13} color={SALE.gold} />
+          <Text style={s.sectionAction}>Create Schedule</Text>
+        </Pressable>
+      </View>
+
+      {schedulesQuery.isLoading ? (
+        <ActivityIndicator color={SALE.gold} />
+      ) : schedulesQuery.isError ? (
+        <Text style={s.centerMuted}>{getErrorMessage(schedulesQuery.error, "Unable to load schedules.")}</Text>
+      ) : schedules.length === 0 ? (
+        <Pressable style={[s.card, s.dashed]} onPress={onCreate}>
+          <Text style={s.bodyText}>No schedules yet</Text>
+          <Text style={[s.sectionAction, { marginTop: 7 }]}>＋ Add Measurement / Delivery</Text>
+        </Pressable>
+      ) : (
+        schedules.map((schedule) => (
+          <ScheduleCard
+            key={schedule.scheduleId}
+            title={schedule.title ?? schedule.scheduleType}
+            status={schedule.status.replaceAll("_", " ")}
+            date={formatSaleDate(getScheduleStartAt(schedule))}
+            time={formatScheduleTimeRange(schedule)}
+            type={schedule.scheduleType.replaceAll("_", " ")}
+          />
+        ))
+      )}
+
+      {project?.status === "MEASUREMENT_REQUIRED" ? (
+        <Pressable style={[s.card, s.dashed]} onPress={onCreate}>
+          <Text style={s.bodyText}>Schedule a site measurement visit</Text>
+          <Text style={[s.sectionAction, { marginTop: 7 }]}>＋ Add Measurement Schedule</Text>
+        </Pressable>
+      ) : null}
     </>
   );
 }
 
-function ScheduleCard({ title, status, date, time, type }: { title: string; status: string; date: string; time: string; type: string }): React.JSX.Element {
-  return <View style={s.card}><View style={s.topCardRow}><Text style={s.cardTitle}>{title}</Text><View style={s.status}><Text style={s.statusText}>{status}</Text></View></View><View style={s.scheduleRow}><View style={s.scheduleMeta}><AppIcon definition={calendarIconDefinition} size={13} color={SALE.muted} /><Text style={s.infoValue}>{date}</Text></View><View style={s.scheduleMeta}><AppIcon definition={clockIconDefinition} size={13} color={SALE.muted} /><Text style={s.infoValue}>{time}</Text></View></View><View style={s.buttonRow}><View style={[s.status, { borderWidth: 0, backgroundColor: SALE.pale }]}><Text style={[s.statusText, { color: SALE.muted }]}>{type}</Text></View><Pressable><Text style={s.buttonSecondaryText}>Reschedule</Text></Pressable></View></View>;
+function ScheduleCard({
+  title,
+  status,
+  date,
+  time,
+  type,
+}: {
+  title: string;
+  status: string;
+  date: string;
+  time: string;
+  type: string;
+}): React.JSX.Element {
+  return (
+    <View style={s.card}>
+      <View style={s.topCardRow}>
+        <Text style={s.cardTitle}>{title}</Text>
+        <View style={s.status}>
+          <Text style={s.statusText}>{status}</Text>
+        </View>
+      </View>
+      <View style={s.scheduleRow}>
+        <View style={s.scheduleMeta}>
+          <AppIcon definition={calendarIconDefinition} size={13} color={SALE.muted} />
+          <Text style={s.infoValue}>{date}</Text>
+        </View>
+        <View style={s.scheduleMeta}>
+          <AppIcon definition={clockIconDefinition} size={13} color={SALE.muted} />
+          <Text style={s.infoValue}>{time}</Text>
+        </View>
+      </View>
+      <View style={s.buttonRow}>
+        <View style={[s.status, { borderWidth: 0, backgroundColor: SALE.pale }]}>
+          <Text style={[s.statusText, { color: SALE.muted }]}>{type}</Text>
+        </View>
+      </View>
+    </View>
+  );
 }
 
-function CreateScheduleModal({ visible, onClose }: { visible: boolean; onClose: () => void }): React.JSX.Element {
-  const [type, setType] = useState("Consultation");
+function CreateScheduleModal({
+  visible,
+  onClose,
+  projectId,
+  project,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  projectId: string | null;
+  project: ProjectDetailDto | null;
+}): React.JSX.Element {
+  const createMutation = useCreateProjectScheduleMutation(projectId);
+  const [type, setType] = useState<"MEASUREMENT" | "DELIVERY" | "CONSULTATION">("MEASUREMENT");
   const [title, setTitle] = useState("");
-  const [location, setLocation] = useState("");
-  const canCreate = title.trim().length > 0;
+  const [location, setLocation] = useState(project?.projectAddress ?? "");
+  const [customerNote, setCustomerNote] = useState("");
+  const window = useMemo(() => defaultScheduleWindow(), [visible]);
+
+  const typeOptions: Array<{ label: string; value: typeof type }> = [
+    { label: "Measurement", value: "MEASUREMENT" },
+    { label: "Delivery", value: "DELIVERY" },
+    { label: "Consultation", value: "CONSULTATION" },
+  ];
+
+  const canCreate = Boolean(projectId && title.trim());
+
+  const handleCreate = () => {
+    if (!projectId || !canCreate) {
+      return;
+    }
+
+    const scheduleType = type as ProjectScheduleType;
+    const assignedStaffId =
+      scheduleType === "MEASUREMENT" ? project?.assignedDesignerId ?? undefined : undefined;
+
+    if (scheduleType === "MEASUREMENT" && !assignedStaffId) {
+      Alert.alert("Missing designer", "Assign a designer before creating a measurement schedule.");
+      return;
+    }
+
+    createMutation.mutate(
+      {
+        scheduleType,
+        title: title.trim(),
+        assignedStaffId,
+        scheduledStart: window.start,
+        scheduledEnd: window.end,
+        location: location.trim() || project?.projectAddress || null,
+        customerNote: customerNote.trim() || null,
+      },
+      {
+        onSuccess: () => {
+          setTitle("");
+          setCustomerNote("");
+          onClose();
+          Alert.alert("Created", "Schedule created and waiting for confirmation.");
+        },
+        onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to create schedule.")),
+      },
+    );
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={s.modalBackdrop} onPress={onClose}>
         <Pressable style={s.sheet} onPress={(event) => event.stopPropagation()}>
           <View style={s.sheetHandle} />
-          <View style={s.sheetHeader}><View><Text style={s.sheetTitle}>New Schedule</Text><Text style={s.cardMeta}>PRJ-2026-014</Text></View><Pressable style={s.settingIcon} onPress={onClose}><Text style={{ color: SALE.muted, fontSize: 18 }}>×</Text></Pressable></View>
+          <View style={s.sheetHeader}>
+            <View>
+              <Text style={s.sheetTitle}>New Schedule</Text>
+              <Text style={s.cardMeta}>{project?.projectCode ?? "Project"}</Text>
+            </View>
+            <Pressable style={s.settingIcon} onPress={onClose}>
+              <Text style={{ color: SALE.muted, fontSize: 18 }}>×</Text>
+            </Pressable>
+          </View>
           <View style={s.sheetBody}>
-            <View style={s.typeRow}>{["Consultation", "Measurement"].map((item) => <Pressable key={item} style={[s.typeOption, type === item && s.typeSelected]} onPress={() => setType(item)}><Text style={[s.chipText, type === item && { color: "#432DD7" }]}>{item}</Text></Pressable>)}</View>
-            <TextInput value={title} onChangeText={setTitle} placeholder="Schedule title" placeholderTextColor="rgba(122,111,104,.5)" style={s.sheetInput} />
-            <View style={s.dateRow}><View style={s.dateField}><Text style={s.dateText}>Aug 26, 2026</Text></View><View style={s.dateField}><Text style={s.dateText}>09:00</Text></View><View style={s.dateField}><Text style={s.dateText}>12:00</Text></View></View>
-            <TextInput value={location} onChangeText={setLocation} placeholder="Location or meeting link" placeholderTextColor="rgba(122,111,104,.5)" style={s.sheetInput} />
-            <View style={s.typeRow}><Pressable style={[s.buttonSecondary, { height: 41 }]} onPress={onClose}><Text style={s.buttonSecondaryText}>Cancel</Text></Pressable><Pressable disabled={!canCreate} style={[s.buttonPrimary, { height: 41, flex: 2 }, !canCreate && { backgroundColor: "rgba(122,111,104,.2)" }]} onPress={onClose}><Text style={s.buttonPrimaryText}>Create</Text></Pressable></View>
+            <View style={s.typeRow}>
+              {typeOptions.map((item) => (
+                <Pressable
+                  key={item.value}
+                  style={[s.typeOption, type === item.value && s.typeSelected]}
+                  onPress={() => setType(item.value)}
+                >
+                  <Text style={[s.chipText, type === item.value && { color: "#432DD7" }]}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Schedule title"
+              placeholderTextColor="rgba(122,111,104,.5)"
+              style={s.sheetInput}
+            />
+            <View style={s.dateRow}>
+              <View style={s.dateField}>
+                <Text style={s.dateText}>{formatSaleDate(window.start)}</Text>
+              </View>
+              <View style={s.dateField}>
+                <Text style={s.dateText}>09:00</Text>
+              </View>
+              <View style={s.dateField}>
+                <Text style={s.dateText}>11:00</Text>
+              </View>
+            </View>
+            <TextInput
+              value={location}
+              onChangeText={setLocation}
+              placeholder="Location or meeting link"
+              placeholderTextColor="rgba(122,111,104,.5)"
+              style={s.sheetInput}
+            />
+            <TextInput
+              value={customerNote}
+              onChangeText={setCustomerNote}
+              placeholder="Customer note (optional)"
+              placeholderTextColor="rgba(122,111,104,.5)"
+              style={s.sheetInput}
+            />
+            <View style={s.typeRow}>
+              <Pressable style={[s.buttonSecondary, { height: 41 }]} onPress={onClose}>
+                <Text style={s.buttonSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                disabled={!canCreate || createMutation.isPending}
+                style={[
+                  s.buttonPrimary,
+                  { height: 41, flex: 2 },
+                  (!canCreate || createMutation.isPending) && { backgroundColor: "rgba(122,111,104,.2)" },
+                ]}
+                onPress={handleCreate}
+              >
+                <Text style={s.buttonPrimaryText}>{createMutation.isPending ? "Creating…" : "Create"}</Text>
+              </Pressable>
+            </View>
           </View>
         </Pressable>
       </Pressable>
@@ -227,29 +644,66 @@ export function SaleChatScreen({ route, navigation }: ChatProps): React.JSX.Elem
   const insets = useSafeAreaInsets();
   const conversation = saleConversations.find((item) => item.id === route.params.conversationId) ?? saleConversations[0];
   const [message, setMessage] = useState("");
-  const [items, setItems] = useState(["Xin chào, tôi muốn hỏi về tiến độ hiện tại.", "Chào anh/chị. Phí khởi động đã được xác nhận và chúng tôi đang phân công designer.", "Khi nào tôi có thể nhận được lịch đo đạc?", "Dự kiến ngày 26/08. Tôi sẽ gửi xác nhận trong hôm nay."]);
-  const send = () => { if (message.trim()) { setItems((current) => [...current, message.trim()]); setMessage(""); } };
+  const [items, setItems] = useState([
+    "Xin chào, tôi muốn hỏi về tiến độ hiện tại.",
+    "Chào anh/chị. Phí khởi động đã được xác nhận và chúng tôi đang phân công designer.",
+  ]);
+  const send = () => {
+    if (message.trim()) {
+      setItems((current) => [...current, message.trim()]);
+      setMessage("");
+    }
+  };
   return (
     <SaleFrame>
       <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={[s.header, { paddingTop: Math.max(insets.top, 18) + 8 }]}>
           <View style={s.detailHeaderTop}>
-            <Pressable style={s.backButton} onPress={() => navigation.goBack()}><Text style={{ color: SALE.white, fontSize: 19 }}>‹</Text></Pressable>
+            <Pressable style={s.backButton} onPress={() => navigation.goBack()}>
+              <Text style={{ color: SALE.white, fontSize: 19 }}>‹</Text>
+            </Pressable>
             <Avatar initials={conversation.initials} color={conversation.color} size={36} />
-            <View style={s.detailTitleWrap}><Text style={s.detailTitle}>{conversation.name}</Text><Text style={s.headerSubtitle}>{conversation.meta} · Online</Text></View>
+            <View style={s.detailTitleWrap}>
+              <Text style={s.detailTitle}>{conversation.name}</Text>
+              <Text style={s.headerSubtitle}>{conversation.meta}</Text>
+            </View>
             <AppIcon definition={phoneIconDefinition} size={18} color={SALE.white} />
           </View>
         </View>
         <ScrollView style={s.fill} contentContainerStyle={s.messageArea} keyboardShouldPersistTaps="handled">
-          <Text style={s.centerMuted}>TODAY · AUG 24</Text>
-          {items.map((item, index) => { const own = index % 2 === 1 || index === items.length - 1 && items.length > 4; return <View key={`${item}-${index}`} style={[s.bubble, own ? s.bubbleOwn : s.bubbleOther]}><Text style={[s.bubbleText, own && s.bubbleOwnText]}>{item}</Text><Text style={[s.bubbleTime, own && { color: "rgba(255,255,255,.55)" }]}>{10 + index}:3{index}</Text></View>; })}
+          {items.map((item, index) => {
+            const own = index % 2 === 1;
+            return (
+              <View key={`${item}-${index}`} style={[s.bubble, own ? s.bubbleOwn : s.bubbleOther]}>
+                <Text style={[s.bubbleText, own && s.bubbleOwnText]}>{item}</Text>
+              </View>
+            );
+          })}
         </ScrollView>
-        <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 9) }]}><AppIcon definition={paperclipIconDefinition} size={19} color={SALE.muted} /><TextInput multiline value={message} onChangeText={setMessage} placeholder="Write a message…" placeholderTextColor="rgba(122,111,104,.5)" style={s.composerInput} /><Pressable style={s.send} onPress={send}><AppIcon definition={sendIconDefinition} size={16} color={SALE.white} /></Pressable></View>
+        <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 9) }]}>
+          <AppIcon definition={paperclipIconDefinition} size={19} color={SALE.muted} />
+          <TextInput
+            multiline
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Write a message…"
+            placeholderTextColor="rgba(122,111,104,.5)"
+            style={s.composerInput}
+          />
+          <Pressable style={s.send} onPress={send}>
+            <AppIcon definition={sendIconDefinition} size={16} color={SALE.white} />
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </SaleFrame>
   );
 }
 
 function Info({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return <View style={s.infoCell}><Text style={s.infoLabel}>{label}</Text><Text style={s.infoValue}>{value}</Text></View>;
+  return (
+    <View style={s.infoCell}>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoValue}>{value}</Text>
+    </View>
+  );
 }

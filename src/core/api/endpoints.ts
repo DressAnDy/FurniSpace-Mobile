@@ -26,15 +26,34 @@ export const endpoints = {
     detail: (projectId: string) => `/projects/${projectId}`,
     publishedProposal: (projectId: string) => `/projects/${projectId}/published-proposal`,
     phaseDeadlines: (projectId: string) => `/projects/${projectId}/phase-deadlines`,
+    updatePhaseDeadlines: (projectId: string) => `/projects/${projectId}/phase-deadlines`,
     updateBasicInfo: (projectId: string) => `/projects/${projectId}/basic-information`,
     updateTargetDate: (projectId: string) => `/projects/${projectId}/target-completion-date`,
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
+    complete: (projectId: string) => `/projects/${projectId}/complete`,
     orders: (projectId: string) => `/projects/${projectId}/orders`,
     salesAssignment: (projectId: string) => `/projects/${projectId}/sales-assignment`,
     informationRequests: (projectId: string) => `/projects/${projectId}/information-requests`,
     updateStatus: (projectId: string) => `/projects/${projectId}/status`,
     rejection: (projectId: string) => `/projects/${projectId}/rejection`,
     designerAssignment: (projectId: string) => `/projects/${projectId}/designer-assignment`,
+    areas: (projectId: string) => `/projects/${projectId}/areas`,
+    schedules: (projectId: string) => `/projects/${projectId}/schedules`,
+    files: (projectId: string) => `/projects/${projectId}/files`,
+    searchFiles: (projectId: string) => `/projects/${projectId}/files/search`,
+    measurementImages: (projectId: string) => `/projects/${projectId}/measurement-images`,
+    proposals: (projectId: string) => `/projects/${projectId}/proposals`,
+    quotations: (projectId: string) => `/projects/${projectId}/quotations`,
+  },
+  projectAreas: {
+    detail: (areaId: string) => `/project-areas/${areaId}`,
+    update: (areaId: string) => `/project-areas/${areaId}`,
+    cancel: (areaId: string) => `/project-areas/${areaId}/cancel`,
+    measurementImages: (areaId: string) => `/project-areas/${areaId}/measurement-images`,
+    linkMeasurementImage: (areaId: string, fileId: string) =>
+      `/project-areas/${areaId}/measurement-images/${fileId}/link`,
+    unlinkMeasurementImage: (areaId: string, fileId: string) =>
+      `/project-areas/${areaId}/measurement-images/${fileId}/unlink`,
   },
   saleDashboard: {
     kpis: "/api/dashboard/sales/kpis",
@@ -44,6 +63,9 @@ export const endpoints = {
   accounts: {
     availableDesigners: "/accounts/designers/available",
   },
+  productionStaff: {
+    available: "/production-staff/available",
+  },
   projectStartFee: {
     status: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee/status`,
     create: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee`,
@@ -52,15 +74,59 @@ export const endpoints = {
     detail: (orderId: string) => `/orders/${orderId}`,
     deliveryDetails: (orderId: string) => `/orders/${orderId}/delivery-details`,
     createDeposit: (orderId: string) => `/orders/${orderId}/payments/deposit`,
+    createRemaining: (orderId: string) => `/orders/${orderId}/payments/remaining`,
     confirmDelivery: (orderId: string) => `/orders/${orderId}/confirm-delivery`,
+    prepareFinalPayment: (orderId: string) => `/orders/${orderId}/prepare-final-payment`,
+    complete: (orderId: string) => `/orders/${orderId}/complete`,
+    productionRequest: (orderId: string) => `/orders/${orderId}/production-request`,
+    deliveries: (orderId: string) => `/orders/${orderId}/deliveries`,
+    deliveryDetail: (orderId: string, deliveryId: string) => `/orders/${orderId}/deliveries/${deliveryId}`,
+    deliveryTracking: (orderId: string) => `/orders/${orderId}/delivery-tracking`,
+    completeDelivery: (orderId: string, deliveryId: string) =>
+      `/orders/${orderId}/deliveries/${deliveryId}/complete`,
+  },
+  productionRequests: {
+    list: "/production-requests",
+    detail: (id: string) => `/production-requests/${id}`,
+    assign: (id: string) => `/production-requests/${id}/assign`,
   },
   projectSchedules: {
     list: "/project-schedules",
+    myAssigned: "/project-schedules/my-assigned",
     detail: (scheduleId: string) => `/project-schedules/${scheduleId}`,
+    update: (scheduleId: string) => `/project-schedules/${scheduleId}`,
     updateStatus: (scheduleId: string) => `/project-schedules/${scheduleId}/status`,
+    delete: (scheduleId: string) => `/project-schedules/${scheduleId}`,
+    measurementImages: (scheduleId: string) => `/project-schedules/${scheduleId}/measurement-images`,
+  },
+  proposals: {
+    detail: (proposalId: string) => `/proposals/${proposalId}`,
+    update: (proposalId: string) => `/proposals/${proposalId}`,
+    publish: (proposalId: string) => `/proposals/${proposalId}/publish`,
+    reopen: (proposalId: string) => `/proposals/${proposalId}/reopen-for-editing`,
+    scenes: (proposalId: string) => `/proposals/${proposalId}/scenes`,
+    items: (proposalId: string) => `/proposals/${proposalId}/items`,
+  },
+  proposalScenes: {
+    update: (sceneId: string) => `/proposal-scenes/${sceneId}`,
+  },
+  proposalItems: {
+    update: (itemId: string) => `/proposal-items/${itemId}`,
+    delete: (itemId: string) => `/proposal-items/${itemId}`,
+  },
+  quotations: {
+    detail: (quotationId: string) => `/quotations/${quotationId}`,
+    update: (quotationId: string) => `/quotations/${quotationId}`,
+    itemFinancials: (quotationId: string, itemId: string) =>
+      `/quotations/${quotationId}/items/${itemId}/financials`,
+    bulkFinancials: (quotationId: string) => `/quotations/${quotationId}/items/financials`,
+    send: (quotationId: string) => `/quotations/${quotationId}/send`,
+    revise: (quotationId: string) => `/quotations/${quotationId}/revise`,
+    cancel: (quotationId: string) => `/quotations/${quotationId}/cancel`,
   },
   payments: {
     list: "/api/payments",
+    summary: "/api/payments/summary",
     detail: (paymentId: string) => `/api/payments/${paymentId}`,
     statusByCode: (paymentCode: string) => `/api/payments/code/${paymentCode}/status`,
     createTransaction: (paymentId: string) => `/api/payments/${paymentId}/transactions`,
@@ -68,5 +134,6 @@ export const endpoints = {
     cancelTransaction: (paymentId: string, transactionId: string) =>
       `/api/payments/${paymentId}/transactions/${transactionId}/cancel`,
     payOsPaymentLink: (paymentId: string) => `/api/payments/${paymentId}/payos/payment-link`,
+    sepayVietQr: (paymentId: string) => `/api/payments/${paymentId}/sepay/vietqr`,
   },
 } as const;
