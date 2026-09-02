@@ -27,6 +27,7 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { saleConversations } from "../data/sale.mock";
 import {
   matchesSaleProjectFilter,
+  saleProjectsFilterToStatus,
   useClaimSalesAssignmentMutation,
   useSaleAssignedProjectsQuery,
   useSaleInboxProjectsQuery,
@@ -38,7 +39,6 @@ import {
   ACTION_GROUP_ORDER,
   getInitials,
   getPriorityColor,
-  mapActionQueueToAlerts,
   mapSalesKpisToMetrics,
 } from "../utils/sale.mapper";
 import { Avatar, FilterChips, SaleBottomNav, SaleFrame, SaleHeader, SectionTitle } from "../components/SaleShared";
@@ -64,13 +64,13 @@ function formatDashboardSubtitle(): string {
 export function SaleDashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const currentUser = useAuthStore((state) => state.user);
-  const [selectedGroup, setSelectedGroup] = useState<SaleActionGroup | "All">("Intake");
+  const [selectedGroup, setSelectedGroup] = useState<SaleActionGroup>("Intake");
 
   const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
   const queueQuery = useSalesActionQueueQuery({
     scope: "mine",
     dateRange: "thisWeek",
-    ...(selectedGroup === "All" ? {} : { group: selectedGroup }),
+    group: selectedGroup,
     page: 1,
     limit: 20,
   });
@@ -78,10 +78,6 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const metrics = useMemo(
     () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data) : []),
     [kpisQuery.data],
-  );
-  const alerts = useMemo(
-    () => mapActionQueueToAlerts(queueQuery.data?.items ?? []),
-    [queueQuery.data?.items],
   );
   const queueItems = queueQuery.data?.items ?? [];
   const countsByGroup = queueQuery.data?.countsByGroup ?? {};
@@ -92,12 +88,12 @@ export function SaleDashboardScreen(): React.JSX.Element {
     });
   }, [countsByGroup]);
 
-  const selectedChip = selectedGroup === "All"
-    ? groupChips[0]
-    : groupChips.find((chip) => chip.startsWith(selectedGroup.split(" ")[0])) ?? groupChips[0];
+  const selectedChip =
+    groupChips.find((chip) => chip.startsWith(selectedGroup.split(" ")[0])) ?? groupChips[0] ?? "Intake  0";
 
-  const primaryQueueItem = queueItems[0] ?? null;
+  const topQueueItems = queueItems.slice(0, 3);
   const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
+  const totalActions = queueQuery.data?.total ?? 0;
 
   return (
     <SaleFrame>
@@ -114,119 +110,102 @@ export function SaleDashboardScreen(): React.JSX.Element {
           />
         }
       >
-        <SaleHeader title="Sales Dashboard" subtitle={`${formatDashboardSubtitle()} · Live`}>
-          <View style={[s.headerActions, { position: "absolute", right: 19, bottom: 20 }]}>
-            <Pressable style={s.headerIcon} onPress={() => navigation.navigate("Notifications")}>
-              <AppIcon definition={bellIconDefinition} size={15} color={SALE.white} />
-            </Pressable>
-            <View style={s.avatarGold}>
-              <Text style={s.avatarText}>{getInitials(currentUser?.fullName)}</Text>
+        <SaleHeader
+          title="Dashboard"
+          subtitle={`${formatDashboardSubtitle()} · Live workspace`}
+          trailing={
+            <>
+              <Pressable style={s.headerIcon} onPress={() => navigation.navigate("Notifications")}>
+                <AppIcon definition={bellIconDefinition} size={15} color={SALE.white} />
+              </Pressable>
+              <View style={s.avatarGold}>
+                <Text style={s.avatarText}>{getInitials(currentUser?.fullName)}</Text>
+              </View>
+            </>
+          }
+        />
+
+        <View style={s.dashboardBody}>
+          <View style={s.dashboardSection}>
+            <View style={s.quickActions}>
+              <Pressable style={[s.quickAction, s.quickActionPrimary]} onPress={() => navigation.navigate("SaleRequests")}>
+                <Text style={[s.quickActionLabel, s.quickActionLabelPrimary]}>Requests</Text>
+                <Text style={[s.quickActionMeta, s.quickActionMetaPrimary]}>
+                  {kpisQuery.data ? `${kpisQuery.data.newRequests} new` : "Open inbox"}
+                </Text>
+              </Pressable>
+              <Pressable style={s.quickAction} onPress={() => navigation.navigate("SaleProjects")}>
+                <Text style={s.quickActionLabel}>Projects</Text>
+                <Text style={s.quickActionMeta}>
+                  {kpisQuery.data ? `${kpisQuery.data.activeProjects} active` : "Assigned work"}
+                </Text>
+              </Pressable>
             </View>
           </View>
-        </SaleHeader>
 
-        <View style={{ paddingTop: 15 }}>
-          <View style={{ paddingHorizontal: 19 }}>
-            <SectionTitle
-              title="Action Alerts"
-              action={queueQuery.data ? `${queueQuery.data.total} requiring action` : undefined}
-            />
-          </View>
-          {queueQuery.isLoading ? (
-            <View style={{ padding: 24 }}>
-              <ActivityIndicator color={SALE.gold} />
-            </View>
-          ) : alerts.length === 0 ? (
-            <Text style={[s.centerMuted, { paddingHorizontal: 19 }]}>No action alerts right now.</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.alertScroller}>
-              {alerts.map((alert) => (
-                <Pressable
-                  key={alert.id}
-                  style={[s.alertCard, { borderColor: alert.color }]}
-                  onPress={() =>
-                    navigation.navigate("SaleProjectDetail", {
-                      projectId: alert.projectId,
-                      tab: "Overview",
-                    })
-                  }
-                >
-                  <View style={s.alertTop}>
-                    <View style={[s.alertIcon, { backgroundColor: `${alert.color}22` }]}>
-                      <AppIcon definition={bellIconDefinition} size={14} color={alert.color} />
-                    </View>
-                    <View style={[s.priorityBadge, { backgroundColor: alert.color }]}>
-                      <Text style={s.priorityText}>{alert.priority}</Text>
-                    </View>
-                  </View>
-                  <Text style={s.alertTitle}>{alert.title}</Text>
-                  <Text style={s.alertDescription}>{alert.description}</Text>
-                  <Text style={[s.cardMeta, { marginTop: 8 }]}>{alert.code}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        <View style={[s.content, s.contentGap, { paddingTop: 16 }]}>
-          <View>
-            <SectionTitle title="Overview" />
+          <View style={s.dashboardSection}>
+            <SectionTitle title="This week" />
             {kpisQuery.isLoading ? (
               <ActivityIndicator color={SALE.gold} />
             ) : kpisQuery.isError ? (
-              <Text style={s.centerMuted}>{getErrorMessage(kpisQuery.error, "Unable to load KPIs.")}</Text>
+              <View style={s.emptyState}>
+                <Text style={s.emptyStateText}>{getErrorMessage(kpisQuery.error, "Unable to load KPIs.")}</Text>
+              </View>
             ) : (
-              <View style={s.metricGrid}>
-                {metrics.map((metric) => (
-                  <View style={s.metric} key={metric.label}>
-                    <View style={s.metricRow}>
-                      <Text style={[s.metricValue, { color: metric.color }]}>{metric.value}</Text>
-                    </View>
-                    <Text style={s.metricLabel}>{metric.label}</Text>
+              <View style={s.metricStrip}>
+                {metrics.map((metric, index) => (
+                  <View
+                    key={metric.label}
+                    style={[s.metricTile, index >= 3 ? s.metricTileWide : null]}
+                  >
+                    <Text style={[s.metricTileValue, { color: metric.color }]}>{metric.value}</Text>
+                    <Text style={s.metricTileLabel}>{metric.label}</Text>
                   </View>
                 ))}
               </View>
             )}
           </View>
 
-          <View>
-            <SectionTitle title="Action Queue" action="View All" onAction={() => navigation.navigate("SaleProjects")} />
-            <FilterChips
-              options={groupChips.length > 0 ? groupChips : ["Intake  0"]}
-              selected={selectedChip || "Intake  0"}
-              onSelect={(value) => {
-                const label = value.split("  ")[0];
-                const matched = ACTION_GROUP_ORDER.find((group) => group.startsWith(label)) ?? "Intake";
-                setSelectedGroup(matched);
-              }}
+          <View style={s.dashboardSection}>
+            <SectionTitle
+              title="Action queue"
+              action={totalActions > 0 ? `${totalActions} open` : undefined}
+              onAction={() => navigation.navigate("SaleProjects")}
             />
-            {queueQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} style={{ marginTop: 12 }} />
-            ) : primaryQueueItem ? (
-              <ActionQueueCard
-                item={primaryQueueItem}
-                onOpen={() =>
-                  navigation.navigate("SaleProjectDetail", {
-                    projectId: primaryQueueItem.projectId,
-                    tab: "Overview",
-                  })
-                }
+            <View style={s.queueChipsWrap}>
+              <FilterChips
+                options={groupChips.length > 0 ? groupChips : ["Intake  0"]}
+                selected={selectedChip}
+                onSelect={(value) => {
+                  const label = value.split("  ")[0];
+                  const matched = ACTION_GROUP_ORDER.find((group) => group.startsWith(label)) ?? "Intake";
+                  setSelectedGroup(matched);
+                }}
               />
-            ) : (
-              <Text style={s.centerMuted}>No items in this queue group.</Text>
-            )}
-          </View>
-
-          <View>
-            <SectionTitle title="Quick Links" />
-            <View style={s.buttonRow}>
-              <Pressable style={s.buttonSecondary} onPress={() => navigation.navigate("SaleRequests")}>
-                <Text style={s.buttonSecondaryText}>Open Requests</Text>
-              </Pressable>
-              <Pressable style={s.buttonPrimary} onPress={() => navigation.navigate("SaleProjects")}>
-                <Text style={s.buttonPrimaryText}>My Projects</Text>
-              </Pressable>
             </View>
+
+            {queueQuery.isLoading ? (
+              <ActivityIndicator color={SALE.gold} />
+            ) : topQueueItems.length === 0 ? (
+              <View style={s.emptyState}>
+                <Text style={s.emptyStateText}>Nothing waiting in {selectedGroup.split(" ")[0].toLowerCase()} right now.</Text>
+              </View>
+            ) : (
+              <View style={s.queueList}>
+                {topQueueItems.map((item) => (
+                  <ActionQueueCard
+                    key={item.id}
+                    item={item}
+                    onOpen={() =>
+                      navigation.navigate("SaleProjectDetail", {
+                        projectId: item.projectId,
+                        tab: "Overview",
+                      })
+                    }
+                  />
+                ))}
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -244,26 +223,30 @@ function ActionQueueCard({
 }): React.JSX.Element {
   const color = getPriorityColor(item.priority);
   return (
-    <View style={s.card}>
-      <View style={s.topCardRow}>
-        <View>
-          <Text style={s.cardTitle}>{item.projectName}</Text>
+    <Pressable style={s.queueCard} onPress={onOpen}>
+      <View style={s.queueCardTop}>
+        <View style={s.queueCardCopy}>
+          <Text style={s.cardTitle} numberOfLines={1}>
+            {item.projectName}
+          </Text>
           <Text style={s.cardMeta}>{item.projectCode}</Text>
         </View>
         <View style={[s.priorityBadge, { backgroundColor: color }]}>
           <Text style={s.priorityText}>{item.priority}</Text>
         </View>
       </View>
-      <Text style={[s.infoLabel, { marginTop: 12 }]}>NEXT ACTION</Text>
-      <Text style={s.infoValue}>{item.action}</Text>
-      <Text style={[s.cardMeta, { marginTop: 6 }]}>
-        {item.customerName}
-        {item.dueBucket ? ` · ${item.dueBucket}` : ""}
+      <Text style={s.queueActionLabel}>Next action</Text>
+      <Text style={s.queueActionText} numberOfLines={2}>
+        {item.action}
       </Text>
-      <Pressable style={[s.buttonPrimary, { marginTop: 12 }]} onPress={onOpen}>
-        <Text style={s.buttonPrimaryText}>Open Project</Text>
-      </Pressable>
-    </View>
+      <View style={s.queueFooter}>
+        <Text style={s.cardMeta} numberOfLines={1}>
+          {item.customerName}
+          {item.dueBucket ? ` · ${item.dueBucket}` : ""}
+        </Text>
+        <Text style={s.sectionAction}>Open</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -400,16 +383,38 @@ function mapRequestItem(item: {
 export function SaleProjectsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "Active" | "Production" | "Delivery">("Active");
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+
   const projectsQuery = useSaleAssignedProjectsQuery({
     search: query.trim() || undefined,
-    page: 1,
-    limit: 50,
+    status: saleProjectsFilterToStatus(filter),
+    page,
+    limit: pageSize,
   });
 
   const items = useMemo(() => {
     const list = projectsQuery.data?.items ?? [];
-    return list.filter((item) => matchesSaleProjectFilter(item.rawStatus, filter));
+    if (filter === "Active") {
+      return list.filter((item) => matchesSaleProjectFilter(item.rawStatus, "Active"));
+    }
+    return list;
   }, [filter, projectsQuery.data?.items]);
+
+  const total = projectsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+
+  const handleSearchChange = (value: string) => {
+    setQuery(value);
+    setPage(1);
+  };
+
+  const handleFilterChange = (value: string) => {
+    setFilter(value as typeof filter);
+    setPage(1);
+  };
 
   return (
     <SaleFrame>
@@ -425,7 +430,7 @@ export function SaleProjectsScreen(): React.JSX.Element {
       >
         <SaleHeader title="Assigned Projects">
           <View style={s.searchRow}>
-            <SearchBar value={query} onChange={setQuery} placeholder="Search project or code…" />
+            <SearchBar value={query} onChange={handleSearchChange} placeholder="Search project or code…" />
             <View style={s.filterButton}>
               <AppIcon definition={filterIconDefinition} size={15} color={SALE.white} />
             </View>
@@ -434,10 +439,12 @@ export function SaleProjectsScreen(): React.JSX.Element {
         <FilterChips
           options={["All", "Active", "Production", "Delivery"]}
           selected={filter}
-          onSelect={(value) => setFilter(value as typeof filter)}
+          onSelect={handleFilterChange}
         />
         <View style={[s.content, s.contentGap]}>
-          <Text style={s.sectionLabel}>{items.length} projects</Text>
+          <Text style={s.sectionLabel}>
+            {total} projects · Page {Math.min(page, totalPages)}/{totalPages}
+          </Text>
           {projectsQuery.isLoading ? (
             <ActivityIndicator color={SALE.gold} />
           ) : projectsQuery.isError ? (
@@ -447,6 +454,28 @@ export function SaleProjectsScreen(): React.JSX.Element {
           ) : (
             items.map((item) => <ProjectCard key={item.projectId} item={item} />)
           )}
+
+          {total > 0 ? (
+            <View style={s.paginationRow}>
+              <Pressable
+                style={[s.paginationButton, !canPrev && s.paginationButtonDisabled]}
+                disabled={!canPrev || projectsQuery.isFetching}
+                onPress={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <Text style={[s.paginationButtonText, !canPrev && s.paginationButtonTextDisabled]}>Previous</Text>
+              </Pressable>
+              <Text style={s.paginationMeta}>
+                {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+              </Text>
+              <Pressable
+                style={[s.paginationButton, !canNext && s.paginationButtonDisabled]}
+                disabled={!canNext || projectsQuery.isFetching}
+                onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <Text style={[s.paginationButtonText, !canNext && s.paginationButtonTextDisabled]}>Next</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
       <SaleBottomNav active="projects" />

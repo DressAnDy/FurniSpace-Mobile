@@ -63,17 +63,24 @@ export function SaleHeader({
   title,
   subtitle,
   children,
+  trailing,
 }: {
   title: string;
   subtitle?: string;
   children?: React.ReactNode;
+  trailing?: React.ReactNode;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
   return (
     <View style={[s.header, { paddingTop: Math.max(insets.top, 18) + 8 }]}>
-      <Text style={s.headerEyebrow}>FurniSpace · Sales</Text>
-      <Text style={s.headerTitle}>{title}</Text>
-      {subtitle ? <Text style={s.headerSubtitle}>{subtitle}</Text> : null}
+      <View style={s.headerTopRow}>
+        <View style={s.headerCopy}>
+          <Text style={s.headerEyebrow}>FurniSpace · Sales</Text>
+          <Text style={s.headerTitle}>{title}</Text>
+          {subtitle ? <Text style={s.headerSubtitle}>{subtitle}</Text> : null}
+        </View>
+        {trailing ? <View style={s.headerActions}>{trailing}</View> : null}
+      </View>
       {children}
     </View>
   );

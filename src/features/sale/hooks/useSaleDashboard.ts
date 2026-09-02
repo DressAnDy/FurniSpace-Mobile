@@ -100,7 +100,7 @@ export function useSaleAssignedProjectsQuery(query: Omit<ProjectListQuery, "assi
         ...query,
         assignedSalesId: accountId!,
         page: query.page ?? 1,
-        limit: query.limit ?? 50,
+        limit: query.limit ?? 5,
       });
       return {
         ...response,
@@ -108,6 +108,18 @@ export function useSaleAssignedProjectsQuery(query: Omit<ProjectListQuery, "assi
       };
     },
   });
+}
+
+export function saleProjectsFilterToStatus(
+  filter: "All" | "Active" | "Production" | "Delivery",
+): ProjectStatus | undefined {
+  if (filter === "Production") {
+    return "IN_PRODUCTION";
+  }
+  if (filter === "Delivery") {
+    return "DELIVERING";
+  }
+  return undefined;
 }
 
 export function useClaimSalesAssignmentMutation() {

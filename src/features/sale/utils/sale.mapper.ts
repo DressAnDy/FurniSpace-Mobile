@@ -29,11 +29,11 @@ const STATUS_COLORS: Partial<Record<ProjectStatus, string>> = {
 
 export function mapSalesKpisToMetrics(kpis: SalesKpisDto): SaleMetricCard[] {
   return [
-    { value: String(kpis.newRequests), label: "New Requests", color: "#C9A86A" },
-    { value: String(kpis.activeProjects), label: "Active Projects", color: "#3A3330" },
-    { value: String(kpis.waitingCustomer), label: "Waiting Customer", color: "#7A6F68" },
-    { value: String(kpis.paymentFollowUp), label: "Payment Follow-up", color: "#DC2626" },
-    { value: String(kpis.overdueTasks), label: "Overdue Tasks", color: "#DC2626" },
+    { value: String(kpis.newRequests), label: "New requests", color: "#C9A86A" },
+    { value: String(kpis.activeProjects), label: "Active", color: "#3A3330" },
+    { value: String(kpis.waitingCustomer), label: "Waiting", color: "#7A6F68" },
+    { value: String(kpis.paymentFollowUp), label: "Payments", color: "#DC2626" },
+    { value: String(kpis.overdueTasks), label: "Overdue", color: "#DC2626" },
   ];
 }
 
