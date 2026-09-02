@@ -60,7 +60,7 @@ export type RootStackParamList = {
   SaleMessages: undefined;
   SaleMore: undefined;
   SaleChat: { conversationId: string };
-  SaleProjectDetail: { tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
+  SaleProjectDetail: { projectId?: string; tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

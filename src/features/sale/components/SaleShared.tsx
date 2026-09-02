@@ -111,7 +111,17 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
   );
 }
 
-export function ProjectDetailHeader(): React.JSX.Element {
+export function ProjectDetailHeader({
+  projectCode,
+  projectName,
+  businessType,
+  statusLabel,
+}: {
+  projectCode?: string;
+  projectName?: string;
+  businessType?: string;
+  statusLabel?: string;
+} = {}): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   return (
@@ -121,10 +131,14 @@ export function ProjectDetailHeader(): React.JSX.Element {
           <Text style={{ color: SALE.white, fontSize: 19 }}>‹</Text>
         </Pressable>
         <View style={s.detailTitleWrap}>
-          <Text style={s.detailCode}>PRJ-2026-014 · APARTMENT</Text>
-          <Text style={s.detailTitle}>Modern Apartment Reno</Text>
+          <Text style={s.detailCode}>
+            {(projectCode ?? "PRJ-…") + (businessType ? ` · ${businessType.toUpperCase()}` : "")}
+          </Text>
+          <Text style={s.detailTitle}>{projectName ?? "Project detail"}</Text>
         </View>
-        <View style={s.status}><Text style={s.statusText}>Waiting For Designer</Text></View>
+        <View style={s.status}>
+          <Text style={s.statusText}>{statusLabel ?? "—"}</Text>
+        </View>
       </View>
       <View style={s.progress}>
         {Array.from({ length: 15 }, (_, index) => (
@@ -134,19 +148,25 @@ export function ProjectDetailHeader(): React.JSX.Element {
           </React.Fragment>
         ))}
       </View>
-      <Text style={s.progressLabel}>Stage 4 of 15 · <Text style={s.progressGold}>Waiting for Designer Assignment</Text></Text>
+      <Text style={s.progressLabel}>
+        Status · <Text style={s.progressGold}>{statusLabel ?? "Loading"}</Text>
+      </Text>
     </View>
   );
 }
 
-export function ProjectTabs({ active }: { active: ProjectDetailTab }): React.JSX.Element {
+export function ProjectTabs({ active, projectId }: { active: ProjectDetailTab; projectId?: string }): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
       {projectTabs.map((tab) => {
         const selected = active === tab;
         return (
-          <Pressable key={tab} style={[s.chip, selected && s.chipActive]} onPress={() => navigation.setParams({ tab } as never)}>
+          <Pressable
+            key={tab}
+            style={[s.chip, selected && s.chipActive]}
+            onPress={() => navigation.setParams({ tab, ...(projectId ? { projectId } : {}) } as never)}
+          >
             <Text style={[s.chipText, selected && s.chipTextActive]}>{tab}</Text>
           </Pressable>
         );

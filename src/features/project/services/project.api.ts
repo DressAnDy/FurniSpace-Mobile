@@ -32,6 +32,8 @@ export async function getProjectsApi(query: ProjectListQuery = {}): Promise<Proj
     params: {
       ...(query.status ? { status: query.status } : {}),
       ...(query.search ? { search: query.search } : {}),
+      ...(query.assignedSalesId ? { assignedSalesId: query.assignedSalesId } : {}),
+      ...(query.assignedDesignerId ? { assignedDesignerId: query.assignedDesignerId } : {}),
       page: query.page ?? 1,
       limit: query.limit ?? 20,
     },

@@ -120,6 +120,8 @@ export type ProjectByUserListResponseDto = {
 export type ProjectListQuery = {
   status?: ProjectStatus;
   search?: string;
+  assignedSalesId?: string;
+  assignedDesignerId?: string;
   page?: number;
   limit?: number;
 };

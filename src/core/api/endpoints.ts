@@ -30,6 +30,23 @@ export const endpoints = {
     updateTargetDate: (projectId: string) => `/projects/${projectId}/target-completion-date`,
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
     orders: (projectId: string) => `/projects/${projectId}/orders`,
+    salesAssignment: (projectId: string) => `/projects/${projectId}/sales-assignment`,
+    informationRequests: (projectId: string) => `/projects/${projectId}/information-requests`,
+    updateStatus: (projectId: string) => `/projects/${projectId}/status`,
+    rejection: (projectId: string) => `/projects/${projectId}/rejection`,
+    designerAssignment: (projectId: string) => `/projects/${projectId}/designer-assignment`,
+  },
+  saleDashboard: {
+    kpis: "/api/dashboard/sales/kpis",
+    actionQueue: "/api/dashboard/sales/action-queue",
+    phaseDeadlines: "/api/dashboard/project-phase-deadlines",
+  },
+  accounts: {
+    availableDesigners: "/accounts/designers/available",
+  },
+  projectStartFee: {
+    status: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee/status`,
+    create: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee`,
   },
   orders: {
     detail: (orderId: string) => `/orders/${orderId}`,

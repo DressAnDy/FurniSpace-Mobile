@@ -1,15 +1,19 @@
 import React, { useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { plusIconDefinition } from "../../../icons/action/definitions";
-import { mailIconDefinition, sendIconDefinition, paperclipIconDefinition } from "../../../icons/communication/definitions";
+import { mailIconDefinition, sendIconDefinition, paperclipIconDefinition, phoneIconDefinition } from "../../../icons/communication/definitions";
 import { calendarIconDefinition, clockIconDefinition } from "../../../icons/project/definitions";
 import { downloadIconDefinition, fileTextIconDefinition, imageIconDefinition, pdfIconDefinition, uploadIconDefinition } from "../../../icons/file/definitions";
-import { phoneIconDefinition } from "../../../icons/communication/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { getErrorMessage } from "../../../core/errors/getErrorMessage";
+import { useProjectDetailQuery } from "../../project/hooks/useProjects";
+import type { ProjectDetailDto } from "../../project/models/project.model";
+import { getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { saleConversations, type ProjectDetailTab } from "../data/sale.mock";
+import { formatSaleDate } from "../utils/sale.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
@@ -18,16 +22,33 @@ type ChatProps = NativeStackScreenProps<RootStackParamList, "SaleChat">;
 
 export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Element {
   const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
+  const projectId = route.params?.projectId ?? null;
   const [scheduleModal, setScheduleModal] = useState(route.params?.openScheduleModal ?? false);
+  const projectQuery = useProjectDetailQuery(projectId);
+  const project = projectQuery.data ?? null;
+
   return (
     <SaleFrame>
-      <ProjectDetailHeader />
-      <ProjectTabs active={activeTab} />
+      <ProjectDetailHeader
+        projectCode={project?.projectCode}
+        projectName={project?.projectName}
+        businessType={project?.businessType}
+        statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
+      />
+      <ProjectTabs active={activeTab} projectId={projectId ?? undefined} />
       {activeTab === "Chat" ? (
         <ProjectChat />
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[s.content, s.contentGap, { paddingTop: 15, paddingBottom: 105 }]}>
-          {activeTab === "Overview" ? <OverviewTab /> : null}
+          {activeTab === "Overview" ? (
+            projectQuery.isLoading ? (
+              <ActivityIndicator color={SALE.gold} />
+            ) : projectQuery.isError ? (
+              <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
+            ) : (
+              <OverviewTab project={project} />
+            )
+          ) : null}
           {activeTab === "Member" ? <MemberTab /> : null}
           {activeTab === "Files" ? <FilesTab /> : null}
           {activeTab === "Schedules" ? <SchedulesTab onCreate={() => setScheduleModal(true)} /> : null}
@@ -39,22 +60,54 @@ export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Elem
   );
 }
 
-function OverviewTab(): React.JSX.Element {
-  const requirements = ["Modern minimalist aesthetic with warm wood accents", "Open-plan living and dining area", "Maximize natural light through smart layout", "Built-in storage solutions throughout", "Smart home integration for lighting and AC"];
-  const furniture = ["Modular sofa (4-seat) with chaise", "Dining table for 6 persons", "Full kitchen cabinet system", "Master bedroom walk-in wardrobe", "Home office desk and shelving unit"];
+function OverviewTab({ project }: { project: ProjectDetailDto | null }): React.JSX.Element {
+  if (!project) {
+    return <Text style={s.centerMuted}>Select a project to view details.</Text>;
+  }
+
+  const brief =
+    project.description?.trim() ||
+    project.businessPurpose?.trim() ||
+    "No project brief provided yet.";
+  const furnitureItems = project.furnitureRequirement
+    ? project.furnitureRequirement.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)
+    : [];
+  const budget =
+    project.budgetMin != null || project.budgetMax != null
+      ? `₫ ${(project.budgetMin ?? 0).toLocaleString()} – ${(project.budgetMax ?? 0).toLocaleString()}`
+      : "—";
+
   return (
     <>
-      <View style={s.alert}><View style={s.alertCopy}><Text style={s.alertHeading}>Action Required</Text><Text style={s.alertBody}>Start fee confirmed. Assign a designer to proceed to space measurement.</Text></View></View>
-      <View style={s.card}><Text style={s.sectionLabel}>Project Brief</Text><Text style={[s.bodyText, { marginTop: 8 }]}>Full renovation of a 68 sqm apartment in Binh Thanh District. Client wants a modern minimalist style with warm wood tones, maximizing natural light. Open-plan living and dining space requested.</Text></View>
+      <View style={s.alert}>
+        <View style={s.alertCopy}>
+          <Text style={s.alertHeading}>Current status</Text>
+          <Text style={s.alertBody}>{getProjectStatusLabel(project.status)}</Text>
+        </View>
+      </View>
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Project Brief</Text>
+        <Text style={[s.bodyText, { marginTop: 8 }]}>{brief}</Text>
+      </View>
       <View style={s.card}>
         <Text style={s.sectionLabel}>Project Details</Text>
         <View style={s.infoGrid}>
-          <Info label="Area" value="68 sqm" /><Info label="Budget" value="₫ 120,000,000" /><Info label="Submitted" value="Aug 18, 2026" /><Info label="Target Date" value="Sep 10, 2026" />
-          <View style={{ width: "100%" }}><Text style={s.infoLabel}>Address</Text><Text style={s.infoValue}>45 Nguyen Huu Canh, Binh Thanh District, HCM City</Text></View>
+          <Info label="Area" value={project.totalAreaSqm != null ? `${project.totalAreaSqm} sqm` : "—"} />
+          <Info label="Budget" value={budget} />
+          <Info label="Submitted" value={formatSaleDate(project.submittedAt)} />
+          <Info label="Target Date" value={formatSaleDate(project.targetCompletionDate)} />
+          <View style={{ width: "100%" }}>
+            <Text style={s.infoLabel}>Address</Text>
+            <Text style={s.infoValue}>{project.projectAddress || "—"}</Text>
+          </View>
         </View>
       </View>
-      <RequirementCard title="Customer Requirements" items={requirements} bullets />
-      <RequirementCard title="Furniture Requirements" items={furniture} />
+      {project.businessPurpose ? (
+        <RequirementCard title="Business Purpose" items={[project.businessPurpose]} bullets />
+      ) : null}
+      {furnitureItems.length > 0 ? (
+        <RequirementCard title="Furniture Requirements" items={furnitureItems} />
+      ) : null}
     </>
   );
 }
