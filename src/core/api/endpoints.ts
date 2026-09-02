@@ -33,6 +33,7 @@ export const endpoints = {
   },
   orders: {
     detail: (orderId: string) => `/orders/${orderId}`,
+    deliveryDetails: (orderId: string) => `/orders/${orderId}/delivery-details`,
     createDeposit: (orderId: string) => `/orders/${orderId}/payments/deposit`,
     confirmDelivery: (orderId: string) => `/orders/${orderId}/confirm-delivery`,
   },

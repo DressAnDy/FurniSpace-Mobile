@@ -1,13 +1,19 @@
 import React, { useCallback, useState } from "react";
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
 import { checkIconDefinition } from "../../../icons/status/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
-import { bootstrapPaymentMethod } from "../hooks/usePayments";
+import { useAuthStore } from "../../auth/store/auth.store";
+import { getProjectByIdApi } from "../../project/services/project.api";
+import {
+  getOrderByIdApi,
+  hasOrderDeliveryDetails,
+} from "../../project/services/project.tracking.api";
+import { bootstrapPaymentMethod, isDeliveryDetailsRequiredError } from "../hooks/usePayments";
 import { isPaymentTerminalStatus } from "../hooks/usePaymentRealtime";
 import { PaymentDetailDto } from "../models/payment.model";
 import { formatVndAmount, getPaymentStatusLabel, getPaymentTypeLabel } from "../utils/payment.mapper";
@@ -22,27 +28,74 @@ type PaymentMethodRoute = RouteProp<RootStackParamList, "PaymentMethod">;
 export function PaymentMethodScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentMethodRoute>();
+  const currentUser = useAuthStore((state) => state.user);
+
   const [payment, setPayment] = useState<PaymentDetailDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSavingDelivery, setIsSavingDelivery] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsDeliveryDetails, setNeedsDeliveryDetails] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [receiverName, setReceiverName] = useState(currentUser?.fullName ?? "");
+  const [receiverPhone, setReceiverPhone] = useState(currentUser?.phone ?? "");
 
-  const loadPayment = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+  const loadPayment = useCallback(
+    async (deliveryDetails?: { deliveryAddress: string; receiverName: string; receiverPhone: string }) => {
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const result = await bootstrapPaymentMethod({
-        orderId: route.params.orderId,
-        paymentId: route.params.paymentId,
-        paymentType: route.params.paymentType,
-      });
-      setPayment(result);
-    } catch (loadError: unknown) {
-      setError(getErrorMessage(loadError, "Unable to load payment."));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [route.params.orderId, route.params.paymentId, route.params.paymentType]);
+      try {
+        if (route.params.orderId && !route.params.paymentId) {
+          try {
+            const order = await getOrderByIdApi(route.params.orderId);
+            if (!hasOrderDeliveryDetails(order) && !deliveryDetails) {
+              let defaultAddress = order.deliveryAddress ?? "";
+              if (!defaultAddress && route.params.projectId) {
+                const project = await getProjectByIdApi(route.params.projectId);
+                defaultAddress = project.projectAddress ?? "";
+              }
+
+              setDeliveryAddress(defaultAddress);
+              setReceiverName((prev) => order.receiverName?.trim() || prev || currentUser?.fullName || "");
+              setReceiverPhone((prev) => order.receiverPhone?.trim() || prev || currentUser?.phone || "");
+              setNeedsDeliveryDetails(true);
+              setPayment(null);
+              return;
+            }
+          } catch {
+            // Continue into payment bootstrap; BE will reject if details are still missing.
+          }
+        }
+
+        const result = await bootstrapPaymentMethod({
+          orderId: route.params.orderId,
+          paymentId: route.params.paymentId,
+          paymentType: route.params.paymentType,
+          deliveryDetails,
+        });
+        setNeedsDeliveryDetails(false);
+        setPayment(result);
+      } catch (loadError: unknown) {
+        if (isDeliveryDetailsRequiredError(loadError)) {
+          setNeedsDeliveryDetails(true);
+          setPayment(null);
+          setError(null);
+          return;
+        }
+        setError(getErrorMessage(loadError, "Unable to load payment."));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [
+      currentUser?.fullName,
+      currentUser?.phone,
+      route.params.orderId,
+      route.params.paymentId,
+      route.params.paymentType,
+      route.params.projectId,
+    ],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -69,6 +122,27 @@ export function PaymentMethodScreen(): React.JSX.Element {
     navigation.navigate("Tracking");
   };
 
+  const handleSaveDeliveryDetails = async () => {
+    const payload = {
+      deliveryAddress: deliveryAddress.trim(),
+      receiverName: receiverName.trim(),
+      receiverPhone: receiverPhone.trim(),
+    };
+
+    if (!payload.deliveryAddress || !payload.receiverName || !payload.receiverPhone) {
+      setError("Please fill delivery address, receiver name, and phone.");
+      return;
+    }
+
+    setIsSavingDelivery(true);
+    setError(null);
+    try {
+      await loadPayment(payload);
+    } finally {
+      setIsSavingDelivery(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -90,19 +164,70 @@ export function PaymentMethodScreen(): React.JSX.Element {
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.pageTitle}>{isPaid ? "Payment completed" : "Choose payment"}</Text>
+          <Text style={styles.pageTitle}>
+            {needsDeliveryDetails ? "Delivery details" : isPaid ? "Payment completed" : "Choose payment"}
+          </Text>
           <Text style={styles.pageSubtitle}>
-            {isPaid ? "This payment has already been confirmed." : "Select how you want to pay"}
+            {needsDeliveryDetails
+              ? "Provide delivery details before creating the deposit invoice."
+              : isPaid
+                ? "This payment has already been confirmed."
+                : "Select how you want to pay"}
           </Text>
 
-          {isLoading ? (
+          {isLoading && !needsDeliveryDetails ? (
             <View style={styles.centerState}>
               <ActivityIndicator color={paymentBrandColors.gold} />
               <Text style={styles.stateText}>Loading payment details...</Text>
             </View>
+          ) : needsDeliveryDetails ? (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>DELIVERY INFORMATION</Text>
+              <Text style={styles.fieldLabel}>Delivery address</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={deliveryAddress}
+                onChangeText={setDeliveryAddress}
+                placeholder="Street, district, city"
+                placeholderTextColor="#A89F97"
+                multiline
+              />
+              <Text style={styles.fieldLabel}>Receiver name</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={receiverName}
+                onChangeText={setReceiverName}
+                placeholder="Full name"
+                placeholderTextColor="#A89F97"
+              />
+              <Text style={styles.fieldLabel}>Receiver phone</Text>
+              <TextInput
+                style={styles.fieldInput}
+                value={receiverPhone}
+                onChangeText={setReceiverPhone}
+                placeholder="Phone number"
+                placeholderTextColor="#A89F97"
+                keyboardType="phone-pad"
+              />
+              {error ? <Text style={styles.formErrorText}>{error}</Text> : null}
+              <Pressable
+                style={[styles.primaryActionButton, isSavingDelivery && styles.primaryActionButtonDisabled]}
+                disabled={isSavingDelivery}
+                onPress={() => void handleSaveDeliveryDetails()}
+              >
+                {isSavingDelivery ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.primaryActionButtonText}>Continue to payment</Text>
+                )}
+              </Pressable>
+            </View>
           ) : error ? (
             <View style={styles.centerState}>
               <Text style={styles.stateText}>{error}</Text>
+              <Pressable style={styles.primaryActionButton} onPress={() => void loadPayment()}>
+                <Text style={styles.primaryActionButtonText}>Retry</Text>
+              </Pressable>
             </View>
           ) : payment ? (
             <>

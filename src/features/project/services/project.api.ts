@@ -11,6 +11,7 @@ import {
   UpdateProjectBasicInfoRequestDto,
   UpdateTargetCompletionDateRequestDto,
 } from "../models/project.model";
+import { ReopenProjectProposalResponseDto } from "../models/project.tracking.model";
 
 function mapByUserItemToListItem(item: ProjectByUserListResponseDto["items"][number]): ProjectListItemDto {
   return {
@@ -90,7 +91,9 @@ export async function updateProjectTargetCompletionDateApi(
   return response.data.data;
 }
 
-export async function reopenProjectProposalApi(projectId: string): Promise<ProjectDetailDto> {
-  const response = await httpClient.post<ApiResponse<ProjectDetailDto>>(endpoints.projects.reopenProposal(projectId));
+export async function reopenProjectProposalApi(projectId: string): Promise<ReopenProjectProposalResponseDto> {
+  const response = await httpClient.post<ApiResponse<ReopenProjectProposalResponseDto>>(
+    endpoints.projects.reopenProposal(projectId),
+  );
   return response.data.data;
 }

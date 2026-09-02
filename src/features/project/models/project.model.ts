@@ -29,6 +29,29 @@ export type ProjectListItemDto = {
   submittedAt: string;
 };
 
+export type ProjectAssigneeDto = {
+  accountId: string;
+  fullName: string;
+};
+
+export type ProjectPhaseDeadlineDto = {
+  phase: "PROPOSAL" | "PRODUCTION";
+  dueDate: string;
+  startedAt?: string | null;
+  completedAt: string | null;
+  status: "PLANNED" | "ON_TRACK" | "OVERDUE" | "COMPLETED_ON_TIME" | "COMPLETED_LATE";
+  overdueDays: number;
+};
+
+export type ProjectDeliverySummaryDto = {
+  status: string;
+  deliveredQuantity: number;
+  totalQuantity: number;
+  remainingQuantity: number;
+  deliveryProgressPercent: number;
+  nextDeliveryAt: string | null;
+};
+
 export type ProjectDetailDto = {
   projectId: string;
   customerId: string;
@@ -50,6 +73,8 @@ export type ProjectDetailDto = {
   targetCompletionDate: string | null;
   status: ProjectStatus;
   submittedAt: string;
+  phaseDeadlines?: ProjectPhaseDeadlineDto[];
+  deliverySummary?: ProjectDeliverySummaryDto | null;
 };
 
 export type ProjectListResponseDto = {
@@ -59,17 +84,17 @@ export type ProjectListResponseDto = {
   total: number;
 };
 
-export type ProjectAssigneeDto = {
-  accountId: string;
-  fullName: string;
-};
-
 export type ProjectByUserItemDto = {
   projectId: string;
   projectCode: string;
   projectName: string;
   businessType: string;
   projectAddress?: string | null;
+  totalAreaSqm?: number | null;
+  numberOfFloors?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  targetCompletionDate?: string | null;
   status: ProjectStatus;
   customer?: {
     accountId: string;

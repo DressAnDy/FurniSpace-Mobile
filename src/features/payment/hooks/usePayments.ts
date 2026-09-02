@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
+import {
+  getOrderByIdApi,
+  hasOrderDeliveryDetails,
+  isDepositEligibleOrderStatus,
+  updateOrderDeliveryDetailsApi,
+} from "../../project/services/project.tracking.api";
+import { UpdateOrderDeliveryDetailsRequestDto } from "../../project/models/project.tracking.model";
 import { PaymentDetailDto, PaymentListQuery, PayOsCheckoutState } from "../models/payment.model";
 import {
   createOrderDepositPaymentApi,
@@ -13,6 +20,11 @@ import {
 } from "../services/payment.api";
 import { buildTransferDetails } from "../utils/payment.mapper";
 import { buildPayOsCheckoutState, mapPayOsTransactionToAttempt } from "../utils/payos.mapper";
+
+export function isDeliveryDetailsRequiredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /ORDER_DELIVERY_DETAILS_REQUIRED|delivery details/i.test(message);
+}
 
 export function usePaymentDetailQuery(paymentId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -57,10 +69,28 @@ export function useCreateDepositPaymentMutation() {
   });
 }
 
+export async function ensureOrderDeliveryDetails(
+  orderId: string,
+  deliveryDetails?: UpdateOrderDeliveryDetailsRequestDto,
+): Promise<void> {
+  const order = await getOrderByIdApi(orderId);
+
+  if (hasOrderDeliveryDetails(order)) {
+    return;
+  }
+
+  if (!deliveryDetails) {
+    throw new Error("ORDER_DELIVERY_DETAILS_REQUIRED");
+  }
+
+  await updateOrderDeliveryDetailsApi(orderId, deliveryDetails);
+}
+
 export async function ensurePayment(input: {
   orderId?: string;
   paymentId?: string;
   paymentType?: PaymentDetailDto["paymentType"];
+  deliveryDetails?: UpdateOrderDeliveryDetailsRequestDto;
 }): Promise<PaymentDetailDto> {
   if (input.paymentId) {
     return getPaymentDetailApi(input.paymentId);
@@ -75,7 +105,22 @@ export async function ensurePayment(input: {
     return existingPayment;
   }
 
-  return createOrderDepositPaymentApi(input.orderId);
+  if (input.paymentType === "DEPOSIT" || !input.paymentType) {
+    const order = await getOrderByIdApi(input.orderId);
+    if (isDepositEligibleOrderStatus(order.status)) {
+      await ensureOrderDeliveryDetails(input.orderId, input.deliveryDetails);
+    }
+  }
+
+  try {
+    return await createOrderDepositPaymentApi(input.orderId);
+  } catch (error) {
+    if (isDeliveryDetailsRequiredError(error) && input.deliveryDetails) {
+      await updateOrderDeliveryDetailsApi(input.orderId, input.deliveryDetails);
+      return createOrderDepositPaymentApi(input.orderId);
+    }
+    throw error;
+  }
 }
 
 async function findExistingPaymentForOrder(
@@ -193,6 +238,7 @@ export async function bootstrapPaymentMethod(input: {
   orderId?: string;
   paymentId?: string;
   paymentType?: PaymentDetailDto["paymentType"];
+  deliveryDetails?: UpdateOrderDeliveryDetailsRequestDto;
 }) {
   return ensurePayment(input);
 }

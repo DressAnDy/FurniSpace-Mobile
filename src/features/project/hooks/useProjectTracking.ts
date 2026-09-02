@@ -12,6 +12,8 @@ import {
   getProjectOrdersApi,
   getProjectPhaseDeadlinesApi,
   getProjectSchedulesApi,
+  getScheduleStartAt,
+  isDepositEligibleOrderStatus,
 } from "../services/project.tracking.api";
 import { buildProjectTrackingSummary } from "../utils/project.tracking.mapper";
 
@@ -112,21 +114,32 @@ export function useProjectTrackingQueries(projectId: string | null) {
 
   const isLoading = enabled && results.some((query) => query.isLoading);
   const isRefetching = enabled && results.some((query) => query.isFetching && !query.isLoading);
-  const isError = results.some((query) => query.isError);
-  const error = results.find((query) => query.error)?.error ?? null;
+  // Project detail is required; secondary endpoints failing should not block the whole screen.
+  const isError = Boolean(projectQuery.isError);
+  const error = projectQuery.error ?? null;
 
   const data = useMemo<ProjectTrackingData | null>(() => {
     if (!projectQuery.data) {
       return null;
     }
 
+    const embeddedDeadlines = projectQuery.data.phaseDeadlines ?? [];
+    const phaseDeadlines: PhaseDeadlinesResponseDto = phaseDeadlinesQuery.data ?? {
+      projectId: projectId ?? projectQuery.data.projectId,
+      targetCompletionDate: projectQuery.data.targetCompletionDate,
+      deadlines: embeddedDeadlines.map((item) => ({
+        phase: item.phase,
+        dueDate: item.dueDate,
+        startedAt: item.startedAt ?? null,
+        completedAt: item.completedAt,
+        status: item.status,
+        overdueDays: item.overdueDays,
+      })),
+    };
+
     return {
       project: projectQuery.data,
-      phaseDeadlines: phaseDeadlinesQuery.data ?? {
-        projectId: projectId ?? "",
-        targetCompletionDate: projectQuery.data.targetCompletionDate,
-        deadlines: [],
-      },
+      phaseDeadlines,
       schedules: schedulesQuery.data ?? [],
       orders: ordersQuery.data ?? [],
       payments: paymentsQuery.data ?? { items: [], page: 1, limit: 20, total: 0 },
@@ -178,8 +191,7 @@ export function useConfirmOrderDeliveryMutation(projectId: string | null) {
     mutationFn: (orderId: string) => confirmOrderDeliveryApi(orderId),
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.orders(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void refetchProjectTrackingQueries(queryClient, projectId);
       }
     },
   });
@@ -192,15 +204,55 @@ export function useReopenProjectProposalMutation(projectId: string | null) {
     mutationFn: () => reopenProjectProposalApi(projectId!),
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.list({}) });
+        void refetchProjectTrackingQueries(queryClient, projectId);
       }
     },
   });
 }
 
-export function canReopenProposal(status: ProjectStatus): boolean {
-  return status === "PROPOSAL_SELECTED" || status === "QUOTATION_SENT" || status === "ORDER_CONFIRMED";
+export function canReopenProposal(status: ProjectStatus, order?: OrderDto | null): boolean {
+  if (status === "PROPOSAL_SELECTED" || status === "QUOTATION_SENT") {
+    return true;
+  }
+
+  if (status !== "ORDER_CONFIRMED") {
+    return false;
+  }
+
+  // Source statuses before deposit paid / production created.
+  if (!order) {
+    return true;
+  }
+
+  return isDepositEligibleOrderStatus(order.status);
+}
+
+export function canPayDeposit(projectStatus: ProjectStatus, order: OrderDto | null, paidDeposit: boolean): boolean {
+  if (paidDeposit || !order) {
+    return false;
+  }
+
+  return projectStatus === "ORDER_CONFIRMED" && isDepositEligibleOrderStatus(order.status);
+}
+
+export function canConfirmDelivery(
+  projectStatus: ProjectStatus,
+  order: OrderDto | null,
+  remainingQuantity?: number | null,
+): boolean {
+  if (!order) {
+    return false;
+  }
+
+  if (order.status === "AWAITING_CUSTOMER_CONFIRMATION") {
+    return true;
+  }
+
+  if (projectStatus === "DELIVERING" && remainingQuantity === 0) {
+    return true;
+  }
+
+  return false;
 }
 
 export function getPendingConfirmationSchedules(schedules: ProjectScheduleDto[]): ProjectScheduleDto[] {
@@ -211,8 +263,19 @@ export function getUpcomingSchedules(schedules: ProjectScheduleDto[]): ProjectSc
   const now = Date.now();
   return schedules
     .filter((schedule) => schedule.status !== "CANCELLED" && schedule.status !== "COMPLETED")
-    .filter((schedule) => new Date(schedule.scheduledAt).getTime() >= now - 24 * 60 * 60 * 1000)
-    .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime())
+    .filter((schedule) => {
+      const startAt = getScheduleStartAt(schedule);
+      if (!startAt) {
+        return true;
+      }
+      const time = new Date(startAt).getTime();
+      return Number.isNaN(time) || time >= now - 24 * 60 * 60 * 1000;
+    })
+    .sort((left, right) => {
+      const leftTime = new Date(getScheduleStartAt(left)).getTime() || 0;
+      const rightTime = new Date(getScheduleStartAt(right)).getTime() || 0;
+      return leftTime - rightTime;
+    })
     .slice(0, 5);
 }
 
@@ -221,7 +284,10 @@ export function getPrimaryOrder(orders: OrderDto[]): OrderDto | null {
     return null;
   }
 
-  return [...orders].sort((left, right) => {
+  const active = orders.find((order) => order.status !== "CANCELLED");
+  const pool = active ? orders.filter((order) => order.status !== "CANCELLED") : orders;
+
+  return [...pool].sort((left, right) => {
     const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
     const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
     return rightTime - leftTime;

@@ -24,6 +24,8 @@ import { ProjectSwitcherModal } from "../components/ProjectSwitcherModal";
 import { useActiveProjectSummary } from "../hooks/useProjects";
 import { useActiveProjectId, useProjectStore } from "../store/project.store";
 import {
+  canConfirmDelivery,
+  canPayDeposit,
   canReopenProposal,
   getPendingConfirmationSchedules,
   getPrimaryOrder,
@@ -34,6 +36,7 @@ import {
   useReopenProjectProposalMutation,
 } from "../hooks/useProjectTracking";
 import { useProjectTrackingRealtime } from "../hooks/useProjectTrackingRealtime";
+import { getScheduleStartAt } from "../services/project.tracking.api";
 import {
   buildProjectTrackingSummary,
   computeDaysUntil,
@@ -295,9 +298,13 @@ export function ProjectTrackingScreen(): React.JSX.Element {
               <CustomerActionsCard
                 status={project.status}
                 hasPendingSchedules={pendingSchedules.length > 0}
-                canPayDeposit={project.status === "ORDER_CONFIRMED" && !paidDeposit}
-                canConfirmDelivery={project.status === "DELIVERING"}
-                canReopen={canReopenProposal(project.status) && !paidDeposit}
+                canPayDeposit={canPayDeposit(project.status, primaryOrder, paidDeposit)}
+                canConfirmDelivery={canConfirmDelivery(
+                  project.status,
+                  primaryOrder,
+                  project.deliverySummary?.remainingQuantity,
+                )}
+                canReopen={canReopenProposal(project.status, primaryOrder) && !paidDeposit}
                 onConfirmSchedule={() => pendingSchedules[0] && handleConfirmSchedule(pendingSchedules[0])}
                 onPayDeposit={handlePayDeposit}
                 onConfirmDelivery={handleConfirmDelivery}
@@ -388,7 +395,16 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                   <Text style={styles.orderStatusText}>{primaryOrder.status.replaceAll("_", " ")}</Text>
                   {primaryOrder.totalAmount != null ? (
                     <Text style={styles.orderMetaText}>
-                      Total {primaryOrder.totalAmount.toLocaleString()} · Paid {(primaryOrder.paidAmount ?? 0).toLocaleString()}
+                      Total {primaryOrder.totalAmount.toLocaleString()} · Deposit{" "}
+                      {(primaryOrder.depositAmount ?? 0).toLocaleString()} · Paid{" "}
+                      {(primaryOrder.paidAmount ?? 0).toLocaleString()}
+                    </Text>
+                  ) : null}
+                  {project.deliverySummary ? (
+                    <Text style={styles.orderMetaText}>
+                      Delivery {project.deliverySummary.deliveredQuantity}/
+                      {project.deliverySummary.totalQuantity} (
+                      {project.deliverySummary.deliveryProgressPercent}%)
                     </Text>
                   ) : null}
                 </View>
@@ -570,7 +586,7 @@ function ScheduleRow({
       <View style={styles.scheduleTextWrap}>
         <Text style={styles.scheduleTitle}>{schedule.title ?? schedule.scheduleType.replaceAll("_", " ")}</Text>
         <Text style={styles.scheduleMeta}>
-          {formatTrackingDate(schedule.scheduledAt)} · {schedule.status.replaceAll("_", " ")}
+          {formatTrackingDate(getScheduleStartAt(schedule))} · {schedule.status.replaceAll("_", " ")}
         </Text>
       </View>
       {onConfirm ? (
