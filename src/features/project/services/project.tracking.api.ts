@@ -1,10 +1,12 @@
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
 import { ApiResponse } from "../../../shared/types/api";
+import { OrderListResponseDto } from "../models/order.model";
+import { normalizeOrderListItem, resolveOrderDisplayTotal } from "../utils/order.mapper";
+import { normalizeProjectSchedule } from "../utils/schedule.mapper";
 import {
   ConfirmOrderDeliveryResponseDto,
   OrderDto,
-  OrderListResponseDto,
   PhaseDeadlinesResponseDto,
   ProjectScheduleDto,
   ProjectScheduleListResponseDto,
@@ -55,12 +57,43 @@ export async function confirmProjectScheduleApi(
     payload,
   );
   return normalizeSchedule(response.data.data);
+
+  return items
+    .map((item) => normalizeProjectSchedule(item))
+    .filter((item): item is ProjectScheduleDto => item != null && Boolean(item.scheduleId));
+}
+
+export async function confirmProjectScheduleApi(scheduleId: string): Promise<ProjectScheduleDto> {
+  const payload: UpdateProjectScheduleStatusRequestDto = { status: "CONFIRMED" };
+  const response = await httpClient.patch<ApiResponse<unknown>>(
+    endpoints.projectSchedules.updateStatus(scheduleId),
+    payload,
+  );
+  const normalized = normalizeProjectSchedule(response.data.data);
+  if (!normalized) {
+    throw new Error("Invalid schedule response");
+  }
+  return normalized;
 }
 
 export async function getProjectOrdersApi(projectId: string): Promise<OrderDto[]> {
   const response = await httpClient.get<ApiResponse<OrderListResponseDto>>(endpoints.projects.orders(projectId));
   const data = response.data.data;
-  return data.items ?? (Array.isArray(data) ? (data as unknown as OrderDto[]) : []);
+  const items = data.items ?? [];
+
+  return items
+    .map((item) => normalizeOrderListItem(item))
+    .filter((item): item is NonNullable<ReturnType<typeof normalizeOrderListItem>> => item != null)
+    .map((item) => ({
+      orderId: item.orderId,
+      projectId: item.projectId,
+      orderCode: item.orderCode,
+      status: item.status,
+      totalAmount: resolveOrderDisplayTotal(item),
+      paidAmount: item.paidAmount,
+      remainingAmount: item.remainingAmount,
+      createdAt: item.createdAt,
+    }));
 }
 
 export async function getOrderByIdApi(orderId: string): Promise<OrderDto> {

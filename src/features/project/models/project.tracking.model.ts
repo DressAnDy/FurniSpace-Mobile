@@ -90,6 +90,8 @@ export type ProjectScheduleDto = {
   scheduledAt?: string;
   endAt?: string | null;
   location?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
   status: ProjectScheduleStatus;
   customerNote?: string | null;
   internalNote?: string | null;

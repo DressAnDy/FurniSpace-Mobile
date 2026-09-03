@@ -9,6 +9,12 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & {
 };
 
 let refreshTask: Promise<void> | null = null;
+const tokenRefreshHandlers = new Set<() => void>();
+
+export function subscribeAuthTokenRefresh(handler: () => void): () => void {
+  tokenRefreshHandlers.add(handler);
+  return () => tokenRefreshHandlers.delete(handler);
+}
 
 function shouldSkipRefresh(url?: string): boolean {
   if (!url) {
@@ -54,6 +60,9 @@ export function setupInterceptors(client: AxiosInstance): void {
           const response = await postAuthJson(endpoints.auth.refresh, { refreshToken: savedRefreshToken });
           const tokens = extractAuthTokensFromSetCookie(response.setCookieLines);
           await setAuthTokens(tokens);
+          for (const handler of tokenRefreshHandlers) {
+            handler();
+          }
         })().finally(() => {
           refreshTask = null;
         });

@@ -14,7 +14,11 @@ const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
-export function formatVndAmount(amount: number, currency = "VND"): string {
+export function formatVndAmount(amount: number | null | undefined, currency = "VND"): string {
+  if (amount == null || !Number.isFinite(amount)) {
+    return "—";
+  }
+
   if (currency !== "VND") {
     return `${amount.toLocaleString("vi-VN")} ${currency}`;
   }

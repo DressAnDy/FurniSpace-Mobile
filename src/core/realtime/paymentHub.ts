@@ -7,6 +7,7 @@ import { PaymentUpdatedRealtimeDto } from "../../features/payment/models/payment
 import { getAccessToken } from "../storage/secureStorage";
 import {
   getHubUrl,
+  getSignalRRetryDelay,
   getSignalRTransportOptions,
   safeHubStart,
   signalRLogLevel,
@@ -18,6 +19,7 @@ type PaymentEventHandler = (payload: PaymentUpdatedRealtimeDto) => void;
 
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const handlers = new Set<PaymentEventHandler>();
 const joinedPaymentIds = new Set<string>();
 
@@ -96,6 +98,18 @@ function attachEventHandlers(hub: HubConnection): void {
   hub.onreconnected(async () => {
     await rejoinActivePayments();
   });
+
+  hub.onclose((error) => {
+    if (connection === hub) {
+      connection = null;
+    }
+    if (error && joinedPaymentIds.size > 0 && !reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void connectPaymentHub();
+      }, 2000);
+    }
+  });
 }
 
 async function rejoinActivePayments(): Promise<void> {
@@ -164,7 +178,10 @@ export async function connectPaymentHub(): Promise<boolean> {
 
     const hub = new HubConnectionBuilder()
       .withUrl(getHubUrl("/hubs/payments"), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (context) =>
+          getSignalRRetryDelay(context.previousRetryCount, context.retryReason),
+      })
       .configureLogging(signalRLogLevel)
       .build();
 
@@ -186,6 +203,10 @@ export async function connectPaymentHub(): Promise<boolean> {
 
 export async function disconnectPaymentHub(): Promise<void> {
   joinedPaymentIds.clear();
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
 
   if (!connection) {
     return;
@@ -194,6 +215,21 @@ export async function disconnectPaymentHub(): Promise<void> {
   const hub = connection;
   connection = null;
   await hub.stop().catch(() => undefined);
+}
+
+export async function restartPaymentHub(): Promise<boolean> {
+  if (joinedPaymentIds.size === 0) {
+    return false;
+  }
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const hub = connection;
+  connection = null;
+  await hub?.stop().catch(() => undefined);
+  return connectPaymentHub();
 }
 
 export async function joinPaymentHub(paymentId: string): Promise<void> {

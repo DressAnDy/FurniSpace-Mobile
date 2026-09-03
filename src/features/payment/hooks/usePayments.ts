@@ -93,14 +93,32 @@ export async function ensurePayment(input: {
   deliveryDetails?: UpdateOrderDeliveryDetailsRequestDto;
 }): Promise<PaymentDetailDto> {
   if (input.paymentId) {
-    return getPaymentDetailApi(input.paymentId);
+    const payment = await getPaymentDetailApi(input.paymentId);
+    if (
+      payment.status === "PAID" ||
+      !input.orderId ||
+      (payment.status !== "EXPIRED" && payment.status !== "CANCELLED")
+    ) {
+      return payment;
+    }
+
+    const replacement = await findExistingPaymentForOrder(
+      input.orderId,
+      input.paymentType ?? payment.paymentType,
+    );
+    if (replacement) {
+      return replacement;
+    }
+
+    return payment;
   }
 
   if (!input.orderId) {
     throw new Error("Missing order or payment information.");
   }
 
-  const existingPayment = await findExistingPaymentForOrder(input.orderId, input.paymentType);
+  const paymentType = input.paymentType ?? "DEPOSIT";
+  const existingPayment = await findExistingPaymentForOrder(input.orderId, paymentType);
   if (existingPayment) {
     return existingPayment;
   }
@@ -121,6 +139,11 @@ export async function ensurePayment(input: {
     }
     throw error;
   }
+  if (paymentType === "REMAINING_PAYMENT") {
+    throw new Error("Remaining payment has not been issued yet. Please contact sales after delivery.");
+  }
+
+  return createOrderDepositPaymentApi(input.orderId);
 }
 
 async function findExistingPaymentForOrder(
@@ -129,8 +152,7 @@ async function findExistingPaymentForOrder(
 ): Promise<PaymentDetailDto | null> {
   const response = await getPaymentsApi({ orderId, limit: 20 });
   const items = response.items ?? [];
-  const scopedItems = paymentType ? items.filter((item) => item.paymentType === paymentType) : items;
-  const candidates = scopedItems.length > 0 ? scopedItems : items;
+  const candidates = paymentType ? items.filter((item) => item.paymentType === paymentType) : items;
 
   const paidPayment = candidates.find((item) => item.status === "PAID");
   if (paidPayment) {

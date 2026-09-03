@@ -19,6 +19,12 @@ import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { AppBottomNav } from "../../../shared/components/AppBottomNav";
 import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
+import {
+  canCustomerPayDeposit,
+  canCustomerPayRemaining,
+  findPendingPayment,
+  hasPaidPayment,
+} from "../../payment/utils/payment.helpers";
 import type { MacroStageItem, PhaseDeadlineItemDto, ProjectScheduleDto } from "../models/project.tracking.model";
 import { ProjectSwitcherModal } from "../components/ProjectSwitcherModal";
 import { useActiveProjectSummary } from "../hooks/useProjects";
@@ -27,25 +33,30 @@ import {
   canConfirmDelivery,
   canPayDeposit,
   canReopenProposal,
-  getPendingConfirmationSchedules,
   getPrimaryOrder,
   getUpcomingSchedules,
   useConfirmOrderDeliveryMutation,
-  useConfirmProjectScheduleMutation,
   useProjectTrackingQueries,
   useReopenProjectProposalMutation,
 } from "../hooks/useProjectTracking";
+import { useProjectSwitcherPrefetch } from "../hooks/useProjectSwitcherPrefetch";
 import { useProjectTrackingRealtime } from "../hooks/useProjectTrackingRealtime";
 import { getScheduleStartAt } from "../services/project.tracking.api";
 import {
   buildProjectTrackingSummary,
   computeDaysUntil,
   formatTrackingDate,
+  formatTrackingDateTime,
   getInitials,
   getPhaseDeadlineMetricLabel,
   getPhaseDeadlineStatusColor,
 } from "../utils/project.tracking.mapper";
 import { getProjectStatusLabel } from "../utils/project.mapper";
+import {
+  resolveCustomerFlowDecision,
+  type CustomerFlowAction,
+} from "../utils/project.customer-flow.mapper";
+import { formatScheduleStatusLabel, formatScheduleTypeLabel } from "../utils/schedule.mapper";
 import { styles } from "./ProjectTrackingScreen.styles";
 
 type TrackingRoute = RouteProp<RootStackParamList, "Tracking">;
@@ -75,10 +86,10 @@ export function ProjectTrackingScreen(): React.JSX.Element {
 
   const projects = projectsQuery.data?.items ?? [];
   const hasMultipleProjects = projects.length > 1;
+  const { prefetchProject, prefetchAllProjects } = useProjectSwitcherPrefetch(projects);
 
   const { data, isLoading, isError, refetchAll } = useProjectTrackingQueries(projectId);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
-  const confirmScheduleMutation = useConfirmProjectScheduleMutation(projectId);
   const confirmDeliveryMutation = useConfirmOrderDeliveryMutation(projectId);
   const reopenProposalMutation = useReopenProjectProposalMutation(projectId);
 
@@ -103,10 +114,11 @@ export function ProjectTrackingScreen(): React.JSX.Element {
 
   const handleSelectProject = useCallback(
     (nextProjectId: string) => {
+      prefetchProject(nextProjectId);
       setActiveProjectId(nextProjectId);
       navigation.setParams({ projectId: nextProjectId });
     },
-    [navigation, setActiveProjectId],
+    [navigation, prefetchProject, setActiveProjectId],
   );
 
   useEffect(() => {
@@ -115,38 +127,14 @@ export function ProjectTrackingScreen(): React.JSX.Element {
     }
   }, [route.params?.projectId, setActiveProjectId]);
 
-  const pendingSchedules = useMemo(
-    () => getPendingConfirmationSchedules(data?.schedules ?? []),
-    [data?.schedules],
-  );
   const upcomingSchedules = useMemo(() => getUpcomingSchedules(data?.schedules ?? []), [data?.schedules]);
   const primaryOrder = useMemo(() => getPrimaryOrder(data?.orders ?? []), [data?.orders]);
 
-  const pendingDepositPayment = useMemo(() => {
-    return (data?.payments.items ?? []).find(
-      (payment) => payment.paymentType === "DEPOSIT" && (payment.status === "PENDING" || payment.status === "PROCESSING"),
-    );
-  }, [data?.payments.items]);
-
-  const paidDeposit = useMemo(() => {
-    return (data?.payments.items ?? []).some(
-      (payment) => payment.paymentType === "DEPOSIT" && payment.status === "PAID",
-    );
-  }, [data?.payments.items]);
-
-  const handleConfirmSchedule = (schedule: ProjectScheduleDto) => {
-    Alert.alert("Confirm Schedule", `Confirm ${schedule.title ?? schedule.scheduleType}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Confirm",
-        onPress: () => {
-          confirmScheduleMutation.mutate(schedule.scheduleId, {
-            onError: () => Alert.alert("Error", "Unable to confirm the schedule. Please try again."),
-          });
-        },
-      },
-    ]);
-  };
+  const payments = data?.payments.items ?? [];
+  const pendingDepositPayment = useMemo(() => findPendingPayment(payments, "DEPOSIT"), [payments]);
+  const pendingRemainingPayment = useMemo(() => findPendingPayment(payments, "REMAINING_PAYMENT"), [payments]);
+  const paidDeposit = useMemo(() => hasPaidPayment(payments, "DEPOSIT"), [payments]);
+  const paidRemaining = useMemo(() => hasPaidPayment(payments, "REMAINING_PAYMENT"), [payments]);
 
   const handleConfirmDelivery = () => {
     if (!primaryOrder) {
@@ -198,8 +186,101 @@ export function ProjectTrackingScreen(): React.JSX.Element {
     });
   };
 
-  const tracking = data?.tracking ?? buildProjectTrackingSummary("SUBMITTED");
+  const handlePayRemaining = () => {
+    if (!primaryOrder) {
+      return;
+    }
+
+    navigation.navigate("PaymentMethod", {
+      orderId: primaryOrder.orderId,
+      projectId: projectId ?? undefined,
+      paymentId: pendingRemainingPayment?.paymentId,
+      paymentType: "REMAINING_PAYMENT",
+    });
+  };
+
+  const projectSummary = useMemo(
+    () => projects.find((item) => item.projectId === projectId) ?? null,
+    [projectId, projects],
+  );
+
   const project = data?.project;
+  const tracking = useMemo(() => {
+    if (data?.tracking) {
+      return data.tracking;
+    }
+
+    if (projectSummary) {
+      return buildProjectTrackingSummary(projectSummary.status);
+    }
+
+    return buildProjectTrackingSummary("SUBMITTED");
+  }, [data?.tracking, projectSummary]);
+  const displayProjectName = project?.projectName ?? projectSummary?.projectName ?? "—";
+  const displayProjectMeta = project
+    ? `Project #${project.projectCode} · ${project.businessType}`
+    : projectSummary
+      ? `Project #${projectSummary.projectCode} · ${projectSummary.businessType}`
+      : "Loading...";
+  const displayStatusLabel = projectSummary ? projectSummary.statusLabel : tracking.currentStatusLabel;
+
+  const flowDecision = useMemo(
+    () => (project ? resolveCustomerFlowDecision(project.status) : null),
+    [project],
+  );
+
+  const handleFlowAction = useCallback(
+    (action: CustomerFlowAction) => {
+      if (!projectId || !project) {
+        return;
+      }
+
+      switch (action.id) {
+        case "update_basic_information":
+          navigation.navigate("UpdateProjectBasicInfo", { projectId });
+          break;
+        case "view_proposals":
+          navigation.navigate("ProjectProposals", { projectId, projectName: project.projectName });
+          break;
+        case "view_quotations":
+          navigation.navigate("ProjectQuotations", { projectId, projectName: project.projectName });
+          break;
+        case "view_orders":
+          navigation.navigate("ProjectOrders", { projectId, projectName: project.projectName });
+          break;
+        case "pay_deposit":
+          handlePayDeposit();
+          break;
+        case "pay_remaining":
+          handlePayRemaining();
+          break;
+        case "confirm_schedule":
+          navigation.navigate("ProjectSchedules", { projectId, projectName: project.projectName });
+          break;
+        case "confirm_delivery":
+          handleConfirmDelivery();
+          break;
+        case "reopen_proposal":
+          handleReopenProposal();
+          break;
+        case "open_chat":
+          navigation.navigate("Messages", { projectId });
+          break;
+        default:
+          break;
+      }
+    },
+    [
+      handleConfirmDelivery,
+      handlePayDeposit,
+      handlePayRemaining,
+      handleReopenProposal,
+      navigation,
+      project,
+      projectId,
+    ],
+  );
+
   const daysLeft = computeDaysUntil(project?.targetCompletionDate ?? data?.phaseDeadlines.targetCompletionDate);
   const progressPercent = tracking.progressPercent;
   const activeStageNumber = tracking.activeStageIndex >= 0 ? tracking.activeStageIndex + 1 : 0;
@@ -229,10 +310,10 @@ export function ProjectTrackingScreen(): React.JSX.Element {
             <View style={styles.summaryTopRow}>
               <View style={styles.summaryTextWrap}>
                 <Text style={styles.projectName} numberOfLines={2}>
-                  {project?.projectName ?? "—"}
+                  {displayProjectName}
                 </Text>
                 <Text style={styles.projectMeta} numberOfLines={2}>
-                  {project ? `Project #${project.projectCode} · ${project.businessType}` : "Loading..."}
+                  {displayProjectMeta}
                 </Text>
               </View>
               <View style={[styles.activePill, tracking.isRejected && styles.rejectedPill]}>
@@ -254,9 +335,15 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { width: `${Math.max(progressPercent, 4)}%` }]} />
                 </View>
-                <Text style={styles.currentStatusText}>{tracking.currentStatusLabel}</Text>
+                <Text style={styles.currentStatusText}>{displayStatusLabel}</Text>
                 {hasMultipleProjects ? (
-                  <Pressable style={styles.switchProjectButton} onPress={() => setIsProjectSwitcherOpen(true)}>
+                  <Pressable
+                    style={styles.switchProjectButton}
+                    onPress={() => {
+                      prefetchAllProjects();
+                      setIsProjectSwitcherOpen(true);
+                    }}
+                  >
                     <Text style={styles.switchProjectButtonText}>Switch Project</Text>
                     <AppIcon definition={chevronDownIconDefinition} size={12} color="#E8D4A8" strokeWidth={2} />
                   </Pressable>
@@ -314,6 +401,12 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                   confirmDeliveryMutation.isPending ||
                   reopenProposalMutation.isPending
                 }
+                flowDecision={flowDecision}
+                canPayDeposit={canCustomerPayDeposit(payments, primaryOrder?.status, project.status)}
+                canPayRemaining={canCustomerPayRemaining(payments, primaryOrder?.status, project.status)}
+                canReopen={canReopenProposal(project.status) && !paidDeposit}
+                onFlowAction={handleFlowAction}
+                isBusy={confirmDeliveryMutation.isPending || reopenProposalMutation.isPending}
               />
 
               {(project.assignedSales || project.assignedDesigner) ? (
@@ -376,21 +469,22 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                 <View style={styles.card}>
                   <Text style={styles.cardLabel}>UPCOMING SCHEDULES</Text>
                   {upcomingSchedules.map((schedule) => (
-                    <ScheduleRow
-                      key={schedule.scheduleId}
-                      schedule={schedule}
-                      onConfirm={
-                        schedule.status === "PENDING_CONFIRMATION"
-                          ? () => handleConfirmSchedule(schedule)
-                          : undefined
-                      }
-                    />
+                    <ScheduleRow key={schedule.scheduleId} schedule={schedule} />
                   ))}
                 </View>
               ) : null}
 
               {primaryOrder ? (
-                <View style={styles.card}>
+                <Pressable
+                  style={styles.card}
+                  onPress={() =>
+                    navigation.navigate("OrderDetail", {
+                      orderId: primaryOrder.orderId,
+                      projectId: projectId!,
+                      projectName: project.projectName,
+                    })
+                  }
+                >
                   <Text style={styles.cardLabel}>ORDER STATUS</Text>
                   <Text style={styles.orderStatusText}>{primaryOrder.status.replaceAll("_", " ")}</Text>
                   {primaryOrder.totalAmount != null ? (
@@ -407,7 +501,8 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                       {project.deliverySummary.deliveryProgressPercent}%)
                     </Text>
                   ) : null}
-                </View>
+                  <Text style={[styles.emptyHint, { marginTop: 8 }]}>Tap to view order details</Text>
+                </Pressable>
               ) : null}
 
               <View style={styles.completionCard}>
@@ -436,6 +531,7 @@ export function ProjectTrackingScreen(): React.JSX.Element {
         activeProjectId={activeProjectId ?? projectId}
         onClose={() => setIsProjectSwitcherOpen(false)}
         onSelect={handleSelectProject}
+        onPrefetch={prefetchProject}
       />
 
       <AppBottomNav activeTab="tracking" />
@@ -463,49 +559,30 @@ function MetricCard({ value, label }: { value: string; label: string }): React.J
 }
 
 function CustomerActionsCard({
-  status,
-  hasPendingSchedules,
+  flowDecision,
   canPayDeposit,
-  canConfirmDelivery,
+  canPayRemaining,
   canReopen,
-  onConfirmSchedule,
-  onPayDeposit,
-  onConfirmDelivery,
-  onReopenProposal,
+  onFlowAction,
   isBusy,
 }: {
-  status: string;
-  hasPendingSchedules: boolean;
+  flowDecision: ReturnType<typeof resolveCustomerFlowDecision> | null;
   canPayDeposit: boolean;
-  canConfirmDelivery: boolean;
+  canPayRemaining: boolean;
   canReopen: boolean;
-  onConfirmSchedule: () => void;
-  onPayDeposit: () => void;
-  onConfirmDelivery: () => void;
-  onReopenProposal: () => void;
+  onFlowAction: (action: CustomerFlowAction) => void;
   isBusy: boolean;
 }): React.JSX.Element | null {
-  const actions: Array<{ label: string; onPress: () => void }> = [];
-
-  if (status === "NEED_BASIC_INFORMATION") {
-    actions.push({ label: "Update Basic Information", onPress: () => undefined });
+  if (!flowDecision) {
+    return null;
   }
 
-  if (hasPendingSchedules) {
-    actions.push({ label: "Confirm Schedule", onPress: onConfirmSchedule });
-  }
-
-  if (canPayDeposit) {
-    actions.push({ label: "Pay Deposit (30%)", onPress: onPayDeposit });
-  }
-
-  if (canConfirmDelivery) {
-    actions.push({ label: "Confirm Delivery", onPress: onConfirmDelivery });
-  }
-
-  if (canReopen) {
-    actions.push({ label: "Reopen Proposal", onPress: onReopenProposal });
-  }
+  const actions = flowDecision.actions.filter((action) => {
+    if (action.id === "pay_deposit" && !canPayDeposit) return false;
+    if (action.id === "pay_remaining" && !canPayRemaining) return false;
+    if (action.id === "reopen_proposal" && !canReopen) return false;
+    return true;
+  });
 
   if (actions.length === 0) {
     return null;
@@ -516,10 +593,10 @@ function CustomerActionsCard({
       <Text style={styles.cardLabel}>ACTIONS</Text>
       {actions.map((action) => (
         <Pressable
-          key={action.label}
+          key={action.id}
           style={[styles.actionButton, isBusy && styles.actionButtonDisabled]}
           disabled={isBusy}
-          onPress={action.onPress}
+          onPress={() => onFlowAction(action)}
         >
           <Text style={styles.actionButtonText}>{action.label}</Text>
         </Pressable>
@@ -574,26 +651,19 @@ function PhaseDeadlineRow({ deadline }: { deadline: PhaseDeadlineItemDto }): Rea
   );
 }
 
-function ScheduleRow({
-  schedule,
-  onConfirm,
-}: {
-  schedule: ProjectScheduleDto;
-  onConfirm?: () => void;
-}): React.JSX.Element {
+function ScheduleRow({ schedule }: { schedule: ProjectScheduleDto }): React.JSX.Element {
   return (
     <View style={styles.scheduleRow}>
       <View style={styles.scheduleTextWrap}>
-        <Text style={styles.scheduleTitle}>{schedule.title ?? schedule.scheduleType.replaceAll("_", " ")}</Text>
+        <Text style={styles.scheduleTitle}>{schedule.title ?? formatScheduleTypeLabel(schedule.scheduleType)}</Text>
         <Text style={styles.scheduleMeta}>
           {formatTrackingDate(getScheduleStartAt(schedule))} · {schedule.status.replaceAll("_", " ")}
+          {formatTrackingDateTime(schedule.scheduledAt)}
+          {schedule.location ? ` · ${schedule.location}` : ""}
+          {" · "}
+          {formatScheduleStatusLabel(schedule.status)}
         </Text>
       </View>
-      {onConfirm ? (
-        <Pressable style={styles.scheduleConfirmButton} onPress={onConfirm}>
-          <Text style={styles.scheduleConfirmText}>Confirm</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }

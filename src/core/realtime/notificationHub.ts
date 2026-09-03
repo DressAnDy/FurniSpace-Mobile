@@ -7,6 +7,7 @@ import { getAccessToken } from "../storage/secureStorage";
 import { RealtimeNotificationPayloadDto } from "../../features/notification/models/notification.model";
 import {
   getHubUrl,
+  getSignalRRetryDelay,
   getSignalRTransportOptions,
   safeHubStart,
   signalRLogLevel,
@@ -59,20 +60,71 @@ type NotificationEventHandler = (payload: RealtimeNotificationPayloadDto) => voi
 
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+let allowReconnect = true;
 const handlers = new Set<NotificationEventHandler>();
 
 function getNotificationHubUrl(): string {
   return getHubUrl("/hubs/notifications");
 }
 
+function clearReconnectTimer(): void {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleNotificationHubReconnect(): void {
+  if (!allowReconnect || connectTask || reconnectTimer) {
+    return;
+  }
+
+  const delay = Math.min(2000 * 2 ** reconnectAttempt, 30000);
+  reconnectAttempt += 1;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void getAccessToken().then((token) => {
+      if (!token || !allowReconnect) {
+        return;
+      }
+
+      void connectNotificationHub().then((connected) => {
+        if (connected) {
+          reconnectAttempt = 0;
+        }
+      });
+    });
+  }, delay);
+}
+
 function attachEventHandlers(hub: HubConnection): void {
   for (const eventName of NOTIFICATION_HUB_EVENTS) {
+    hub.off(eventName);
     hub.on(eventName, (payload: RealtimeNotificationPayloadDto) => {
       for (const handler of handlers) {
         handler(payload);
       }
     });
   }
+}
+
+function attachLifecycleHandlers(hub: HubConnection): void {
+  hub.onreconnected(() => {
+    reconnectAttempt = 0;
+  });
+
+  hub.onclose((error) => {
+    if (connection === hub) {
+      connection = null;
+    }
+
+    if (error) {
+      scheduleNotificationHubReconnect();
+    }
+  });
 }
 
 export function subscribeNotificationHub(handler: NotificationEventHandler): () => void {
@@ -82,39 +134,65 @@ export function subscribeNotificationHub(handler: NotificationEventHandler): () 
   };
 }
 
+async function disposeConnection(hub: HubConnection | null): Promise<void> {
+  if (!hub) {
+    return;
+  }
+
+  await hub.stop().catch(() => undefined);
+}
+
 export async function connectNotificationHub(): Promise<boolean> {
   if (connectTask) {
     return connectTask;
   }
 
   connectTask = (async () => {
+    allowReconnect = true;
     const accessToken = await getAccessToken();
     if (!accessToken) {
       return false;
     }
 
-    if (connection && connection.state === HubConnectionState.Connected) {
+    if (connection?.state === HubConnectionState.Connected) {
       return true;
     }
 
-    if (connection && connection.state === HubConnectionState.Connecting) {
+    if (connection?.state === HubConnectionState.Connecting) {
       return false;
     }
 
+    clearReconnectTimer();
+
     if (connection) {
-      await connection.stop().catch(() => undefined);
+      const staleConnection = connection;
       connection = null;
+      await disposeConnection(staleConnection);
     }
 
     const hub = new HubConnectionBuilder()
       .withUrl(getNotificationHubUrl(), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (retryContext) => {
+          return getSignalRRetryDelay(retryContext.previousRetryCount, retryContext.retryReason);
+        },
+      })
       .configureLogging(signalRLogLevel)
       .build();
 
     attachEventHandlers(hub);
+    attachLifecycleHandlers(hub);
     connection = hub;
-    return safeHubStart(() => hub.start());
+
+    const started = await safeHubStart(() => hub.start());
+    if (started) {
+      reconnectAttempt = 0;
+    } else if (connection === hub) {
+      connection = null;
+      scheduleNotificationHubReconnect();
+    }
+
+    return started;
   })().finally(() => {
     connectTask = null;
   });
@@ -123,13 +201,26 @@ export async function connectNotificationHub(): Promise<boolean> {
 }
 
 export async function disconnectNotificationHub(): Promise<void> {
+  allowReconnect = false;
+  clearReconnectTimer();
+  reconnectAttempt = 0;
+
   if (!connection) {
     return;
   }
 
   const hub = connection;
   connection = null;
-  await hub.stop().catch(() => undefined);
+  await disposeConnection(hub);
+}
+
+export async function restartNotificationHub(): Promise<boolean> {
+  clearReconnectTimer();
+  allowReconnect = true;
+  const hub = connection;
+  connection = null;
+  await disposeConnection(hub);
+  return connectNotificationHub();
 }
 
 export function getNotificationHubState(): HubConnectionState | null {

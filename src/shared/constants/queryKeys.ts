@@ -18,6 +18,23 @@ export const queryKeys = {
     phaseDeadlines: (projectId: string) => ["project", "phase-deadlines", projectId] as const,
     schedules: (projectId: string) => ["project", "schedules", projectId] as const,
     orders: (projectId: string) => ["project", "orders", projectId] as const,
+    trackingOrders: (projectId: string) => ["project", "tracking-orders", projectId] as const,
+    proposals: (projectId: string, query?: { status?: string; page?: number; limit?: number }) =>
+      ["project", "proposals", projectId, query ?? {}] as const,
+    publishedProposal: (projectId: string) => ["project", "published-proposal", projectId] as const,
+    quotations: (projectId: string, query?: { status?: string; page?: number; limit?: number }) =>
+      ["project", "quotations", projectId, query ?? {}] as const,
+  },
+  proposal: {
+    detail: (proposalId: string) => ["proposal", "detail", proposalId] as const,
+    items: (proposalId: string, query?: { sceneId?: string; page?: number; limit?: number }) =>
+      ["proposal", "items", proposalId, query ?? {}] as const,
+  },
+  quotation: {
+    detail: (quotationId: string) => ["quotation", "detail", quotationId] as const,
+  },
+  order: {
+    detail: (orderId: string) => ["order", "detail", orderId] as const,
   },
   sale: {
     kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,

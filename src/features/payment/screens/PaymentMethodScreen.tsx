@@ -1,7 +1,9 @@
-import React, { useCallback, useState } from "react";
-import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo } from "react";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, AppState, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
@@ -16,6 +18,9 @@ import {
 import { bootstrapPaymentMethod, isDeliveryDetailsRequiredError } from "../hooks/usePayments";
 import { isPaymentTerminalStatus } from "../hooks/usePaymentRealtime";
 import { PaymentDetailDto } from "../models/payment.model";
+import { bootstrapPaymentMethod } from "../hooks/usePayments";
+import { isPaymentTerminalStatus, usePaymentRealtime } from "../hooks/usePaymentRealtime";
+import { PaymentDetailDto, PaymentUpdatedRealtimeDto } from "../models/payment.model";
 import { formatVndAmount, getPaymentStatusLabel, getPaymentTypeLabel } from "../utils/payment.mapper";
 import { paymentBrandColors, styles } from "./PaymentMethodScreen.styles";
 
@@ -96,12 +101,58 @@ export function PaymentMethodScreen(): React.JSX.Element {
       route.params.projectId,
     ],
   );
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadPayment();
-    }, [loadPayment]),
+  const queryClient = useQueryClient();
+  const methodQueryKey = useMemo(
+    () =>
+      [
+        "payment",
+        "method",
+        route.params.paymentId ?? "order",
+        route.params.orderId ?? "none",
+        route.params.paymentType ?? "DEPOSIT",
+      ] as const,
+    [route.params.orderId, route.params.paymentId, route.params.paymentType],
   );
+  const paymentQuery = useQuery({
+    queryKey: methodQueryKey,
+    queryFn: () =>
+      bootstrapPaymentMethod({
+        orderId: route.params.orderId,
+        paymentId: route.params.paymentId,
+        paymentType: route.params.paymentType,
+      }),
+    staleTime: 15_000,
+  });
+  const payment = paymentQuery.data ?? null;
+
+  const handleRealtimeUpdate = useCallback(
+    (payload: PaymentUpdatedRealtimeDto) => {
+      queryClient.setQueryData<PaymentDetailDto>(methodQueryKey, (current) =>
+        current ? { ...current, status: payload.status, paidAt: payload.paidAt } : current,
+      );
+      queryClient.setQueryData<PaymentDetailDto>(
+        ["payment", "detail", payload.paymentId],
+        (current) => (current ? { ...current, status: payload.status, paidAt: payload.paidAt } : current),
+      );
+      void queryClient.invalidateQueries({ queryKey: ["payment", "list"] });
+    },
+    [methodQueryKey, queryClient],
+  );
+
+  usePaymentRealtime({
+    paymentId: payment?.paymentId ?? null,
+    enabled: Boolean(payment),
+    onUpdated: handleRealtimeUpdate,
+  });
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void paymentQuery.refetch();
+      }
+    });
+    return () => subscription.remove();
+  }, [paymentQuery.refetch]);
 
   const sharedParams = {
     orderId: route.params.orderId,
@@ -111,7 +162,8 @@ export function PaymentMethodScreen(): React.JSX.Element {
   };
 
   const isPaid = payment?.status === "PAID";
-  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status) && payment.isPayable !== false);
+  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status));
+  const isProcessing = payment?.status === "PROCESSING";
 
   const handleBackToTracking = () => {
     if (route.params.projectId) {
@@ -176,6 +228,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
           </Text>
 
           {isLoading && !needsDeliveryDetails ? (
+          {paymentQuery.isPending && !payment ? (
             <View style={styles.centerState}>
               <ActivityIndicator color={paymentBrandColors.gold} />
               <Text style={styles.stateText}>Loading payment details...</Text>
@@ -227,19 +280,40 @@ export function PaymentMethodScreen(): React.JSX.Element {
               <Text style={styles.stateText}>{error}</Text>
               <Pressable style={styles.primaryActionButton} onPress={() => void loadPayment()}>
                 <Text style={styles.primaryActionButtonText}>Retry</Text>
+          ) : paymentQuery.isError && !payment ? (
+            <View style={styles.centerState}>
+              <Text style={styles.stateText}>
+                {getErrorMessage(paymentQuery.error, "Unable to load payment.")}
+              </Text>
+              <Pressable style={styles.retryButton} onPress={() => void paymentQuery.refetch()}>
+                <Text style={styles.retryButtonText}>Try again</Text>
               </Pressable>
             </View>
           ) : payment ? (
             <>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>{getPaymentTypeLabel(payment.paymentType)}</Text>
-                <Text style={styles.summaryAmount}>{formatVndAmount(payment.amount, payment.currency)}</Text>
-                <Text style={styles.summaryMeta}>Reference: {payment.paymentCode}</Text>
-                <View style={[styles.statusPill, isPaid && styles.statusPillPaid]}>
-                  <Text style={[styles.statusPillText, isPaid && styles.statusPillTextPaid]}>
-                    {getPaymentStatusLabel(payment.status)}
-                  </Text>
+                <View style={styles.summaryTopRow}>
+                  <Text style={styles.summaryLabel}>{getPaymentTypeLabel(payment.paymentType)}</Text>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      isPaid && styles.statusPillPaid,
+                      isProcessing && styles.statusPillProcessing,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusPillText,
+                        isPaid && styles.statusPillTextPaid,
+                        isProcessing && styles.statusPillTextProcessing,
+                      ]}
+                    >
+                      {getPaymentStatusLabel(payment.status)}
+                    </Text>
+                  </View>
                 </View>
+                <Text style={styles.summaryAmount}>{formatVndAmount(payment.amount, payment.currency)}</Text>
+                <Text style={styles.summaryMeta}>Reference · {payment.paymentCode}</Text>
               </View>
 
               {isPaid ? (
@@ -257,17 +331,26 @@ export function PaymentMethodScreen(): React.JSX.Element {
                 </>
               ) : !canChooseMethod ? (
                 <>
-                  <Text style={styles.terminalText}>
-                    This payment is {getPaymentStatusLabel(payment.status).toLowerCase()} and cannot be processed
-                    again.
-                  </Text>
+                  <View style={styles.noticeCard}>
+                    <Text style={styles.noticeTitle}>Payment unavailable</Text>
+                    <Text style={styles.terminalText}>
+                      This payment is {getPaymentStatusLabel(payment.status).toLowerCase()}. Return to tracking
+                      to continue.
+                    </Text>
+                  </View>
                   <Pressable style={styles.primaryActionButton} onPress={handleBackToTracking}>
                     <Text style={styles.primaryActionButtonText}>Back to tracking</Text>
                   </Pressable>
                 </>
               ) : (
                 <>
-                  <Text style={styles.sectionTitle}>Payment method</Text>
+                  <View style={styles.sectionHeader}>
+                    <View>
+                      <Text style={styles.sectionEyebrow}>PAY SECURELY</Text>
+                      <Text style={styles.sectionTitle}>Choose a method</Text>
+                    </View>
+                    {paymentQuery.isFetching ? <ActivityIndicator color={paymentBrandColors.gold} size="small" /> : null}
+                  </View>
 
                   <Pressable
                     style={({ pressed }) => [

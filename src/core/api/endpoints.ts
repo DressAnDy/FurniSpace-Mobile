@@ -69,6 +69,21 @@ export const endpoints = {
   projectStartFee: {
     status: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee/status`,
     create: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee`,
+    proposals: (projectId: string) => `/projects/${projectId}/proposals`,
+    quotations: (projectId: string) => `/projects/${projectId}/quotations`,
+  },
+  proposals: {
+    detail: (proposalId: string) => `/proposals/${proposalId}`,
+    scenes: (proposalId: string) => `/proposals/${proposalId}/scenes`,
+    items: (proposalId: string) => `/proposals/${proposalId}/items`,
+    selectFinal: (proposalId: string) => `/proposals/${proposalId}/select-final`,
+    requestRevision: (proposalId: string) => `/proposals/${proposalId}/request-revision`,
+  },
+  quotations: {
+    detail: (quotationId: string) => `/quotations/${quotationId}`,
+    accept: (quotationId: string) => `/quotations/${quotationId}/accept`,
+    requestRevision: (quotationId: string) => `/quotations/${quotationId}/request-revision`,
+    reject: (quotationId: string) => `/quotations/${quotationId}/reject`,
   },
   orders: {
     detail: (orderId: string) => `/orders/${orderId}`,
