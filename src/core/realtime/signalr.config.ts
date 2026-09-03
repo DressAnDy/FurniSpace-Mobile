@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { env } from "../config/env";
 
@@ -23,12 +24,30 @@ export function getHubUrl(hubPath: string): string {
 export function getSignalRTransportOptions(accessTokenFactory: () => Promise<string>) {
   return {
     accessTokenFactory,
-    transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
+    // Native WebSocket often fails against ASP.NET SignalR (proxy/TLS). Long polling is reliable on mobile.
+    transport:
+      Platform.OS === "web"
+        ? HttpTransportType.WebSockets | HttpTransportType.LongPolling
+        : HttpTransportType.LongPolling,
     skipNegotiation: false,
   };
 }
 
-export const signalRLogLevel = __DEV__ ? LogLevel.Warning : LogLevel.Error;
+export const signalRLogLevel = LogLevel.Critical;
+
+export function isStaleSignalRConnectionError(error: Error | undefined): boolean {
+  const message = error?.message ?? "";
+  return message.includes("404") || message.includes("No Connection with that ID");
+}
+
+export function getSignalRRetryDelay(previousRetryCount: number, error?: Error): number | null {
+  if (isStaleSignalRConnectionError(error)) {
+    return null;
+  }
+
+  const delays = [0, 2000, 5000, 10000, 30000];
+  return delays[previousRetryCount] ?? 30000;
+}
 
 export async function safeHubStart(start: () => Promise<void>): Promise<boolean> {
   try {

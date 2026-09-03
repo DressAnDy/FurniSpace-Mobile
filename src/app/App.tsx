@@ -8,6 +8,8 @@ import { RootNavigator } from "./navigation/RootNavigator";
 LogBox.ignoreLogs([
   "Connection disconnected with error",
   "WebSocket closed with status code: 1006",
+  "Failed to start the transport 'WebSockets'",
+  "WebSocket failed to connect",
 ]);
 
 export default function App(): React.JSX.Element {

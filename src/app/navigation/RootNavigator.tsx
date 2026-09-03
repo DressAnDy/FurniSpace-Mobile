@@ -14,11 +14,28 @@ import { NotificationsScreen } from "../../features/notification/screens/Notific
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ProjectTrackingScreen } from "../../features/project/screens/ProjectTrackingScreen";
 import { CreateProjectRequestScreen } from "../../features/project/screens/CreateProjectRequestScreen";
+import { ProjectProposalsScreen } from "../../features/project/screens/ProjectProposalsScreen";
+import { ProposalDetailScreen } from "../../features/project/screens/ProposalDetailScreen";
+import { ProjectQuotationsScreen } from "../../features/project/screens/ProjectQuotationsScreen";
+import { QuotationDetailScreen } from "../../features/project/screens/QuotationDetailScreen";
+import { UpdateProjectBasicInfoScreen } from "../../features/project/screens/UpdateProjectBasicInfoScreen";
+import { ProjectOrdersScreen } from "../../features/project/screens/ProjectOrdersScreen";
+import { OrderDetailScreen } from "../../features/project/screens/OrderDetailScreen";
+import { ProjectSchedulesScreen } from "../../features/project/screens/ProjectSchedulesScreen";
 import { SePayPaymentScreen } from "../../features/payment/screens/SePayPaymentScreen";
 import { PayOSPaymentScreen } from "../../features/payment/screens/PayOSPaymentScreen";
 import { PaymentMethodScreen } from "../../features/payment/screens/PaymentMethodScreen";
 import { ProjectChatStatus, ProjectChatType } from "../../features/communication/models/chat.model";
 import { PaymentRouteParams } from "../../features/payment/models/payment.model";
+import {
+  SaleDashboardScreen,
+  SaleMessagesScreen,
+  SaleMoreScreen,
+  SaleProjectsScreen,
+  SaleRequestsScreen,
+} from "../../features/sale/screens/SaleMainScreens";
+import { SaleChatScreen, SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
+import type { ProjectDetailTab } from "../../features/sale/data/sale.mock";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
@@ -44,7 +61,22 @@ export type RootStackParamList = {
   PayOSPayment: PaymentRouteParams;
   Tracking: { projectId?: string } | undefined;
   CreateProjectRequest: undefined;
+  ProjectProposals: { projectId: string; projectName?: string };
+  ProposalDetail: { proposalId: string; projectId: string; projectName?: string };
+  ProjectQuotations: { projectId: string; projectName?: string };
+  QuotationDetail: { quotationId: string; projectId: string; projectName?: string };
+  UpdateProjectBasicInfo: { projectId: string };
+  ProjectOrders: { projectId: string; projectName?: string };
+  OrderDetail: { orderId: string; projectId: string; projectName?: string };
+  ProjectSchedules: { projectId: string; projectName?: string };
   VerifyEmail: { email?: string } | undefined;
+  SaleDashboard: undefined;
+  SaleRequests: undefined;
+  SaleProjects: undefined;
+  SaleMessages: undefined;
+  SaleMore: undefined;
+  SaleChat: { conversationId: string };
+  SaleProjectDetail: { projectId?: string; tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,7 +100,22 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="PayOSPayment" component={PayOSPaymentScreen} />
         <Stack.Screen name="Tracking" component={ProjectTrackingScreen} />
         <Stack.Screen name="CreateProjectRequest" component={CreateProjectRequestScreen} />
+        <Stack.Screen name="ProjectProposals" component={ProjectProposalsScreen} />
+        <Stack.Screen name="ProposalDetail" component={ProposalDetailScreen} />
+        <Stack.Screen name="ProjectQuotations" component={ProjectQuotationsScreen} />
+        <Stack.Screen name="QuotationDetail" component={QuotationDetailScreen} />
+        <Stack.Screen name="UpdateProjectBasicInfo" component={UpdateProjectBasicInfoScreen} />
+        <Stack.Screen name="ProjectOrders" component={ProjectOrdersScreen} />
+        <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+        <Stack.Screen name="ProjectSchedules" component={ProjectSchedulesScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+        <Stack.Screen name="SaleDashboard" component={SaleDashboardScreen} />
+        <Stack.Screen name="SaleRequests" component={SaleRequestsScreen} />
+        <Stack.Screen name="SaleProjects" component={SaleProjectsScreen} />
+        <Stack.Screen name="SaleMessages" component={SaleMessagesScreen} />
+        <Stack.Screen name="SaleMore" component={SaleMoreScreen} />
+        <Stack.Screen name="SaleChat" component={SaleChatScreen} />
+        <Stack.Screen name="SaleProjectDetail" component={SaleProjectDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

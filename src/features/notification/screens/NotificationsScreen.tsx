@@ -42,8 +42,8 @@ export function NotificationsScreen(): React.JSX.Element {
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const { data: unreadData } = useUnreadNotificationCount();
   const { markReadMutation, markAllReadMutation } = useNotificationActions();
-  const notificationsQuery = useNotificationsQuery(filter, page);
   const projectsQuery = useProjectsQuery({ limit: 100 });
+  const notificationsQuery = useNotificationsQuery(filter, page);
 
   const unreadCount = unreadData?.unreadCount ?? 0;
   const projectNameById = useMemo(() => {
@@ -180,7 +180,7 @@ export function NotificationsScreen(): React.JSX.Element {
         </View>
 
         <View style={styles.content}>
-          {notificationsQuery.isLoading ? (
+          {notificationsQuery.isPending && !notificationsQuery.data ? (
             <View style={styles.centerState}>
               <ActivityIndicator color="#C9A86A" />
             </View>

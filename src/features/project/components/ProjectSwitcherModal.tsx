@@ -12,6 +12,7 @@ type ProjectSwitcherModalProps = {
   activeProjectId: string | null;
   onClose: () => void;
   onSelect: (projectId: string) => void;
+  onPrefetch?: (projectId: string) => void;
 };
 
 export function ProjectSwitcherModal({
@@ -20,6 +21,7 @@ export function ProjectSwitcherModal({
   activeProjectId,
   onClose,
   onSelect,
+  onPrefetch,
 }: ProjectSwitcherModalProps): React.JSX.Element {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -51,7 +53,9 @@ export function ProjectSwitcherModal({
                       isActive && styles.itemActive,
                       pressed && styles.itemPressed,
                     ]}
+                    onPressIn={() => onPrefetch?.(item.projectId)}
                     onPress={() => {
+                      onPrefetch?.(item.projectId);
                       onSelect(item.projectId);
                       onClose();
                     }}

@@ -214,12 +214,42 @@ export const styles = StyleSheet.create({
   projectHead: {
     gap: 0,
   },
+  projectSwitcherFrame: {
+    alignItems: "center",
+    backgroundColor: "#FBF9F6",
+    borderColor: "rgba(184,149,88,0.28)",
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  projectSwitcherFramePressed: {
+    backgroundColor: "#F5F1EA",
+    borderColor: "rgba(184,149,88,0.45)",
+  },
+  projectSwitcherFrameStatic: {
+    backgroundColor: "#FBF9F6",
+  },
+  projectSwitcherContent: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
+  },
+  projectSwitcherChevron: {
+    alignItems: "center",
+    backgroundColor: "rgba(201,168,106,0.12)",
+    borderRadius: 10,
+    height: 32,
+    justifyContent: "center",
+    width: 32,
+  },
   projectTitle: {
     color: INK,
     fontFamily: "serif",
-    fontSize: 26,
+    fontSize: 22,
     letterSpacing: -0.3,
-    lineHeight: 30,
+    lineHeight: 28,
   },
   projectCode: {
     color: SOFT,
@@ -383,6 +413,23 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     width: 34,
   },
+  flowActionButton: {
+    alignItems: "center",
+    backgroundColor: GOLD,
+    borderRadius: 16,
+    marginTop: 10,
+    paddingVertical: 13,
+  },
+  flowActionButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
+  },
+  flowActionButtonText: {
+    color: CHARCOAL,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
   newProjectButton: {
     alignItems: "center",
     backgroundColor: "rgba(201,168,106,0.08)",
@@ -400,26 +447,6 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.1,
-  },
-  switchProjectButton: {
-    alignItems: "center",
-    backgroundColor: PAPER,
-    borderColor: "rgba(184,149,88,0.35)",
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 6,
-    justifyContent: "center",
-    marginTop: 10,
-    paddingVertical: 11,
-  },
-  switchProjectButtonPressed: {
-    opacity: 0.88,
-  },
-  switchProjectButtonText: {
-    color: GOLD_DEEP,
-    fontSize: 13,
-    fontWeight: "600",
   },
 
   /* ——— Updates ——— */

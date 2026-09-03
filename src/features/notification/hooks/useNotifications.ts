@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { NotificationFilter } from "../models/notification.model";
+import { NotificationFilter, NotificationListItem } from "../models/notification.model";
 import {
   getNotificationsApi,
   getUnreadNotificationCountApi,
@@ -10,7 +10,64 @@ import {
 } from "../services/notification.api";
 import { mapNotificationDtoToListItem } from "../utils/notification.mapper";
 
-export const NOTIFICATIONS_PAGE_SIZE = 6;
+export const NOTIFICATIONS_PAGE_SIZE = 20;
+const FILTERED_FETCH_LIMIT = 100;
+const NOTIFICATIONS_STALE_TIME_MS = 60_000;
+
+function filterNotificationItems(items: NotificationListItem[], filter: NotificationFilter): NotificationListItem[] {
+  return items.filter((item) => filter === "all" || item.category === filter);
+}
+
+function paginateItems<T>(items: T[], page: number, pageSize: number): T[] {
+  const start = (page - 1) * pageSize;
+  return items.slice(start, start + pageSize);
+}
+
+async function fetchNotificationsPage(filter: NotificationFilter, page: number) {
+  if (filter === "all") {
+    const response = await getNotificationsApi({
+      page,
+      limit: NOTIFICATIONS_PAGE_SIZE,
+    });
+
+    const items = response.items.map(mapNotificationDtoToListItem);
+
+    return {
+      items,
+      page: response.page,
+      limit: response.limit,
+      total: response.total,
+    };
+  }
+
+  const response = await getNotificationsApi({
+    page: 1,
+    limit: FILTERED_FETCH_LIMIT,
+  });
+
+  const filteredItems = filterNotificationItems(response.items.map(mapNotificationDtoToListItem), filter);
+
+  return {
+    items: paginateItems(filteredItems, page, NOTIFICATIONS_PAGE_SIZE),
+    page,
+    limit: NOTIFICATIONS_PAGE_SIZE,
+    total: filteredItems.length,
+  };
+}
+
+export function prefetchNotificationQueries(queryClient: ReturnType<typeof useQueryClient>): void {
+  void queryClient.prefetchQuery({
+    queryKey: queryKeys.notification.unreadCount,
+    queryFn: getUnreadNotificationCountApi,
+    staleTime: NOTIFICATIONS_STALE_TIME_MS,
+  });
+
+  void queryClient.prefetchQuery({
+    queryKey: [...queryKeys.notification.list("all"), 1],
+    queryFn: () => fetchNotificationsPage("all", 1),
+    staleTime: NOTIFICATIONS_STALE_TIME_MS,
+  });
+}
 
 export function useNotificationsQuery(filter: NotificationFilter, page: number) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -18,23 +75,9 @@ export function useNotificationsQuery(filter: NotificationFilter, page: number) 
   return useQuery({
     queryKey: [...queryKeys.notification.list(filter), page],
     enabled: isLoggedIn,
-    queryFn: async () => {
-      const response = await getNotificationsApi({
-        page,
-        limit: NOTIFICATIONS_PAGE_SIZE,
-      });
-
-      const items = response.items
-        .map(mapNotificationDtoToListItem)
-        .filter((item) => filter === "all" || item.category === filter);
-
-      return {
-        items,
-        page: response.page,
-        limit: response.limit,
-        total: response.total,
-      };
-    },
+    staleTime: NOTIFICATIONS_STALE_TIME_MS,
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchNotificationsPage(filter, page),
   });
 }
 
@@ -45,7 +88,7 @@ export function useUnreadNotificationCount() {
     queryKey: queryKeys.notification.unreadCount,
     enabled: isLoggedIn,
     queryFn: getUnreadNotificationCountApi,
-    staleTime: 30_000,
+    staleTime: NOTIFICATIONS_STALE_TIME_MS,
   });
 }
 

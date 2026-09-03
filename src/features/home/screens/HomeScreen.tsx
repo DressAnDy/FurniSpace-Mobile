@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -24,7 +24,10 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { ProjectSwitcherModal } from "../../project/components/ProjectSwitcherModal";
 import { useActiveProjectSummary } from "../../project/hooks/useProjects";
+import { useHomeProjectRealtime } from "../../project/hooks/useHomeProjectRealtime";
+import { useProjectSwitcherPrefetch } from "../../project/hooks/useProjectSwitcherPrefetch";
 import { useProjectStore } from "../../project/store/project.store";
+import { resolveCustomerFlowDecision } from "../../project/utils/project.customer-flow.mapper";
 import { styles } from "./HomeScreen.styles";
 
 type UpdateItem = {
@@ -71,6 +74,15 @@ export function HomeScreen(): React.JSX.Element {
 
   const projects = projectsQuery.data?.items ?? [];
   const hasMultipleProjects = projects.length > 1;
+  const { prefetchProject, prefetchAllProjects } = useProjectSwitcherPrefetch(projects);
+
+  const refetchProjects = useCallback(() => projectsQuery.refetch(), [projectsQuery]);
+
+  useHomeProjectRealtime({
+    projectId: activeProjectId,
+    enabled: true,
+    refetchProjects,
+  });
 
   const greeting = getGreetingLabel();
   const userName = user?.fullName ?? "Guest";
@@ -82,6 +94,54 @@ export function HomeScreen(): React.JSX.Element {
           .filter(Boolean)
           .join(" · ")
       : "Waiting for team assignment";
+
+  const primaryFlowAction = useMemo(() => {
+    if (!activeProject) {
+      return null;
+    }
+
+    const decision = resolveCustomerFlowDecision(activeProject.status);
+    return decision.actions.find((action) => action.primary) ?? decision.actions[0] ?? null;
+  }, [activeProject]);
+
+  const handleFlowAction = () => {
+    if (!activeProject || !primaryFlowAction) {
+      return;
+    }
+
+    const { projectId, projectName } = {
+      projectId: activeProject.projectId,
+      projectName: activeProject.projectName,
+    };
+
+    switch (primaryFlowAction.id) {
+      case "update_basic_information":
+        navigation.navigate("UpdateProjectBasicInfo", { projectId });
+        break;
+      case "view_proposals":
+        navigation.navigate("ProjectProposals", { projectId, projectName });
+        break;
+      case "view_quotations":
+        navigation.navigate("ProjectQuotations", { projectId, projectName });
+        break;
+      case "view_orders":
+        navigation.navigate("ProjectOrders", { projectId, projectName });
+        break;
+      case "confirm_schedule":
+        navigation.navigate("ProjectSchedules", { projectId, projectName });
+        break;
+      case "pay_deposit":
+      case "pay_remaining":
+        navigation.navigate("Tracking", { projectId });
+        break;
+      case "confirm_delivery":
+        navigation.navigate("Tracking", { projectId });
+        break;
+      default:
+        navigation.navigate("Tracking", { projectId });
+        break;
+    }
+  };
 
   return (
     <View style={styles.screen}>
@@ -161,16 +221,30 @@ export function HomeScreen(): React.JSX.Element {
           <View style={styles.projectCard}>
             <View style={styles.projectCardAccent} />
             <View style={styles.projectCardBody}>
-              <View style={styles.projectHead}>
-                <Text style={styles.projectTitle} numberOfLines={2}>
-                  {activeProject.projectName}
-                </Text>
-                <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>{activeProject.statusLabel}</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.projectSwitcherFrame,
+                  hasMultipleProjects && pressed ? styles.projectSwitcherFramePressed : null,
+                  !hasMultipleProjects ? styles.projectSwitcherFrameStatic : null,
+                ]}
+                disabled={!hasMultipleProjects}
+                onPress={() => {
+                  prefetchAllProjects();
+                  setIsProjectSwitcherOpen(true);
+                }}
+              >
+                <View style={styles.projectSwitcherContent}>
+                  <Text style={styles.projectTitle} numberOfLines={2}>
+                    {activeProject.projectName}
+                  </Text>
+                  <Text style={styles.projectCode}>{activeProject.projectCode}</Text>
                 </View>
-              </View>
+                {hasMultipleProjects ? (
+                  <View style={styles.projectSwitcherChevron}>
+                    <AppIcon definition={chevronDownIconDefinition} size={16} color="#B89558" strokeWidth={2.2} />
+                  </View>
+                ) : null}
+              </Pressable>
 
               <View style={styles.peopleRow}>
                 <View style={styles.avatarRow}>
@@ -226,13 +300,12 @@ export function HomeScreen(): React.JSX.Element {
                 </View>
               </Pressable>
 
-              {hasMultipleProjects ? (
+              {primaryFlowAction ? (
                 <Pressable
-                  style={({ pressed }) => [styles.switchProjectButton, pressed ? styles.switchProjectButtonPressed : null]}
-                  onPress={() => setIsProjectSwitcherOpen(true)}
+                  style={({ pressed }) => [styles.flowActionButton, pressed ? styles.flowActionButtonPressed : null]}
+                  onPress={handleFlowAction}
                 >
-                  <Text style={styles.switchProjectButtonText}>Switch Project</Text>
-                  <AppIcon definition={chevronDownIconDefinition} size={14} color="#B89558" strokeWidth={2} />
+                  <Text style={styles.flowActionButtonText}>{primaryFlowAction.label}</Text>
                 </Pressable>
               ) : null}
 
@@ -302,6 +375,7 @@ export function HomeScreen(): React.JSX.Element {
         activeProjectId={activeProjectId}
         onClose={() => setIsProjectSwitcherOpen(false)}
         onSelect={setActiveProjectId}
+        onPrefetch={prefetchProject}
       />
 
       <AppBottomNav activeTab="home" />
