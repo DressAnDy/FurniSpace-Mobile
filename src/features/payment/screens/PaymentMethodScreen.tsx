@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { ActivityIndicator, AppState, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
@@ -11,14 +10,9 @@ import { checkIconDefinition } from "../../../icons/status/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { getProjectByIdApi } from "../../project/services/project.api";
-import {
-  getOrderByIdApi,
-  hasOrderDeliveryDetails,
-} from "../../project/services/project.tracking.api";
+import { getOrderByIdApi, hasOrderDeliveryDetails } from "../../project/services/project.tracking.api";
+import { UpdateOrderDeliveryDetailsRequestDto } from "../../project/models/project.tracking.model";
 import { bootstrapPaymentMethod, isDeliveryDetailsRequiredError } from "../hooks/usePayments";
-import { isPaymentTerminalStatus } from "../hooks/usePaymentRealtime";
-import { PaymentDetailDto } from "../models/payment.model";
-import { bootstrapPaymentMethod } from "../hooks/usePayments";
 import { isPaymentTerminalStatus, usePaymentRealtime } from "../hooks/usePaymentRealtime";
 import { PaymentDetailDto, PaymentUpdatedRealtimeDto } from "../models/payment.model";
 import { formatVndAmount, getPaymentStatusLabel, getPaymentTypeLabel } from "../utils/payment.mapper";
@@ -34,9 +28,8 @@ export function PaymentMethodScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<PaymentMethodRoute>();
   const currentUser = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
 
-  const [payment, setPayment] = useState<PaymentDetailDto | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSavingDelivery, setIsSavingDelivery] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsDeliveryDetails, setNeedsDeliveryDetails] = useState(false);
@@ -44,64 +37,6 @@ export function PaymentMethodScreen(): React.JSX.Element {
   const [receiverName, setReceiverName] = useState(currentUser?.fullName ?? "");
   const [receiverPhone, setReceiverPhone] = useState(currentUser?.phone ?? "");
 
-  const loadPayment = useCallback(
-    async (deliveryDetails?: { deliveryAddress: string; receiverName: string; receiverPhone: string }) => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        if (route.params.orderId && !route.params.paymentId) {
-          try {
-            const order = await getOrderByIdApi(route.params.orderId);
-            if (!hasOrderDeliveryDetails(order) && !deliveryDetails) {
-              let defaultAddress = order.deliveryAddress ?? "";
-              if (!defaultAddress && route.params.projectId) {
-                const project = await getProjectByIdApi(route.params.projectId);
-                defaultAddress = project.projectAddress ?? "";
-              }
-
-              setDeliveryAddress(defaultAddress);
-              setReceiverName((prev) => order.receiverName?.trim() || prev || currentUser?.fullName || "");
-              setReceiverPhone((prev) => order.receiverPhone?.trim() || prev || currentUser?.phone || "");
-              setNeedsDeliveryDetails(true);
-              setPayment(null);
-              return;
-            }
-          } catch {
-            // Continue into payment bootstrap; BE will reject if details are still missing.
-          }
-        }
-
-        const result = await bootstrapPaymentMethod({
-          orderId: route.params.orderId,
-          paymentId: route.params.paymentId,
-          paymentType: route.params.paymentType,
-          deliveryDetails,
-        });
-        setNeedsDeliveryDetails(false);
-        setPayment(result);
-      } catch (loadError: unknown) {
-        if (isDeliveryDetailsRequiredError(loadError)) {
-          setNeedsDeliveryDetails(true);
-          setPayment(null);
-          setError(null);
-          return;
-        }
-        setError(getErrorMessage(loadError, "Unable to load payment."));
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [
-      currentUser?.fullName,
-      currentUser?.phone,
-      route.params.orderId,
-      route.params.paymentId,
-      route.params.paymentType,
-      route.params.projectId,
-    ],
-  );
-  const queryClient = useQueryClient();
   const methodQueryKey = useMemo(
     () =>
       [
@@ -113,21 +48,76 @@ export function PaymentMethodScreen(): React.JSX.Element {
       ] as const,
     [route.params.orderId, route.params.paymentId, route.params.paymentType],
   );
-  const paymentQuery = useQuery({
-    queryKey: methodQueryKey,
-    queryFn: () =>
-      bootstrapPaymentMethod({
+
+  const resolvePayment = useCallback(
+    async (deliveryDetails?: UpdateOrderDeliveryDetailsRequestDto) => {
+      if (route.params.orderId && !route.params.paymentId) {
+        try {
+          const order = await getOrderByIdApi(route.params.orderId);
+          if (!hasOrderDeliveryDetails(order) && !deliveryDetails) {
+            let defaultAddress = order.deliveryAddress ?? "";
+            if (!defaultAddress && route.params.projectId) {
+              const project = await getProjectByIdApi(route.params.projectId);
+              defaultAddress = project.projectAddress ?? "";
+            }
+
+            setDeliveryAddress(defaultAddress);
+            setReceiverName((prev) => order.receiverName?.trim() || prev || currentUser?.fullName || "");
+            setReceiverPhone((prev) => order.receiverPhone?.trim() || prev || currentUser?.phone || "");
+            setNeedsDeliveryDetails(true);
+            throw new Error("ORDER_DELIVERY_DETAILS_REQUIRED");
+          }
+        } catch (probeError) {
+          if (isDeliveryDetailsRequiredError(probeError)) {
+            throw probeError;
+          }
+          // Continue into payment bootstrap; BE will reject if details are still missing.
+        }
+      }
+
+      return bootstrapPaymentMethod({
         orderId: route.params.orderId,
         paymentId: route.params.paymentId,
         paymentType: route.params.paymentType,
-      }),
+        deliveryDetails,
+      });
+    },
+    [
+      currentUser?.fullName,
+      currentUser?.phone,
+      route.params.orderId,
+      route.params.paymentId,
+      route.params.paymentType,
+      route.params.projectId,
+    ],
+  );
+
+  const paymentQuery = useQuery({
+    queryKey: methodQueryKey,
+    queryFn: async () => {
+      try {
+        const payment = await resolvePayment();
+        setNeedsDeliveryDetails(false);
+        setError(null);
+        return payment;
+      } catch (loadError: unknown) {
+        if (isDeliveryDetailsRequiredError(loadError)) {
+          setNeedsDeliveryDetails(true);
+          setError(null);
+          return null;
+        }
+        setError(getErrorMessage(loadError, "Unable to load payment."));
+        throw loadError;
+      }
+    },
     staleTime: 15_000,
   });
+
   const payment = paymentQuery.data ?? null;
 
   const handleRealtimeUpdate = useCallback(
     (payload: PaymentUpdatedRealtimeDto) => {
-      queryClient.setQueryData<PaymentDetailDto>(methodQueryKey, (current) =>
+      queryClient.setQueryData<PaymentDetailDto | null>(methodQueryKey, (current) =>
         current ? { ...current, status: payload.status, paidAt: payload.paidAt } : current,
       );
       queryClient.setQueryData<PaymentDetailDto>(
@@ -162,7 +152,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
   };
 
   const isPaid = payment?.status === "PAID";
-  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status));
+  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status) && payment.isPayable !== false);
   const isProcessing = payment?.status === "PROCESSING";
 
   const handleBackToTracking = () => {
@@ -170,7 +160,6 @@ export function PaymentMethodScreen(): React.JSX.Element {
       navigation.navigate("Tracking", { projectId: route.params.projectId });
       return;
     }
-
     navigation.navigate("Tracking");
   };
 
@@ -189,11 +178,17 @@ export function PaymentMethodScreen(): React.JSX.Element {
     setIsSavingDelivery(true);
     setError(null);
     try {
-      await loadPayment(payload);
+      const result = await resolvePayment(payload);
+      setNeedsDeliveryDetails(false);
+      queryClient.setQueryData(methodQueryKey, result);
+    } catch (saveError: unknown) {
+      setError(getErrorMessage(saveError, "Unable to save delivery details."));
     } finally {
       setIsSavingDelivery(false);
     }
   };
+
+  const isLoading = paymentQuery.isPending && !payment && !needsDeliveryDetails;
 
   return (
     <View style={styles.screen}>
@@ -227,8 +222,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
                 : "Select how you want to pay"}
           </Text>
 
-          {isLoading && !needsDeliveryDetails ? (
-          {paymentQuery.isPending && !payment ? (
+          {isLoading ? (
             <View style={styles.centerState}>
               <ActivityIndicator color={paymentBrandColors.gold} />
               <Text style={styles.stateText}>Loading payment details...</Text>
@@ -275,15 +269,10 @@ export function PaymentMethodScreen(): React.JSX.Element {
                 )}
               </Pressable>
             </View>
-          ) : error ? (
-            <View style={styles.centerState}>
-              <Text style={styles.stateText}>{error}</Text>
-              <Pressable style={styles.primaryActionButton} onPress={() => void loadPayment()}>
-                <Text style={styles.primaryActionButtonText}>Retry</Text>
           ) : paymentQuery.isError && !payment ? (
             <View style={styles.centerState}>
               <Text style={styles.stateText}>
-                {getErrorMessage(paymentQuery.error, "Unable to load payment.")}
+                {error ?? getErrorMessage(paymentQuery.error, "Unable to load payment.")}
               </Text>
               <Pressable style={styles.retryButton} onPress={() => void paymentQuery.refetch()}>
                 <Text style={styles.retryButtonText}>Try again</Text>
@@ -349,7 +338,9 @@ export function PaymentMethodScreen(): React.JSX.Element {
                       <Text style={styles.sectionEyebrow}>PAY SECURELY</Text>
                       <Text style={styles.sectionTitle}>Choose a method</Text>
                     </View>
-                    {paymentQuery.isFetching ? <ActivityIndicator color={paymentBrandColors.gold} size="small" /> : null}
+                    {paymentQuery.isFetching ? (
+                      <ActivityIndicator color={paymentBrandColors.gold} size="small" />
+                    ) : null}
                   </View>
 
                   <Pressable

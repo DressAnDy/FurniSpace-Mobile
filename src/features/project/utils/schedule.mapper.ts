@@ -27,34 +27,39 @@ export function normalizeProjectSchedule(raw: unknown): ProjectScheduleDto | nul
     return null;
   }
 
+  const scheduledStart =
+    readString(record.scheduledStart) ??
+    readString(record.ScheduledStart) ??
+    readString(record.scheduledAt) ??
+    readString(record.ScheduledAt) ??
+    readString(record.startAt) ??
+    readString(record.StartAt) ??
+    readString(record.startDate) ??
+    readString(record.StartDate) ??
+    readString(record.startDateTime) ??
+    readString(record.StartDateTime) ??
+    "";
+  const scheduledEnd =
+    readString(record.scheduledEnd) ??
+    readString(record.ScheduledEnd) ??
+    readString(record.endAt) ??
+    readString(record.EndAt) ??
+    readString(record.endDate) ??
+    readString(record.EndDate) ??
+    readString(record.endDateTime) ??
+    readString(record.EndDateTime) ??
+    null;
+
   return {
     scheduleId: readString(record.scheduleId) ?? readString(record.ScheduleId) ?? "",
     projectId: readString(record.projectId) ?? readString(record.ProjectId) ?? "",
     scheduleType: normalizeScheduleType(record.scheduleType ?? record.ScheduleType),
     title: readString(record.title) ?? readString(record.Title) ?? null,
     description: readString(record.description) ?? readString(record.Description) ?? null,
-    scheduledAt:
-      readString(record.scheduledStart) ??
-      readString(record.ScheduledStart) ??
-      readString(record.scheduledAt) ??
-      readString(record.ScheduledAt) ??
-      readString(record.startAt) ??
-      readString(record.StartAt) ??
-      readString(record.startDate) ??
-      readString(record.StartDate) ??
-      readString(record.startDateTime) ??
-      readString(record.StartDateTime) ??
-      "",
-    endAt:
-      readString(record.scheduledEnd) ??
-      readString(record.ScheduledEnd) ??
-      readString(record.endAt) ??
-      readString(record.EndAt) ??
-      readString(record.endDate) ??
-      readString(record.EndDate) ??
-      readString(record.endDateTime) ??
-      readString(record.EndDateTime) ??
-      null,
+    scheduledStart,
+    scheduledEnd,
+    scheduledAt: scheduledStart,
+    endAt: scheduledEnd,
     location: readString(record.location) ?? readString(record.Location) ?? null,
     projectCode: readString(record.projectCode) ?? readString(record.ProjectCode) ?? null,
     projectName: readString(record.projectName) ?? readString(record.ProjectName) ?? null,

@@ -379,6 +379,7 @@ export const styles = StyleSheet.create({
     color: "#DC2626",
     fontSize: 12,
     marginTop: 10,
+  },
   noticeCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E8DFD4",

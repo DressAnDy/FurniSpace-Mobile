@@ -30,8 +30,6 @@ import { ProjectSwitcherModal } from "../components/ProjectSwitcherModal";
 import { useActiveProjectSummary } from "../hooks/useProjects";
 import { useActiveProjectId, useProjectStore } from "../store/project.store";
 import {
-  canConfirmDelivery,
-  canPayDeposit,
   canReopenProposal,
   getPrimaryOrder,
   getUpcomingSchedules,
@@ -46,7 +44,6 @@ import {
   buildProjectTrackingSummary,
   computeDaysUntil,
   formatTrackingDate,
-  formatTrackingDateTime,
   getInitials,
   getPhaseDeadlineMetricLabel,
   getPhaseDeadlineStatusColor,
@@ -134,7 +131,6 @@ export function ProjectTrackingScreen(): React.JSX.Element {
   const pendingDepositPayment = useMemo(() => findPendingPayment(payments, "DEPOSIT"), [payments]);
   const pendingRemainingPayment = useMemo(() => findPendingPayment(payments, "REMAINING_PAYMENT"), [payments]);
   const paidDeposit = useMemo(() => hasPaidPayment(payments, "DEPOSIT"), [payments]);
-  const paidRemaining = useMemo(() => hasPaidPayment(payments, "REMAINING_PAYMENT"), [payments]);
 
   const handleConfirmDelivery = () => {
     if (!primaryOrder) {
@@ -383,28 +379,10 @@ export function ProjectTrackingScreen(): React.JSX.Element {
               </View>
 
               <CustomerActionsCard
-                status={project.status}
-                hasPendingSchedules={pendingSchedules.length > 0}
-                canPayDeposit={canPayDeposit(project.status, primaryOrder, paidDeposit)}
-                canConfirmDelivery={canConfirmDelivery(
-                  project.status,
-                  primaryOrder,
-                  project.deliverySummary?.remainingQuantity,
-                )}
-                canReopen={canReopenProposal(project.status, primaryOrder) && !paidDeposit}
-                onConfirmSchedule={() => pendingSchedules[0] && handleConfirmSchedule(pendingSchedules[0])}
-                onPayDeposit={handlePayDeposit}
-                onConfirmDelivery={handleConfirmDelivery}
-                onReopenProposal={handleReopenProposal}
-                isBusy={
-                  confirmScheduleMutation.isPending ||
-                  confirmDeliveryMutation.isPending ||
-                  reopenProposalMutation.isPending
-                }
                 flowDecision={flowDecision}
                 canPayDeposit={canCustomerPayDeposit(payments, primaryOrder?.status, project.status)}
                 canPayRemaining={canCustomerPayRemaining(payments, primaryOrder?.status, project.status)}
-                canReopen={canReopenProposal(project.status) && !paidDeposit}
+                canReopen={canReopenProposal(project.status, primaryOrder) && !paidDeposit}
                 onFlowAction={handleFlowAction}
                 isBusy={confirmDeliveryMutation.isPending || reopenProposalMutation.isPending}
               />
@@ -657,11 +635,8 @@ function ScheduleRow({ schedule }: { schedule: ProjectScheduleDto }): React.JSX.
       <View style={styles.scheduleTextWrap}>
         <Text style={styles.scheduleTitle}>{schedule.title ?? formatScheduleTypeLabel(schedule.scheduleType)}</Text>
         <Text style={styles.scheduleMeta}>
-          {formatTrackingDate(getScheduleStartAt(schedule))} · {schedule.status.replaceAll("_", " ")}
-          {formatTrackingDateTime(schedule.scheduledAt)}
+          {formatTrackingDate(getScheduleStartAt(schedule))} · {formatScheduleStatusLabel(schedule.status)}
           {schedule.location ? ` · ${schedule.location}` : ""}
-          {" · "}
-          {formatScheduleStatusLabel(schedule.status)}
         </Text>
       </View>
     </View>

@@ -130,6 +130,10 @@ export async function ensurePayment(input: {
     }
   }
 
+  if (paymentType === "REMAINING_PAYMENT") {
+    throw new Error("Remaining payment has not been issued yet. Please contact sales after delivery.");
+  }
+
   try {
     return await createOrderDepositPaymentApi(input.orderId);
   } catch (error) {
@@ -139,11 +143,6 @@ export async function ensurePayment(input: {
     }
     throw error;
   }
-  if (paymentType === "REMAINING_PAYMENT") {
-    throw new Error("Remaining payment has not been issued yet. Please contact sales after delivery.");
-  }
-
-  return createOrderDepositPaymentApi(input.orderId);
 }
 
 async function findExistingPaymentForOrder(

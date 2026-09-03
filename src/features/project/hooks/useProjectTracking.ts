@@ -163,15 +163,11 @@ export function useProjectTrackingQueries(projectId: string | null) {
 
   const [projectQuery, phaseDeadlinesQuery, schedulesQuery, ordersQuery, paymentsQuery] = results;
 
-  const isLoading = enabled && results.some((query) => query.isLoading);
-  const isRefetching = enabled && results.some((query) => query.isFetching && !query.isLoading);
   // Project detail is required; secondary endpoints failing should not block the whole screen.
-  const isError = Boolean(projectQuery.isError);
-  const error = projectQuery.error ?? null;
   const isLoading = enabled && projectQuery.isPending && !projectQuery.data;
   const isRefetching = enabled && !isLoading && results.some((query) => query.isFetching);
-  const isError = results.some((query) => query.isError);
-  const error = results.find((query) => query.error)?.error ?? null;
+  const isError = Boolean(projectQuery.isError);
+  const error = projectQuery.error ?? null;
 
   const data = useMemo<ProjectTrackingData | null>(() => {
     if (!projectQuery.data) {
@@ -336,13 +332,6 @@ export function getUpcomingSchedules(schedules: ProjectScheduleDto[]): ProjectSc
       const rightTime = new Date(getScheduleStartAt(right)).getTime() || 0;
       return leftTime - rightTime;
     })
-    .slice(0, 5);
-    .filter(
-      (schedule) =>
-        isSchedulePendingConfirmation(schedule.status) ||
-        new Date(schedule.scheduledAt).getTime() >= now - 24 * 60 * 60 * 1000,
-    )
-    .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime())
     .slice(0, 8);
 }
 

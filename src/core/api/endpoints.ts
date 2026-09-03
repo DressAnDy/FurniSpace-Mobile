@@ -69,18 +69,33 @@ export const endpoints = {
   projectStartFee: {
     status: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee/status`,
     create: (projectId: string) => `/api/projects/${projectId}/payments/project-start-fee`,
-    proposals: (projectId: string) => `/projects/${projectId}/proposals`,
-    quotations: (projectId: string) => `/projects/${projectId}/quotations`,
   },
   proposals: {
     detail: (proposalId: string) => `/proposals/${proposalId}`,
+    update: (proposalId: string) => `/proposals/${proposalId}`,
+    publish: (proposalId: string) => `/proposals/${proposalId}/publish`,
+    reopen: (proposalId: string) => `/proposals/${proposalId}/reopen-for-editing`,
     scenes: (proposalId: string) => `/proposals/${proposalId}/scenes`,
     items: (proposalId: string) => `/proposals/${proposalId}/items`,
     selectFinal: (proposalId: string) => `/proposals/${proposalId}/select-final`,
     requestRevision: (proposalId: string) => `/proposals/${proposalId}/request-revision`,
   },
+  proposalScenes: {
+    update: (sceneId: string) => `/proposal-scenes/${sceneId}`,
+  },
+  proposalItems: {
+    update: (itemId: string) => `/proposal-items/${itemId}`,
+    delete: (itemId: string) => `/proposal-items/${itemId}`,
+  },
   quotations: {
     detail: (quotationId: string) => `/quotations/${quotationId}`,
+    update: (quotationId: string) => `/quotations/${quotationId}`,
+    itemFinancials: (quotationId: string, itemId: string) =>
+      `/quotations/${quotationId}/items/${itemId}/financials`,
+    bulkFinancials: (quotationId: string) => `/quotations/${quotationId}/items/financials`,
+    send: (quotationId: string) => `/quotations/${quotationId}/send`,
+    revise: (quotationId: string) => `/quotations/${quotationId}/revise`,
+    cancel: (quotationId: string) => `/quotations/${quotationId}/cancel`,
     accept: (quotationId: string) => `/quotations/${quotationId}/accept`,
     requestRevision: (quotationId: string) => `/quotations/${quotationId}/request-revision`,
     reject: (quotationId: string) => `/quotations/${quotationId}/reject`,
@@ -113,31 +128,6 @@ export const endpoints = {
     updateStatus: (scheduleId: string) => `/project-schedules/${scheduleId}/status`,
     delete: (scheduleId: string) => `/project-schedules/${scheduleId}`,
     measurementImages: (scheduleId: string) => `/project-schedules/${scheduleId}/measurement-images`,
-  },
-  proposals: {
-    detail: (proposalId: string) => `/proposals/${proposalId}`,
-    update: (proposalId: string) => `/proposals/${proposalId}`,
-    publish: (proposalId: string) => `/proposals/${proposalId}/publish`,
-    reopen: (proposalId: string) => `/proposals/${proposalId}/reopen-for-editing`,
-    scenes: (proposalId: string) => `/proposals/${proposalId}/scenes`,
-    items: (proposalId: string) => `/proposals/${proposalId}/items`,
-  },
-  proposalScenes: {
-    update: (sceneId: string) => `/proposal-scenes/${sceneId}`,
-  },
-  proposalItems: {
-    update: (itemId: string) => `/proposal-items/${itemId}`,
-    delete: (itemId: string) => `/proposal-items/${itemId}`,
-  },
-  quotations: {
-    detail: (quotationId: string) => `/quotations/${quotationId}`,
-    update: (quotationId: string) => `/quotations/${quotationId}`,
-    itemFinancials: (quotationId: string, itemId: string) =>
-      `/quotations/${quotationId}/items/${itemId}/financials`,
-    bulkFinancials: (quotationId: string) => `/quotations/${quotationId}/items/financials`,
-    send: (quotationId: string) => `/quotations/${quotationId}/send`,
-    revise: (quotationId: string) => `/quotations/${quotationId}/revise`,
-    cancel: (quotationId: string) => `/quotations/${quotationId}/cancel`,
   },
   payments: {
     list: "/api/payments",
