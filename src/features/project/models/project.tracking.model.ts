@@ -110,7 +110,7 @@ export type ProjectScheduleListResponseDto = {
 };
 
 export type UpdateProjectScheduleStatusRequestDto = {
-  status: "CONFIRMED";
+  status: "CONFIRMED" | "COMPLETED" | "CANCELLED";
   note?: string;
 };
 

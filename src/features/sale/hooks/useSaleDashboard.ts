@@ -1,23 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { ProjectListQuery, ProjectStatus } from "../../project/models/project.model";
+import { ProjectDetailDto, ProjectListQuery, ProjectStatus } from "../../project/models/project.model";
 import { getProjectsApi } from "../../project/services/project.api";
-import {
-  ClaimSalesAssignmentRequestDto,
-  RequestProjectInformationDto,
-  SalesActionQueueQuery,
-  SalesKpisQuery,
-} from "../models/sale.model";
+import { normalizeProjectDetailDto } from "../../project/utils/project.mapper";
 import {
   AssignDesignerRequestDto,
   assignProjectDesignerApi,
   claimSalesAssignmentApi,
   getAvailableDesignersApi,
+  getDashboardProjectPhaseDeadlinesApi,
   getSalesActionQueueApi,
   getSalesKpisApi,
   requestProjectInformationApi,
 } from "../services/sale.api";
+import {
+  DashboardPhaseDeadlinesQuery,
+  ClaimSalesAssignmentRequestDto,
+  RequestProjectInformationDto,
+  SalesActionQueueQuery,
+  SalesKpisQuery,
+} from "../models/sale.model";
 import { mapProjectToSaleProjectCard, mapProjectToSaleRequestCard } from "../utils/sale.mapper";
 
 export function useSalesKpisQuery(query: SalesKpisQuery = {}) {
@@ -37,6 +40,16 @@ export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
     queryKey: queryKeys.sale.actionQueue(query),
     enabled: isLoggedIn,
     queryFn: () => getSalesActionQueueApi(query),
+  });
+}
+
+export function useDashboardPhaseDeadlinesQuery(query: DashboardPhaseDeadlinesQuery = {}) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: queryKeys.sale.dashboardPhaseDeadlines(query),
+    enabled: isLoggedIn,
+    queryFn: () => getDashboardProjectPhaseDeadlinesApi(query),
   });
 }
 
@@ -168,11 +181,28 @@ export function saleProjectsFilterToStatus(
 
 export function useClaimSalesAssignmentMutation() {
   const queryClient = useQueryClient();
+  const authUser = useAuthStore((state) => state.user);
 
   return useMutation({
     mutationFn: ({ projectId, note }: { projectId: string; note?: string } & ClaimSalesAssignmentRequestDto) =>
       claimSalesAssignmentApi(projectId, note ? { note } : { note: "Taking this lead" }),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(response.projectId), (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return normalizeProjectDetailDto({
+          ...current,
+          assignedSalesId: response.assignedSalesId,
+          assignedSales:
+            authUser && authUser.accountId === response.assignedSalesId
+              ? { accountId: authUser.accountId, fullName: authUser.fullName }
+              : current.assignedSales,
+          status: (response.status as ProjectStatus) ?? current.status,
+        });
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(response.projectId) });
       void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
       void queryClient.invalidateQueries({ queryKey: ["sale"] });
     },
@@ -208,9 +238,26 @@ export function useAssignProjectDesignerMutation(projectId: string | null) {
 
   return useMutation({
     mutationFn: (payload: AssignDesignerRequestDto) => assignProjectDesignerApi(projectId!, payload),
-    onSuccess: () => {
+    onSuccess: (response) => {
       if (projectId) {
+        queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(projectId), (current) => {
+          if (!current) {
+            return current;
+          }
+
+          const assignedDesignerId =
+            response.assignedDesigner?.accountId ?? response.assignedDesignerId ?? current.assignedDesignerId;
+
+          return normalizeProjectDetailDto({
+            ...current,
+            assignedDesignerId,
+            assignedDesigner: response.assignedDesigner ?? current.assignedDesigner,
+            status: (response.status as ProjectStatus) ?? current.status,
+          });
+        });
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.payment.projectStartFeeStatus(projectId) });
         void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
         void queryClient.invalidateQueries({ queryKey: ["sale"] });
       }

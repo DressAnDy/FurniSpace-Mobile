@@ -107,3 +107,50 @@ export type SaleAlertCard = {
   color: string;
   priority: string;
 };
+
+export type DashboardPhaseDeadlinePhase = "PROPOSAL" | "PRODUCTION";
+
+export type DashboardPhaseDeadlineStatus =
+  | "OVERDUE"
+  | "ON_TRACK"
+  | "COMPLETED_ON_TIME"
+  | "COMPLETED_LATE";
+
+export type DashboardPhaseDeadlineItemDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  phase: DashboardPhaseDeadlinePhase;
+  dueDate: string;
+  completedAt: string | null;
+  projectStatus: string;
+  assignedSalesId: string | null;
+  assignedSalesName: string | null;
+  assignedDesignerId: string | null;
+  assignedDesignerName: string | null;
+  assignedProductionId: string | null;
+  assignedProductionName: string | null;
+  status: DashboardPhaseDeadlineStatus;
+  group: string;
+  days: number;
+};
+
+export type DashboardPhaseDeadlinesQuery = {
+  phase?: DashboardPhaseDeadlinePhase;
+  status?: DashboardPhaseDeadlineStatus;
+  salesId?: string;
+  designerId?: string;
+  productionId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type DashboardPhaseDeadlinesResponseDto = {
+  items: DashboardPhaseDeadlineItemDto[];
+  countsByGroup: Record<string, number>;
+  page: number;
+  limit: number;
+  total: number;
+};

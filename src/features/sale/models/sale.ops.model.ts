@@ -125,4 +125,37 @@ export type MeasurementImageListResponseDto = {
   total?: number;
 };
 
+export type ProjectMeasurementImageScheduleDto = {
+  scheduleId: string;
+  scheduledStart: string;
+};
+
+export type ProjectMeasurementImageAreaDto = {
+  projectAreaId: string;
+  areaName: string;
+};
+
+export type ProjectMeasurementImageDto = {
+  fileId: string;
+  url: string;
+  uploadedAt: string;
+  measurementSchedule: ProjectMeasurementImageScheduleDto | null;
+  areas: ProjectMeasurementImageAreaDto[];
+};
+
+export type ProjectMeasurementImagesQuery = {
+  scheduleId?: string;
+  projectAreaId?: string;
+  assigned?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+export type ProjectMeasurementImagesResponseDto = {
+  items: ProjectMeasurementImageDto[];
+  page: number;
+  limit: number;
+  total: number;
+};
+
 export type { PhaseDeadlinesResponseDto, ProjectScheduleDto };

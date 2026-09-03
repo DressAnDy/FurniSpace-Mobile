@@ -35,6 +35,8 @@ import {
   SaleRequestsScreen,
 } from "../../features/sale/screens/SaleMainScreens";
 import { SaleChatScreen, SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
+import { SaleQuotationDetailScreen } from "../../features/sale/screens/SaleQuotationDetailScreen";
+import { SaleOrderDetailScreen } from "../../features/sale/screens/SaleOrderDetailScreen";
 import type { ProjectDetailTab } from "../../features/sale/data/sale.mock";
 import { linking } from "./linking";
 
@@ -77,6 +79,8 @@ export type RootStackParamList = {
   SaleMore: undefined;
   SaleChat: { conversationId: string };
   SaleProjectDetail: { projectId?: string; tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
+  SaleQuotationDetail: { quotationId: string; projectId: string; projectName?: string };
+  SaleOrderDetail: { orderId: string; projectId: string; projectName?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -116,6 +120,8 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="SaleMore" component={SaleMoreScreen} />
         <Stack.Screen name="SaleChat" component={SaleChatScreen} />
         <Stack.Screen name="SaleProjectDetail" component={SaleProjectDetailScreen} />
+        <Stack.Screen name="SaleQuotationDetail" component={SaleQuotationDetailScreen} />
+        <Stack.Screen name="SaleOrderDetail" component={SaleOrderDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

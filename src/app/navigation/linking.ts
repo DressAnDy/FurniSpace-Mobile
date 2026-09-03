@@ -28,6 +28,8 @@ export const linking: LinkingOptions<RootStackParamList> = {
       QuotationDetail: "quotations/:quotationId",
       ProjectOrders: "projects/:projectId/orders",
       OrderDetail: "orders/:orderId",
+      SaleQuotationDetail: "sale/quotations/:quotationId",
+      SaleOrderDetail: "sale/orders/:orderId",
       ProjectSchedules: "projects/:projectId/schedules",
       CreateProjectRequest: "projects/new",
       VerifyEmail: "verify-email",

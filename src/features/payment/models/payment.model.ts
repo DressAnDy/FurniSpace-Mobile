@@ -25,6 +25,24 @@ export type CreatePayOsTransactionRequestDto = {
   paymentMethod: "PAYMENT_LINK";
 };
 
+export type CreatePayOsPaymentLinkRequestDto = {
+  returnUrl?: string;
+  cancelUrl?: string;
+};
+
+export type SePayVietQrDto = {
+  paymentId: string;
+  paymentCode: string;
+  amount: number;
+  currency: string;
+  qrUrl?: string | null;
+  qrContent?: string | null;
+  bankCode?: string | null;
+  accountNo?: string | null;
+  accountName?: string | null;
+  transferContent?: string | null;
+};
+
 export type PayOsPaymentLinkDto = {
   paymentId: string;
   paymentTransactionId: string;
@@ -128,6 +146,45 @@ export type PaymentListResponseDto = {
   page: number;
   limit: number;
   total: number;
+};
+
+export type CreateProjectStartFeeRequestDto = {
+  amount?: number;
+  expiredAt?: string;
+  note?: string;
+};
+
+export type ProjectStartFeePaymentProjectDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+};
+
+export type ProjectStartFeePaymentDto = PaymentDetailDto & {
+  orderId: string | null;
+  quotationId: string | null;
+  project?: ProjectStartFeePaymentProjectDto | null;
+  order?: unknown | null;
+  latestTransaction?: PaymentTransactionDto | null;
+};
+
+export type ProjectStartFeeStatusDto = {
+  projectId: string;
+  requiresProjectStartFee: boolean;
+  projectStartFeeStatus: PaymentStatus | null;
+  isEligibleForDesignerAssignment: boolean;
+  paymentId: string | null;
+};
+
+export type PaymentSummaryDto = {
+  pendingCount: number;
+  processingCount: number;
+  paidCount: number;
+  expiredCount: number;
+  cancelledCount: number;
+  payableCount: number;
+  pendingAmount: number;
+  currency: string;
 };
 
 export type CancelPaymentTransactionRequestDto = {

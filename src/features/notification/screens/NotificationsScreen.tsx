@@ -20,6 +20,7 @@ import { NOTIFICATIONS_PAGE_SIZE, useNotificationActions, useNotificationsQuery,
 import { NotificationCategory, NotificationFilter, NotificationListItem } from "../models/notification.model";
 import { useProjectsQuery } from "../../project/hooks/useProjects";
 import { useProjectStore } from "../../project/store/project.store";
+import { useAuthStore } from "../../auth/store/auth.store";
 import { enrichNotificationWithProjectName } from "../utils/notification.mapper";
 import { navigateFromNotification } from "../utils/notification.navigation";
 import { styles } from "./NotificationsScreen.styles";
@@ -40,6 +41,7 @@ export function NotificationsScreen(): React.JSX.Element {
   const [page, setPage] = useState(1);
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
+  const userRole = useAuthStore((state) => state.user?.role ?? null);
   const { data: unreadData } = useUnreadNotificationCount();
   const { markReadMutation, markAllReadMutation } = useNotificationActions();
   const projectsQuery = useProjectsQuery({ limit: 100 });
@@ -93,7 +95,7 @@ export function NotificationsScreen(): React.JSX.Element {
     }
 
     setNavigatingId(item.id);
-    void navigateFromNotification(navigation, item, { setActiveProjectId })
+    void navigateFromNotification(navigation, item, { setActiveProjectId, role: userRole })
       .catch((error: unknown) => {
         Alert.alert("Unable to open notification", getErrorMessage(error, "Please try again."));
       })

@@ -1,4 +1,4 @@
-import { ProjectListItemDto, ProjectStatus, ProjectSummaryItem } from "../models/project.model";
+import { ProjectDetailDto, ProjectAssigneeDto, ProjectListItemDto, ProjectStatus, ProjectSummaryItem } from "../models/project.model";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   SUBMITTED: "Submitted",
@@ -55,4 +55,36 @@ export function pickDefaultActiveProject(projects: ProjectSummaryItem[]): Projec
 
   const active = projects.find((project) => project.status !== "COMPLETED" && project.status !== "REJECTED");
   return active ?? projects[0];
+}
+
+export function normalizeProjectDetailDto(dto: ProjectDetailDto): ProjectDetailDto {
+  const assignedDesignerId = dto.assignedDesignerId ?? dto.assignedDesigner?.accountId ?? null;
+  const assignedSalesId = dto.assignedSalesId ?? dto.assignedSales?.accountId ?? null;
+
+  return {
+    ...dto,
+    assignedDesignerId,
+    assignedSalesId,
+    assignedDesigner: dto.assignedDesigner?.fullName?.trim() ? dto.assignedDesigner : null,
+    assignedSales: dto.assignedSales?.fullName?.trim() ? dto.assignedSales : null,
+  };
+}
+
+export function resolveProjectMemberDisplay(
+  assignee: ProjectAssigneeDto | null | undefined,
+  assigneeId: string | null | undefined,
+  currentUser?: { accountId: string; fullName: string } | null,
+  fallbackLabel = "Assigned",
+): { memberId: string | null; fullName: string | null; isAssigned: boolean } {
+  const memberId = assigneeId ?? assignee?.accountId ?? null;
+  const resolvedName =
+    assignee?.fullName?.trim() ||
+    (currentUser && memberId === currentUser.accountId ? currentUser.fullName.trim() : "") ||
+    (memberId ? fallbackLabel : "");
+
+  return {
+    memberId,
+    fullName: resolvedName || null,
+    isAssigned: Boolean(memberId),
+  };
 }

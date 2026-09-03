@@ -21,9 +21,18 @@ export async function getProjectPhaseDeadlinesApi(projectId: string): Promise<Ph
   return response.data.data;
 }
 
-export async function getProjectSchedulesApi(projectId: string): Promise<ProjectScheduleDto[]> {
+export async function getProjectSchedulesApi(
+  projectId: string,
+  query: { scheduleType?: string; status?: string; page?: number; limit?: number } = {},
+): Promise<ProjectScheduleDto[]> {
   const response = await httpClient.get<ApiResponse<ProjectScheduleListResponseDto>>(endpoints.projectSchedules.list, {
-    params: { projectId, page: 1, limit: 50 },
+    params: {
+      projectId,
+      ...(query.scheduleType ? { scheduleType: query.scheduleType } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      page: query.page ?? 1,
+      limit: query.limit ?? 50,
+    },
   });
   const data = response.data.data;
   const items = data.items ?? (Array.isArray(data) ? (data as unknown as unknown[]) : []);
