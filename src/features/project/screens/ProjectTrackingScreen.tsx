@@ -39,11 +39,11 @@ import {
 } from "../hooks/useProjectTracking";
 import { useProjectSwitcherPrefetch } from "../hooks/useProjectSwitcherPrefetch";
 import { useProjectTrackingRealtime } from "../hooks/useProjectTrackingRealtime";
+import { getScheduleStartAt } from "../services/project.tracking.api";
 import {
   buildProjectTrackingSummary,
   computeDaysUntil,
   formatTrackingDate,
-  formatTrackingDateTime,
   getInitials,
   getPhaseDeadlineMetricLabel,
   getPhaseDeadlineStatusColor,
@@ -131,7 +131,6 @@ export function ProjectTrackingScreen(): React.JSX.Element {
   const pendingDepositPayment = useMemo(() => findPendingPayment(payments, "DEPOSIT"), [payments]);
   const pendingRemainingPayment = useMemo(() => findPendingPayment(payments, "REMAINING_PAYMENT"), [payments]);
   const paidDeposit = useMemo(() => hasPaidPayment(payments, "DEPOSIT"), [payments]);
-  const paidRemaining = useMemo(() => hasPaidPayment(payments, "REMAINING_PAYMENT"), [payments]);
 
   const handleConfirmDelivery = () => {
     if (!primaryOrder) {
@@ -383,7 +382,7 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                 flowDecision={flowDecision}
                 canPayDeposit={canCustomerPayDeposit(payments, primaryOrder?.status, project.status)}
                 canPayRemaining={canCustomerPayRemaining(payments, primaryOrder?.status, project.status)}
-                canReopen={canReopenProposal(project.status) && !paidDeposit}
+                canReopen={canReopenProposal(project.status, primaryOrder) && !paidDeposit}
                 onFlowAction={handleFlowAction}
                 isBusy={confirmDeliveryMutation.isPending || reopenProposalMutation.isPending}
               />
@@ -468,7 +467,16 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                   <Text style={styles.orderStatusText}>{primaryOrder.status.replaceAll("_", " ")}</Text>
                   {primaryOrder.totalAmount != null ? (
                     <Text style={styles.orderMetaText}>
-                      Total {primaryOrder.totalAmount.toLocaleString()} · Paid {(primaryOrder.paidAmount ?? 0).toLocaleString()}
+                      Total {primaryOrder.totalAmount.toLocaleString()} · Deposit{" "}
+                      {(primaryOrder.depositAmount ?? 0).toLocaleString()} · Paid{" "}
+                      {(primaryOrder.paidAmount ?? 0).toLocaleString()}
+                    </Text>
+                  ) : null}
+                  {project.deliverySummary ? (
+                    <Text style={styles.orderMetaText}>
+                      Delivery {project.deliverySummary.deliveredQuantity}/
+                      {project.deliverySummary.totalQuantity} (
+                      {project.deliverySummary.deliveryProgressPercent}%)
                     </Text>
                   ) : null}
                   <Text style={[styles.emptyHint, { marginTop: 8 }]}>Tap to view order details</Text>
@@ -627,10 +635,8 @@ function ScheduleRow({ schedule }: { schedule: ProjectScheduleDto }): React.JSX.
       <View style={styles.scheduleTextWrap}>
         <Text style={styles.scheduleTitle}>{schedule.title ?? formatScheduleTypeLabel(schedule.scheduleType)}</Text>
         <Text style={styles.scheduleMeta}>
-          {formatTrackingDateTime(schedule.scheduledAt)}
+          {formatTrackingDate(getScheduleStartAt(schedule))} · {formatScheduleStatusLabel(schedule.status)}
           {schedule.location ? ` · ${schedule.location}` : ""}
-          {" · "}
-          {formatScheduleStatusLabel(schedule.status)}
         </Text>
       </View>
     </View>

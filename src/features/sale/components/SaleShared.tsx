@@ -11,14 +11,16 @@ import { AppIcon } from "../../../shared/components/AppIcon";
 import type { IconDefinition } from "../../../icons/types";
 import { projectTabs, type ProjectDetailTab } from "../data/sale.mock";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
+import type { ProjectStatus } from "../../project/models/project.model";
+import { buildProjectTrackingSummary } from "../../project/utils/project.tracking.mapper";
 
 export type SaleNavTab = "dashboard" | "requests" | "projects" | "messages" | "more";
 
 const navItems: { key: SaleNavTab; label: string; icon: IconDefinition; route: keyof RootStackParamList; badge?: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: dashboardIconDefinition, route: "SaleDashboard" },
-  { key: "requests", label: "Requests", icon: clipboardIconDefinition, route: "SaleRequests", badge: "7" },
+  { key: "requests", label: "Requests", icon: clipboardIconDefinition, route: "SaleRequests" },
   { key: "projects", label: "Projects", icon: projectIconDefinition, route: "SaleProjects" },
-  { key: "messages", label: "Messages", icon: chatIconDefinition, route: "SaleMessages", badge: "4" },
+  { key: "messages", label: "Messages", icon: chatIconDefinition, route: "SaleMessages" },
   { key: "more", label: "More", icon: menuIconDefinition, route: "SaleMore" },
 ];
 
@@ -63,17 +65,24 @@ export function SaleHeader({
   title,
   subtitle,
   children,
+  trailing,
 }: {
   title: string;
   subtitle?: string;
   children?: React.ReactNode;
+  trailing?: React.ReactNode;
 }): React.JSX.Element {
   const insets = useSafeAreaInsets();
   return (
     <View style={[s.header, { paddingTop: Math.max(insets.top, 18) + 8 }]}>
-      <Text style={s.headerEyebrow}>FurniSpace · Sales</Text>
-      <Text style={s.headerTitle}>{title}</Text>
-      {subtitle ? <Text style={s.headerSubtitle}>{subtitle}</Text> : null}
+      <View style={s.headerTopRow}>
+        <View style={s.headerCopy}>
+          <Text style={s.headerEyebrow}>FurniSpace · Sales</Text>
+          <Text style={s.headerTitle}>{title}</Text>
+          {subtitle ? <Text style={s.headerSubtitle}>{subtitle}</Text> : null}
+        </View>
+        {trailing ? <View style={s.headerActions}>{trailing}</View> : null}
+      </View>
       {children}
     </View>
   );
@@ -111,9 +120,29 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
   );
 }
 
-export function ProjectDetailHeader(): React.JSX.Element {
+export function ProjectDetailHeader({
+  projectCode,
+  projectName,
+  businessType,
+  statusLabel,
+  status,
+}: {
+  projectCode?: string;
+  projectName?: string;
+  businessType?: string;
+  statusLabel?: string;
+  status?: ProjectStatus;
+} = {}): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const tracking = status ? buildProjectTrackingSummary(status) : null;
+  const stages = tracking?.stages ?? [];
+  const stageLabel =
+    tracking?.isRejected
+      ? "Rejected"
+      : tracking?.stages.find((stage) => stage.uiState === "ACTIVE")?.label ??
+        (status === "COMPLETED" ? "Delivery & Completion" : null);
+
   return (
     <View style={[s.header, { paddingTop: Math.max(insets.top, 18) + 8 }]}>
       <View style={s.detailHeaderTop}>
@@ -121,45 +150,105 @@ export function ProjectDetailHeader(): React.JSX.Element {
           <Text style={{ color: SALE.white, fontSize: 19 }}>‹</Text>
         </Pressable>
         <View style={s.detailTitleWrap}>
-          <Text style={s.detailCode}>PRJ-2026-014 · APARTMENT</Text>
-          <Text style={s.detailTitle}>Modern Apartment Reno</Text>
+          <Text style={s.detailCode}>
+            {(projectCode ?? "PRJ-…") + (businessType ? ` · ${businessType.toUpperCase()}` : "")}
+          </Text>
+          <Text style={s.detailTitle}>{projectName ?? "Project detail"}</Text>
         </View>
-        <View style={s.status}><Text style={s.statusText}>Waiting For Designer</Text></View>
+        <View style={s.status}>
+          <Text style={s.statusText}>{statusLabel ?? "—"}</Text>
+        </View>
       </View>
       <View style={s.progress}>
-        {Array.from({ length: 15 }, (_, index) => (
-          <React.Fragment key={index}>
-            <View style={[s.progressDot, index < 3 && s.progressDone, index === 3 && s.progressCurrent]} />
-            {index < 14 ? <View style={[s.progressLine, index < 3 && s.progressLineDone]} /> : null}
-          </React.Fragment>
-        ))}
+        {stages.length > 0
+          ? stages.map((stage, index) => {
+              const isDone = stage.uiState === "COMPLETED";
+              const isCurrent = stage.uiState === "ACTIVE";
+              return (
+                <React.Fragment key={stage.id}>
+                  <View
+                    style={[
+                      s.progressDot,
+                      isDone && s.progressDone,
+                      isCurrent && s.progressCurrent,
+                    ]}
+                  />
+                  {index < stages.length - 1 ? (
+                    <View style={[s.progressLine, isDone && s.progressLineDone]} />
+                  ) : null}
+                </React.Fragment>
+              );
+            })
+          : Array.from({ length: 6 }, (_, index) => (
+              <React.Fragment key={index}>
+                <View style={s.progressDot} />
+                {index < 5 ? <View style={s.progressLine} /> : null}
+              </React.Fragment>
+            ))}
       </View>
-      <Text style={s.progressLabel}>Stage 4 of 15 · <Text style={s.progressGold}>Waiting for Designer Assignment</Text></Text>
+      <Text style={s.progressLabel}>
+        {tracking?.isRejected ? (
+          <>Rejected · <Text style={s.progressGold}>{statusLabel ?? "Rejected"}</Text></>
+        ) : (
+          <>
+            {stageLabel ? `${stageLabel} · ` : "Status · "}
+            <Text style={s.progressGold}>
+              {statusLabel ?? "Loading"}
+              {tracking ? ` · ${tracking.progressPercent}%` : ""}
+            </Text>
+          </>
+        )}
+      </Text>
     </View>
   );
 }
 
-export function ProjectTabs({ active }: { active: ProjectDetailTab }): React.JSX.Element {
+export function ProjectTabs({ active, projectId }: { active: ProjectDetailTab; projectId?: string }): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
-      {projectTabs.map((tab) => {
-        const selected = active === tab;
-        return (
-          <Pressable key={tab} style={[s.chip, selected && s.chipActive]} onPress={() => navigation.setParams({ tab } as never)}>
-            <Text style={[s.chipText, selected && s.chipTextActive]}>{tab}</Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    <View style={s.tabsBar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
+        {projectTabs.map((tab) => {
+          const selected = active === tab;
+          return (
+            <Pressable
+              key={tab}
+              style={[s.tabChip, selected && s.tabChipActive]}
+              onPress={() => navigation.setParams({ tab, ...(projectId ? { projectId } : {}) } as never)}
+            >
+              <Text style={[s.tabChipText, selected && s.tabChipTextActive]}>{tab}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
   );
 }
 
-export function DetailFixedActions(): React.JSX.Element {
+export function DetailFixedActions({
+  showAssignDesigner = true,
+  onAssignDesigner,
+  onMoreActions,
+}: {
+  showAssignDesigner?: boolean;
+  onAssignDesigner?: () => void;
+  onMoreActions?: () => void;
+} = {}): React.JSX.Element | null {
+  const insets = useSafeAreaInsets();
+  if (!showAssignDesigner && !onMoreActions) {
+    return null;
+  }
+
   return (
-    <View style={s.fixedActions}>
-      <Pressable style={s.fixedPrimary}><Text style={s.buttonPrimaryText}>Assign Designer</Text></Pressable>
-      <Pressable style={s.fixedSecondary}><Text style={s.buttonSecondaryText}>More Actions</Text></Pressable>
+    <View style={[s.fixedActions, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      {showAssignDesigner ? (
+        <Pressable style={s.fixedPrimary} onPress={onAssignDesigner}>
+          <Text style={s.buttonPrimaryText}>Assign Designer</Text>
+        </Pressable>
+      ) : null}
+      <Pressable style={[s.fixedSecondary, !showAssignDesigner && { flex: 1 }]} onPress={onMoreActions}>
+        <Text style={s.buttonSecondaryText}>More Actions</Text>
+      </Pressable>
     </View>
   );
 }

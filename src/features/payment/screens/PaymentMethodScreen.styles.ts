@@ -341,6 +341,9 @@ export const styles = StyleSheet.create({
     marginTop: 4,
     paddingVertical: 14,
   },
+  primaryActionButtonDisabled: {
+    opacity: 0.7,
+  },
   primaryActionButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
@@ -351,6 +354,31 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
+  },
+  fieldLabel: {
+    color: "#7A6F68",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    marginBottom: 6,
+    marginTop: 14,
+    textTransform: "uppercase",
+  },
+  fieldInput: {
+    backgroundColor: "#FAF8F5",
+    borderColor: "rgba(58,51,48,0.12)",
+    borderRadius: 12,
+    borderWidth: 1,
+    color: "#2C2420",
+    fontSize: 14,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  formErrorText: {
+    color: "#DC2626",
+    fontSize: 12,
+    marginTop: 10,
   },
   noticeCard: {
     backgroundColor: "#FFFFFF",

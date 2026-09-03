@@ -47,8 +47,9 @@ export type PaymentDetailDto = {
   paymentId: string;
   projectId: string;
   orderId: string;
+  quotationId?: string | null;
   paymentCode: string;
-  paidBy: string;
+  paidBy: string | null;
   paymentType: PaymentType;
   amount: number;
   currency: string;
@@ -57,6 +58,10 @@ export type PaymentDetailDto = {
   isPayable: boolean;
   reused?: boolean;
   paidAt?: string | null;
+  cancelledAt?: string | null;
+  note?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CreateDepositRequestDto = {

@@ -36,6 +36,18 @@ export const queryKeys = {
   order: {
     detail: (orderId: string) => ["order", "detail", orderId] as const,
   },
+  sale: {
+    kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,
+    actionQueue: (query: SaleActionQueueQueryKey) => ["sale", "action-queue", query] as const,
+    areas: (projectId: string) => ["sale", "areas", projectId] as const,
+    files: (projectId: string, query: Record<string, unknown> = {}) => ["sale", "files", projectId, query] as const,
+    proposals: (projectId: string) => ["sale", "proposals", projectId] as const,
+    quotations: (projectId: string, status?: string) => ["sale", "quotations", projectId, status ?? "all"] as const,
+    orders: (projectId: string) => ["sale", "orders", projectId] as const,
+    productionRequests: (query: Record<string, unknown> = {}) => ["sale", "production-requests", query] as const,
+    deliveries: (orderId: string) => ["sale", "deliveries", orderId] as const,
+    deliveryTracking: (orderId: string) => ["sale", "delivery-tracking", orderId] as const,
+  },
   payment: {
     detail: (paymentId: string) => ["payment", "detail", paymentId] as const,
     list: (query: PaymentListQueryKey) => ["payment", "list", query] as const,
@@ -54,6 +66,24 @@ type PaymentListQueryKey = {
 
 type ProjectListQueryKey = {
   status?: string;
+  search?: string;
+  assignedSalesId?: string;
+  assignedDesignerId?: string;
+  page?: number;
+  limit?: number;
+};
+
+type SaleDashboardQueryKey = {
+  scope?: string;
+  dateRange?: string;
+  search?: string;
+};
+
+type SaleActionQueueQueryKey = {
+  scope?: string;
+  group?: string;
+  dateRange?: string;
+  priority?: string;
   search?: string;
   page?: number;
   limit?: number;
