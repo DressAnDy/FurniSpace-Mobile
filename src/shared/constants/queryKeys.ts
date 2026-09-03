@@ -39,8 +39,12 @@ export const queryKeys = {
   sale: {
     kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,
     actionQueue: (query: SaleActionQueueQueryKey) => ["sale", "action-queue", query] as const,
+    dashboardPhaseDeadlines: (query: DashboardPhaseDeadlinesQueryKey) =>
+      ["sale", "dashboard-phase-deadlines", query] as const,
     areas: (projectId: string) => ["sale", "areas", projectId] as const,
     files: (projectId: string, query: Record<string, unknown> = {}) => ["sale", "files", projectId, query] as const,
+    measurementImages: (projectId: string, query: Record<string, unknown> = {}) =>
+      ["sale", "measurement-images", projectId, query] as const,
     proposals: (projectId: string) => ["sale", "proposals", projectId] as const,
     quotations: (projectId: string, status?: string) => ["sale", "quotations", projectId, status ?? "all"] as const,
     orders: (projectId: string) => ["sale", "orders", projectId] as const,
@@ -52,6 +56,11 @@ export const queryKeys = {
     detail: (paymentId: string) => ["payment", "detail", paymentId] as const,
     list: (query: PaymentListQueryKey) => ["payment", "list", query] as const,
     statusByCode: (paymentCode: string) => ["payment", "status-by-code", paymentCode] as const,
+    summary: ["payment", "summary"] as const,
+    projectStartFeeStatus: (projectId: string) => ["payment", "project-start-fee-status", projectId] as const,
+  },
+  projectSchedule: {
+    detail: (scheduleId: string) => ["project-schedule", "detail", scheduleId] as const,
   },
 } as const;
 
@@ -85,6 +94,18 @@ type SaleActionQueueQueryKey = {
   dateRange?: string;
   priority?: string;
   search?: string;
+  page?: number;
+  limit?: number;
+};
+
+type DashboardPhaseDeadlinesQueryKey = {
+  phase?: string;
+  status?: string;
+  salesId?: string;
+  designerId?: string;
+  productionId?: string;
+  from?: string;
+  to?: string;
   page?: number;
   limit?: number;
 };

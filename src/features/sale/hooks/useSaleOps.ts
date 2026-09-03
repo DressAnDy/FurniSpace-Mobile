@@ -5,10 +5,15 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { getProjectPhaseDeadlinesApi, getProjectSchedulesApi } from "../../project/services/project.tracking.api";
 import {
   CreateProjectScheduleRequestDto,
+  ProjectMeasurementImagesQuery,
   UpsertPhaseDeadlinesRequestDto,
   UpsertProjectAreaRequestDto,
   UploadProjectFileInput,
 } from "../models/sale.ops.model";
+import {
+  assertSalesCanCreateSchedule,
+  assertSalesCanUpdateScheduleStatus,
+} from "../utils/sale.schedule.rules";
 import {
   cancelProjectAreaApi,
   createProjectAreaApi,
@@ -16,12 +21,18 @@ import {
   deleteProjectScheduleApi,
   getProjectAreasApi,
   getProjectFilesApi,
+  getProjectMeasurementImagesApi,
+  getProjectScheduleByIdApi,
+  linkAreaMeasurementImageApi,
   putProjectPhaseDeadlinesApi,
   searchProjectFilesApi,
+  unlinkAreaMeasurementImageApi,
   updateProjectAreaApi,
   updateProjectScheduleApi,
+  updateProjectScheduleStatusApi,
   uploadProjectFileApi,
 } from "../services/sale.ops.api";
+import { UpdateProjectScheduleStatusRequestDto } from "../../project/models/project.tracking.model";
 
 export function useSaleProjectSchedulesQuery(projectId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -59,6 +70,27 @@ export function useSaleProjectFilesQuery(projectId: string | null) {
   });
 }
 
+export function useProjectMeasurementImagesQuery(
+  projectId: string | null,
+  query: ProjectMeasurementImagesQuery = {},
+) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  return useQuery({
+    queryKey: queryKeys.sale.measurementImages(projectId ?? "none", query),
+    enabled: isLoggedIn && Boolean(projectId),
+    queryFn: () => getProjectMeasurementImagesApi(projectId!, query),
+  });
+}
+
+export function useProjectScheduleDetailQuery(scheduleId: string | null) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  return useQuery({
+    queryKey: queryKeys.projectSchedule.detail(scheduleId ?? "none"),
+    enabled: isLoggedIn && Boolean(scheduleId),
+    queryFn: () => getProjectScheduleByIdApi(scheduleId!),
+  });
+}
+
 export function usePutPhaseDeadlinesMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -75,7 +107,10 @@ export function usePutPhaseDeadlinesMutation(projectId: string | null) {
 export function useCreateProjectScheduleMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateProjectScheduleRequestDto) => createProjectScheduleApi(projectId!, payload),
+    mutationFn: (payload: CreateProjectScheduleRequestDto) => {
+      assertSalesCanCreateSchedule(payload.scheduleType);
+      return createProjectScheduleApi(projectId!, payload);
+    },
     onSuccess: () => {
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.schedules(projectId) });
@@ -110,6 +145,58 @@ export function useDeleteProjectScheduleMutation(projectId: string | null) {
     onSuccess: () => {
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.schedules(projectId) });
+      }
+    },
+  });
+}
+
+export function useUpdateProjectScheduleStatusMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      scheduleId,
+      payload,
+    }: {
+      scheduleId: string;
+      payload: UpdateProjectScheduleStatusRequestDto;
+    }) => {
+      assertSalesCanUpdateScheduleStatus(payload.status);
+      return updateProjectScheduleStatusApi(scheduleId, payload);
+    },
+    onSuccess: (_data, variables) => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.schedules(projectId) });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.projectSchedule.detail(variables.scheduleId),
+      });
+    },
+  });
+}
+
+export function useLinkAreaMeasurementImageMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ areaId, fileId }: { areaId: string; fileId: string }) =>
+      linkAreaMeasurementImageApi(areaId, fileId),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.measurementImages(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.areas(projectId) });
+      }
+    },
+  });
+}
+
+export function useUnlinkAreaMeasurementImageMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ areaId, fileId }: { areaId: string; fileId: string }) =>
+      unlinkAreaMeasurementImageApi(areaId, fileId),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.measurementImages(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.areas(projectId) });
       }
     },
   });

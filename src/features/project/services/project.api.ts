@@ -9,9 +9,14 @@ import {
   ProjectListQuery,
   ProjectListResponseDto,
   UpdateProjectBasicInfoRequestDto,
+  UpdateProjectStatusRequestDto,
+  UpdateProjectStatusResponseDto,
+  RejectProjectRequestDto,
+  RejectProjectResponseDto,
   UpdateTargetCompletionDateRequestDto,
 } from "../models/project.model";
 import { ReopenProjectProposalResponseDto } from "../models/project.tracking.model";
+import { normalizeProjectDetailDto } from "../utils/project.mapper";
 
 function mapByUserItemToListItem(item: ProjectByUserListResponseDto["items"][number]): ProjectListItemDto {
   return {
@@ -44,7 +49,7 @@ export async function getProjectsApi(query: ProjectListQuery = {}): Promise<Proj
 
 export async function getProjectByIdApi(projectId: string): Promise<ProjectDetailDto> {
   const response = await httpClient.get<ApiResponse<ProjectDetailDto>>(endpoints.projects.detail(projectId));
-  return response.data.data;
+  return normalizeProjectDetailDto(response.data.data);
 }
 
 export async function getProjectsByUserApi(userId: string, query: ProjectListQuery = {}): Promise<ProjectListResponseDto> {
@@ -96,6 +101,28 @@ export async function updateProjectTargetCompletionDateApi(
 export async function reopenProjectProposalApi(projectId: string): Promise<ReopenProjectProposalResponseDto> {
   const response = await httpClient.post<ApiResponse<ReopenProjectProposalResponseDto>>(
     endpoints.projects.reopenProposal(projectId),
+  );
+  return response.data.data;
+}
+
+export async function updateProjectStatusApi(
+  projectId: string,
+  payload: UpdateProjectStatusRequestDto,
+): Promise<UpdateProjectStatusResponseDto> {
+  const response = await httpClient.patch<ApiResponse<UpdateProjectStatusResponseDto>>(
+    endpoints.projects.updateStatus(projectId),
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function rejectProjectApi(
+  projectId: string,
+  payload: RejectProjectRequestDto,
+): Promise<RejectProjectResponseDto> {
+  const response = await httpClient.patch<ApiResponse<RejectProjectResponseDto>>(
+    endpoints.projects.rejection(projectId),
+    payload,
   );
   return response.data.data;
 }

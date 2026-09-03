@@ -4,6 +4,8 @@ import { ApiResponse } from "../../../shared/types/api";
 import {
   ClaimSalesAssignmentRequestDto,
   ClaimSalesAssignmentResponseDto,
+  DashboardPhaseDeadlinesQuery,
+  DashboardPhaseDeadlinesResponseDto,
   RequestProjectInformationDto,
   RequestProjectInformationResponseDto,
   SalesActionQueueQuery,
@@ -43,6 +45,28 @@ export async function getSalesActionQueueApi(
   return response.data.data;
 }
 
+export async function getDashboardProjectPhaseDeadlinesApi(
+  query: DashboardPhaseDeadlinesQuery = {},
+): Promise<DashboardPhaseDeadlinesResponseDto> {
+  const response = await httpClient.get<ApiResponse<DashboardPhaseDeadlinesResponseDto>>(
+    endpoints.saleDashboard.phaseDeadlines,
+    {
+      params: {
+        ...(query.phase ? { phase: query.phase } : {}),
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.salesId ? { salesId: query.salesId } : {}),
+        ...(query.designerId ? { designerId: query.designerId } : {}),
+        ...(query.productionId ? { productionId: query.productionId } : {}),
+        ...(query.from ? { from: query.from } : {}),
+        ...(query.to ? { to: query.to } : {}),
+        page: query.page ?? 1,
+        limit: query.limit ?? 20,
+      },
+    },
+  );
+  return response.data.data;
+}
+
 export async function claimSalesAssignmentApi(
   projectId: string,
   payload: ClaimSalesAssignmentRequestDto = {},
@@ -73,15 +97,27 @@ export type AvailableDesignerDto = {
   workload?: number | null;
 };
 
+/** BE values for PATCH /projects/{id}/designer-assignment */
+export type SpaceDataStatus = "INSUFFICIENT" | "SUFFICIENT";
+
 export type AssignDesignerRequestDto = {
   designerId: string;
+  spaceDataStatus: SpaceDataStatus;
+  proposalDeadline: string;
   note?: string;
 };
 
 export type AssignDesignerResponseDto = {
   projectId: string;
-  assignedDesignerId: string;
+  assignedDesigner?: {
+    accountId: string;
+    fullName: string;
+    email?: string | null;
+  };
+  assignedDesignerId?: string;
   status: string;
+  designerAssignedAt?: string;
+  proposalDeadline?: string;
 };
 
 function unwrapDesignerList(data: unknown): AvailableDesignerDto[] {

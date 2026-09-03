@@ -6,6 +6,7 @@ import { resolveChatNotificationTarget } from "./notification.chatResolve";
 
 type NavigateFromNotificationOptions = {
   setActiveProjectId?: (projectId: string) => void;
+  role?: "CUSTOMER" | "SALES" | "DESIGNER" | "PRODUCTION" | "ADMIN" | null;
 };
 
 function navigateProjectFlow(
@@ -97,7 +98,11 @@ export async function navigateFromNotification(
 
     if (projectId && quotationId) {
       options?.setActiveProjectId?.(projectId);
-      navigation.navigate("QuotationDetail", { quotationId, projectId, projectName });
+      if (options?.role === "SALES") {
+        navigation.navigate("SaleQuotationDetail", { quotationId, projectId, projectName });
+      } else {
+        navigation.navigate("QuotationDetail", { quotationId, projectId, projectName });
+      }
       return;
     }
 
@@ -113,7 +118,11 @@ export async function navigateFromNotification(
 
     if (projectId && orderId) {
       options?.setActiveProjectId?.(projectId);
-      navigation.navigate("OrderDetail", { orderId, projectId, projectName });
+      if (options?.role === "SALES") {
+        navigation.navigate("SaleOrderDetail", { orderId, projectId, projectName });
+      } else {
+        navigation.navigate("OrderDetail", { orderId, projectId, projectName });
+      }
       return;
     }
 

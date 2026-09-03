@@ -3,8 +3,48 @@ import { AppError } from "./AppError";
 
 type BackendErrorPayload = {
   message?: string;
-  errors?: Array<{ message?: string } | string> | null;
+  errorCode?: string | null;
+  errors?: Array<{ message?: string; field?: string } | string> | Record<string, string[] | string> | null;
 };
+
+function extractBackendErrorMessage(payload: BackendErrorPayload | undefined, fallback: string): string {
+  if (!payload) {
+    return fallback;
+  }
+
+  const detailMessages: string[] = [];
+
+  if (payload.errors) {
+    if (Array.isArray(payload.errors)) {
+      for (const item of payload.errors) {
+        if (typeof item === "string" && item.trim()) {
+          detailMessages.push(item.trim());
+        } else if (item && typeof item === "object" && item.message?.trim()) {
+          detailMessages.push(item.message.trim());
+        }
+      }
+    } else if (typeof payload.errors === "object") {
+      for (const [field, messages] of Object.entries(payload.errors)) {
+        const values = Array.isArray(messages) ? messages : [messages];
+        for (const message of values) {
+          if (typeof message === "string" && message.trim()) {
+            detailMessages.push(`${field}: ${message.trim()}`);
+          }
+        }
+      }
+    }
+  }
+
+  if (detailMessages.length > 0) {
+    const summary = payload.message?.trim();
+    if (summary && summary.toLowerCase() !== "validation failed") {
+      return `${summary}\n${detailMessages.join("\n")}`;
+    }
+    return detailMessages.join("\n");
+  }
+
+  return payload.message?.trim() || fallback;
+}
 
 export function mapAxiosError(error: unknown): AppError {
   if (!(error instanceof AxiosError)) {
@@ -13,12 +53,7 @@ export function mapAxiosError(error: unknown): AppError {
 
   const status = error.response?.status;
   const payload = error.response?.data as BackendErrorPayload | undefined;
-  let firstError: string | undefined;
-  if (payload?.errors && payload.errors.length > 0) {
-    const firstItem = payload.errors[0];
-    firstError = typeof firstItem === "string" ? firstItem : firstItem?.message;
-  }
-  const message = payload?.message ?? firstError ?? error.message;
+  const message = extractBackendErrorMessage(payload, error.message);
 
   if (!status) {
     return new AppError("Network error. Please check your connection.", "NETWORK_ERROR");

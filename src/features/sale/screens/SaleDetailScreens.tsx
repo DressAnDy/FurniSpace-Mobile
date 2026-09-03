@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
   Alert,
@@ -31,18 +33,27 @@ import {
 } from "../../../icons/file/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
+import { useAuthStore } from "../../auth/store/auth.store";
 import { useProjectDetailQuery } from "../../project/hooks/useProjects";
 import type { ProjectDetailDto } from "../../project/models/project.model";
 import type { ProjectScheduleDto, ProjectScheduleType } from "../../project/models/project.tracking.model";
-import { getProjectStatusLabel } from "../../project/utils/project.mapper";
+import { getProjectStatusLabel, resolveProjectMemberDisplay } from "../../project/utils/project.mapper";
 import { getScheduleStartAt } from "../../project/services/project.tracking.api";
+import {
+  useCreateProjectStartFeeMutation,
+  useProjectStartFeeStatusQuery,
+} from "../../payment/hooks/usePayments";
+import { formatVndAmount, getPaymentStatusLabel } from "../../payment/utils/payment.mapper";
+import type { PaymentStatus } from "../../payment/models/payment.model";
 import { saleConversations, type ProjectDetailTab } from "../data/sale.mock";
 import {
   useAssignProjectDesignerMutation,
   useAvailableDesignersQuery,
 } from "../hooks/useSaleDashboard";
-import { useSaleProposalsQuery, useSaleQuotationsQuery, useSendQuotationMutation } from "../hooks/useSaleCommercial";
-import { useSaleOrdersQuery } from "../hooks/useSaleFulfillment";
+import type { SpaceDataStatus } from "../services/sale.api";
+import { useSaleProposalsQuery, useSaleQuotationsQuery } from "../hooks/useSaleCommercial";
+import { useSaleProjectOverviewRealtime } from "../hooks/useSaleProjectOverviewRealtime";
+import { useSaleOrdersQuery, useCompleteProjectMutation } from "../hooks/useSaleFulfillment";
 import {
   pickAndUploadProjectFile,
   useCreateProjectScheduleMutation,
@@ -53,7 +64,11 @@ import {
   useUploadProjectFileMutation,
 } from "../hooks/useSaleOps";
 import type { ProjectFileDto } from "../models/sale.ops.model";
-import { formatSaleDate, getInitials } from "../utils/sale.mapper";
+import { resolveOrderDisplayTotal } from "../../project/utils/order.mapper";
+import { buildProjectOverviewContent, formatSaleDate, getInitials } from "../utils/sale.mapper";
+import { formatSaleOrderStatusLabel } from "../utils/sale.order.mapper";
+import { canSalesCompleteProject, getSaleOrderStatusColors } from "../utils/sale.order.actions";
+import { getQuotationStatusPillColors } from "../utils/sale.quotation.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
@@ -101,6 +116,93 @@ function applyTimeKeepDate(base: Date, nextTime: Date): Date {
   return merged;
 }
 
+function formatApiDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseApiDateOnly(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(`${value.slice(0, 10)}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function defaultProposalDueDate(targetCompletionDate: string | null | undefined): Date {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const proposal = new Date(today);
+  proposal.setDate(proposal.getDate() + 7);
+  const target = parseApiDateOnly(targetCompletionDate);
+  if (target && proposal.getTime() > target.getTime()) {
+    const fallback = new Date(target);
+    fallback.setDate(fallback.getDate() - 14);
+    return fallback.getTime() >= today.getTime() ? fallback : today;
+  }
+  return proposal;
+}
+
+function validateProposalDeadline(
+  proposal: Date,
+  targetCompletionDate: string | null | undefined,
+): string | null {
+  const target = parseApiDateOnly(targetCompletionDate);
+  if (target && proposal.getTime() > target.getTime()) {
+    return "Proposal deadline must be on or before target completion date.";
+  }
+  return null;
+}
+
+const MIN_START_FEE_AMOUNT = 5_000;
+
+function parseAmountDigits(value: string): number | null {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return null;
+  }
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) && parsed >= MIN_START_FEE_AMOUNT ? parsed : null;
+}
+
+function formatAmountDigits(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) {
+    return "";
+  }
+  return Number(digits).toLocaleString("vi-VN");
+}
+
+function shouldShowStartFeeSection(
+  project: ProjectDetailDto,
+  feeStatus:
+    | {
+        requiresProjectStartFee: boolean;
+        projectStartFeeStatus: PaymentStatus | null;
+        isEligibleForDesignerAssignment?: boolean;
+      }
+    | undefined,
+): boolean {
+  if (project.assignedDesignerId || project.assignedDesigner?.accountId) {
+    return false;
+  }
+  if (project.status === "REJECTED" || project.status === "COMPLETED") {
+    return false;
+  }
+  if (feeStatus?.projectStartFeeStatus === "PAID" || feeStatus?.isEligibleForDesignerAssignment) {
+    return false;
+  }
+  if (project.status !== "IN_CONSULTATION" && project.status !== "NEED_BASIC_INFORMATION") {
+    return false;
+  }
+  if (feeStatus?.requiresProjectStartFee) {
+    return true;
+  }
+  return project.status === "IN_CONSULTATION" || project.status === "NEED_BASIC_INFORMATION";
+}
+
 export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
@@ -109,13 +211,17 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
   const [pickerOpen, setPickerOpen] = useState(false);
   const projectQuery = useProjectDetailQuery(projectId);
   const project = projectQuery.data ?? null;
+  const startFeeStatusQuery = useProjectStartFeeStatusQuery(projectId);
+  const startFeeStatus = startFeeStatusQuery.data;
+  useSaleProjectOverviewRealtime({
+    projectId,
+    enabled: activeTab === "Overview",
+  });
   const needsDesigner =
     Boolean(project) &&
     !project?.assignedDesignerId &&
-    (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" ||
-      project?.status === "IN_CONSULTATION" ||
-      project?.status === "NEED_BASIC_INFORMATION" ||
-      !project?.assignedDesigner);
+    !project?.assignedDesigner &&
+    (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" || Boolean(startFeeStatus?.isEligibleForDesignerAssignment));
   const showFixedActions = activeTab !== "Chat";
   const bottomPad = showFixedActions ? 88 + Math.max(insets.bottom, 12) : 24;
 
@@ -154,6 +260,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
                 projectId={projectId}
                 pickerOpen={pickerOpen}
                 onTogglePicker={() => setPickerOpen((open) => !open)}
+                onAssigned={() => setPickerOpen(false)}
               />
             )
           ) : null}
@@ -187,6 +294,139 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
   );
 }
 
+function ProjectStartFeeCard({
+  projectId,
+  project,
+}: {
+  projectId: string | null;
+  project: ProjectDetailDto;
+}): React.JSX.Element | null {
+  const statusQuery = useProjectStartFeeStatusQuery(projectId);
+  const createMutation = useCreateProjectStartFeeMutation(projectId);
+  const [amountInput, setAmountInput] = useState("");
+  const [note, setNote] = useState("Project start fee");
+  const parsedAmount = parseAmountDigits(amountInput);
+  const canCreateFee = Boolean(parsedAmount) && Boolean(projectId);
+
+  const feeStatus = statusQuery.data;
+  const isPaid = feeStatus?.projectStartFeeStatus === "PAID";
+  const paymentId = feeStatus?.paymentId ?? createMutation.data?.paymentId ?? null;
+  const hasPendingPayment = Boolean(paymentId) && !isPaid;
+
+  useEffect(() => {
+    if (createMutation.data?.amount) {
+      setAmountInput(formatAmountDigits(String(createMutation.data.amount)));
+    }
+  }, [createMutation.data?.amount]);
+
+  const handleCreate = () => {
+    const amount = parseAmountDigits(amountInput);
+    if (!amount) {
+      Alert.alert("Invalid amount", `Enter at least ${formatVndAmount(MIN_START_FEE_AMOUNT)}.`);
+      return;
+    }
+    createMutation.mutate(
+      {
+        amount,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      },
+      {
+        onSuccess: () => {
+          Alert.alert("Start fee created", "The customer can choose a payment method in their app.");
+        },
+        onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to create start fee.")),
+      },
+    );
+  };
+
+  if (statusQuery.isLoading) {
+    return (
+      <View style={[s.card, { alignItems: "center", paddingVertical: 20 }]}>
+        <ActivityIndicator color={SALE.gold} />
+        <Text style={[s.cardMeta, { marginTop: 8 }]}>Checking start fee…</Text>
+      </View>
+    );
+  }
+
+  if (isPaid || feeStatus?.isEligibleForDesignerAssignment) {
+    return null;
+  }
+
+  if (hasPendingPayment) {
+    const statusLabel = feeStatus?.projectStartFeeStatus
+      ? getPaymentStatusLabel(feeStatus.projectStartFeeStatus)
+      : "Pending";
+
+    return (
+      <View style={s.card}>
+        <Text style={s.sectionLabel}>Project start fee</Text>
+        <Text style={[s.cardTitle, { marginTop: 6 }]}>Awaiting customer payment</Text>
+        <Text style={[s.cardMeta, { marginTop: 6 }]}>
+          Status: {statusLabel}
+          {paymentId ? ` · Payment ready` : ""}
+        </Text>
+        <Text style={[s.bodyText, { marginTop: 10 }]}>
+          Waiting for the customer to choose a payment method and complete the transfer. Status updates automatically
+          after payment.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.card}>
+      <Text style={s.sectionLabel}>Project start fee</Text>
+      <Text style={[s.bodyText, { marginTop: 8 }]}>
+        Collect the start fee before assigning a designer. Minimum amount is {formatVndAmount(MIN_START_FEE_AMOUNT)}.
+      </Text>
+
+      <Text style={[s.infoLabel, { marginTop: 14 }]}>Amount (VND)</Text>
+      <TextInput
+        value={amountInput}
+        onChangeText={(value) => setAmountInput(formatAmountDigits(value))}
+        keyboardType="number-pad"
+        placeholder={`Minimum ${MIN_START_FEE_AMOUNT.toLocaleString("vi-VN")}`}
+        placeholderTextColor="rgba(122,111,104,.5)"
+        style={[s.sheetInput, { marginTop: 6, height: 44 }]}
+      />
+      {amountInput.length > 0 && !parsedAmount ? (
+        <Text style={[s.cardMeta, { marginTop: 6, color: SALE.red }]}>
+          Amount must be at least {formatVndAmount(MIN_START_FEE_AMOUNT)}.
+        </Text>
+      ) : null}
+
+      <Text style={[s.infoLabel, { marginTop: 12 }]}>Note (optional)</Text>
+      <TextInput
+        value={note}
+        onChangeText={setNote}
+        placeholder="Project start fee"
+        placeholderTextColor="rgba(122,111,104,.5)"
+        style={[s.sheetInput, { marginTop: 6, height: 44 }]}
+      />
+
+      <Pressable
+        style={[
+          s.buttonPrimary,
+          { marginTop: 16 },
+          (createMutation.isPending || !canCreateFee) && { opacity: 0.7 },
+        ]}
+        disabled={createMutation.isPending || !canCreateFee}
+        onPress={handleCreate}
+      >
+        <Text style={s.buttonPrimaryText}>
+          {createMutation.isPending ? "Creating…" : "Create start fee"}
+        </Text>
+      </Pressable>
+
+      {project.status !== "IN_CONSULTATION" ? (
+        <Text style={[s.cardMeta, { marginTop: 10 }]}>
+          Start fee is usually created while the project is In Consultation.
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function OverviewTab({
   project,
   projectId,
@@ -194,31 +434,30 @@ function OverviewTab({
   project: ProjectDetailDto | null;
   projectId: string | null;
 }): React.JSX.Element {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const phaseQuery = useSalePhaseDeadlinesQuery(projectId);
   const areasQuery = useSaleProjectAreasQuery(projectId);
   const proposalsQuery = useSaleProposalsQuery(projectId);
   const quotationsQuery = useSaleQuotationsQuery(projectId);
   const ordersQuery = useSaleOrdersQuery(projectId);
-  const sendQuotationMutation = useSendQuotationMutation(projectId);
+  const startFeeStatusQuery = useProjectStartFeeStatusQuery(projectId);
+  const completeProjectMutation = useCompleteProjectMutation();
 
   if (!project) {
     return <Text style={s.centerMuted}>Select a project to view details.</Text>;
   }
 
-  const brief =
-    project.description?.trim() ||
-    project.businessPurpose?.trim() ||
-    "No project brief provided yet.";
-  const furnitureItems = project.furnitureRequirement
-    ? project.furnitureRequirement.split(/[,\n]/).map((item) => item.trim()).filter(Boolean)
-    : [];
+  const overviewContent = buildProjectOverviewContent(project);
   const budget =
     project.budgetMin != null || project.budgetMax != null
       ? `₫ ${(project.budgetMin ?? 0).toLocaleString()} – ${(project.budgetMax ?? 0).toLocaleString()}`
       : "—";
 
-  const draftQuotation = (quotationsQuery.data ?? []).find(
-    (item) => item.status === "DRAFT" || item.status === "REVISED",
+  const actionableQuotation = (quotationsQuery.data ?? []).find(
+    (item) =>
+      item.status === "DRAFT" ||
+      item.status === "REVISED" ||
+      item.status === "REVISION_REQUESTED",
   );
   const primaryOrder = (ordersQuery.data ?? [])[0] ?? null;
 
@@ -231,66 +470,194 @@ function OverviewTab({
         </View>
       </View>
 
-      <View style={s.detailPanel}>
-        <View style={s.detailPanelAccent} />
-        <Text style={s.sectionLabel}>Ops snapshot</Text>
-        <View style={s.infoGrid}>
-          <Info label="Areas" value={String(areasQuery.data?.length ?? "—")} />
-          <Info label="Proposals" value={String(proposalsQuery.data?.length ?? "—")} />
-          <Info label="Quotations" value={String(quotationsQuery.data?.length ?? "—")} />
-          <Info label="Orders" value={String(ordersQuery.data?.length ?? "—")} />
+      {shouldShowStartFeeSection(project, startFeeStatusQuery.data) ? (
+        <ProjectStartFeeCard projectId={projectId} project={project} />
+      ) : null}
+
+      <View style={s.quotationOverviewCard}>
+        <View style={s.quotationOverviewAccent} />
+        <View style={s.quotationOverviewBody}>
+          <Text style={s.sectionLabel}>Ops snapshot</Text>
+          <View style={s.snapshotStats}>
+            {[
+              ["Areas", String(areasQuery.data?.length ?? 0)],
+              ["Proposals", String(proposalsQuery.data?.length ?? 0)],
+              ["Quotations", String(quotationsQuery.data?.length ?? 0)],
+              ["Orders", String(ordersQuery.data?.length ?? 0)],
+            ].map(([label, value]) => (
+              <View key={label} style={s.snapshotStat}>
+                <Text style={s.snapshotStatValue}>{value}</Text>
+                <Text style={s.snapshotStatLabel}>{label}</Text>
+              </View>
+            ))}
+          </View>
+          {(phaseQuery.data?.deadlines?.length ?? 0) > 0 ? (
+            <View style={s.phaseRow}>
+              {(phaseQuery.data?.deadlines ?? []).map((item) => (
+                <View key={item.phase} style={s.phaseChip}>
+                  <Text style={s.phaseChipLabel}>{item.phase}</Text>
+                  <Text style={s.phaseChipValue}>{formatSaleDate(item.dueDate)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={s.cardMeta}>Phase deadlines not set yet.</Text>
+          )}
         </View>
-        {(phaseQuery.data?.deadlines?.length ?? 0) > 0 ? (
-          <Text style={[s.cardMeta, { marginTop: 10 }]}>
-            Phase:{" "}
-            {(phaseQuery.data?.deadlines ?? [])
-              .map((item) => `${item.phase} ${formatSaleDate(item.dueDate)}`)
-              .join(" · ")}
-          </Text>
-        ) : (
-          <Text style={[s.cardMeta, { marginTop: 10 }]}>Phase deadlines not set yet.</Text>
-        )}
       </View>
 
-      {draftQuotation ? (
-        <View style={s.card}>
-          <Text style={s.sectionLabel}>Quotation ready</Text>
-          <Text style={s.cardTitle}>{draftQuotation.quotationCode ?? "Draft quotation"}</Text>
-          <Text style={s.cardMeta}>
-            {draftQuotation.status} · ₫ {(draftQuotation.totalAmount ?? 0).toLocaleString()}
-          </Text>
-          <Pressable
-            style={[s.buttonPrimary, { marginTop: 12 }]}
-            disabled={sendQuotationMutation.isPending}
-            onPress={() =>
-              sendQuotationMutation.mutate(draftQuotation.quotationId, {
-                onSuccess: () => Alert.alert("Sent", "Quotation sent to customer."),
-                onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to send quotation.")),
-              })
-            }
-          >
-            <Text style={s.buttonPrimaryText}>
-              {sendQuotationMutation.isPending ? "Sending…" : "Send quotation"}
-            </Text>
-          </Pressable>
+      {actionableQuotation && projectId ? (
+        <View style={s.quotationOverviewCard}>
+          <View style={s.quotationOverviewAccent} />
+          <View style={s.quotationOverviewBody}>
+            <View style={s.quotationOverviewTop}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sectionLabel}>
+                  {actionableQuotation.status === "REVISION_REQUESTED" ? "Revision requested" : "Quotation"}
+                </Text>
+                <Text style={s.quotationOverviewAmount}>
+                  {formatVndAmount(actionableQuotation.totalAmount, actionableQuotation.currency)}
+                </Text>
+                <Text style={s.quotationOverviewCode}>
+                  {actionableQuotation.quotationCode ?? "Draft"} · v{actionableQuotation.versionNo ?? 1}
+                </Text>
+              </View>
+              <View
+                style={[
+                  s.quotationStatusPill,
+                  {
+                    backgroundColor: getQuotationStatusPillColors(actionableQuotation.status).backgroundColor,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    s.quotationStatusText,
+                    { color: getQuotationStatusPillColors(actionableQuotation.status).color },
+                  ]}
+                >
+                  {actionableQuotation.status.replaceAll("_", " ")}
+                </Text>
+              </View>
+            </View>
+
+            {actionableQuotation.revisionReason ? (
+              <View style={s.quotationOverviewNote}>
+                <Text style={s.quotationOverviewNoteText}>{actionableQuotation.revisionReason}</Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              style={[s.fixedPrimary, { flex: undefined, width: "100%" }]}
+              onPress={() =>
+                navigation.navigate("SaleQuotationDetail", {
+                  quotationId: actionableQuotation.quotationId,
+                  projectId,
+                  projectName: project.projectName,
+                })
+              }
+            >
+              <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
+                {actionableQuotation.status === "REVISION_REQUESTED" ? "Review & revise" : "Edit & send"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
-      {primaryOrder ? (
-        <View style={s.card}>
-          <Text style={s.sectionLabel}>Latest order</Text>
-          <Text style={s.cardTitle}>{primaryOrder.orderCode ?? primaryOrder.orderId}</Text>
-          <Text style={s.cardMeta}>
-            {primaryOrder.status} · Deposit ₫ {(primaryOrder.depositAmount ?? 0).toLocaleString()} · Paid ₫{" "}
-            {(primaryOrder.paidAmount ?? 0).toLocaleString()}
-          </Text>
+      {primaryOrder && projectId ? (
+        <View style={s.quotationOverviewCard}>
+          <View style={s.quotationOverviewAccent} />
+          <View style={s.quotationOverviewBody}>
+            <Pressable
+              onPress={() =>
+                navigation.navigate("SaleOrderDetail", {
+                  orderId: primaryOrder.orderId,
+                  projectId,
+                  projectName: project.projectName,
+                })
+              }
+            >
+              <View style={s.quotationOverviewTop}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.sectionLabel}>Latest order</Text>
+                  <Text style={s.quotationOverviewAmount}>
+                    {formatVndAmount(resolveOrderDisplayTotal(primaryOrder))}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    s.quotationStatusPill,
+                    { backgroundColor: getSaleOrderStatusColors(primaryOrder.status).backgroundColor },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.quotationStatusText,
+                      { color: getSaleOrderStatusColors(primaryOrder.status).color },
+                    ]}
+                  >
+                    {formatSaleOrderStatusLabel(primaryOrder.status)}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={s.quotationOverviewCode} numberOfLines={1}>
+                {primaryOrder.orderCode ?? primaryOrder.orderId.slice(0, 8)}
+              </Text>
+
+              <View style={[s.quotationBreakdown, { marginTop: 12 }]}>
+                <View style={s.quotationBreakdownCell}>
+                  <Text style={s.quotationBreakdownValue}>{formatVndAmount(primaryOrder.paidAmount ?? 0)}</Text>
+                  <Text style={s.quotationBreakdownLabel}>Paid</Text>
+                </View>
+                <View style={s.quotationBreakdownCell}>
+                  <Text style={s.quotationBreakdownValue}>{formatVndAmount(primaryOrder.remainingAmount ?? 0)}</Text>
+                  <Text style={s.quotationBreakdownLabel}>Remaining</Text>
+                </View>
+                <View style={s.quotationBreakdownCell}>
+                  <Text style={[s.quotationBreakdownValue, { color: SALE.gold }]}>
+                    {formatVndAmount(primaryOrder.depositAmount ?? 0)}
+                  </Text>
+                  <Text style={s.quotationBreakdownLabel}>Deposit</Text>
+                </View>
+              </View>
+            </Pressable>
+
+            {canSalesCompleteProject(primaryOrder, project.status) ? (
+              <Pressable
+                style={[s.fixedPrimary, { flex: undefined, width: "100%" }, completeProjectMutation.isPending && { opacity: 0.6 }]}
+                disabled={completeProjectMutation.isPending}
+                onPress={() => {
+                  Alert.alert("Complete project", "Mark this project as completed?", [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Complete",
+                      onPress: () =>
+                        completeProjectMutation.mutate(projectId, {
+                          onSuccess: () => Alert.alert("Completed", "Project marked complete."),
+                          onError: (error) =>
+                            Alert.alert("Error", getErrorMessage(error, "Unable to complete project.")),
+                        }),
+                    },
+                  ]);
+                }}
+              >
+                <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
+                  {completeProjectMutation.isPending ? "Completing…" : "Complete project"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       ) : null}
 
-      <View style={s.card}>
-        <Text style={s.sectionLabel}>Project Brief</Text>
-        <Text style={[s.bodyText, { marginTop: 8 }]}>{brief}</Text>
-      </View>
+      {overviewContent.brief ? (
+        <View style={s.card}>
+          <Text style={s.sectionLabel}>Project Brief</Text>
+          <Text style={[s.bodyText, { marginTop: 8 }]}>{overviewContent.brief}</Text>
+        </View>
+      ) : null}
       <View style={s.card}>
         <Text style={s.sectionLabel}>Project Details</Text>
         <View style={s.infoGrid}>
@@ -304,11 +671,11 @@ function OverviewTab({
           </View>
         </View>
       </View>
-      {project.businessPurpose ? (
-        <RequirementCard title="Business Purpose" items={[project.businessPurpose]} bullets />
+      {overviewContent.businessPurpose ? (
+        <RequirementCard title="Business Purpose" items={[overviewContent.businessPurpose]} bullets />
       ) : null}
-      {furnitureItems.length > 0 ? (
-        <RequirementCard title="Furniture Requirements" items={furnitureItems} />
+      {overviewContent.furnitureItems.length > 0 ? (
+        <RequirementCard title="Furniture Requirements" items={overviewContent.furnitureItems} />
       ) : null}
     </>
   );
@@ -341,30 +708,107 @@ function MemberTab({
   projectId,
   pickerOpen,
   onTogglePicker,
+  onAssigned,
 }: {
   project: ProjectDetailDto | null;
   projectId: string | null;
   pickerOpen: boolean;
   onTogglePicker: () => void;
+  onAssigned?: () => void;
 }): React.JSX.Element {
-  const designersQuery = useAvailableDesignersQuery(pickerOpen || !project?.assignedDesignerId);
+  const designerId = project?.assignedDesignerId ?? project?.assignedDesigner?.accountId ?? null;
+  const authUser = useAuthStore((state) => state.user);
+  const needsDesignerName = Boolean(designerId && !project?.assignedDesigner?.fullName?.trim());
+  const designersQuery = useAvailableDesignersQuery(pickerOpen || !designerId || needsDesignerName);
+  const phaseQuery = useSalePhaseDeadlinesQuery(projectId);
   const assignMutation = useAssignProjectDesignerMutation(projectId);
   const [selectedDesignerId, setSelectedDesignerId] = useState<string | null>(null);
+  const [spaceDataStatus, setSpaceDataStatus] = useState<SpaceDataStatus>("INSUFFICIENT");
+  const [proposalDeadline, setProposalDeadline] = useState<Date>(() => defaultProposalDueDate(null));
+  const [showProposalPicker, setShowProposalPicker] = useState(false);
 
-  const sales = project?.assignedSales;
-  const designer = project?.assignedDesigner;
+  const spaceDataOptions: Array<{ value: SpaceDataStatus; label: string; description: string }> = [
+    {
+      value: "INSUFFICIENT",
+      label: "Insufficient - needs measurement",
+      description: "Designer will schedule an on-site measurement.",
+    },
+    {
+      value: "SUFFICIENT",
+      label: "Sufficient - ready for design review",
+      description: "Space data is ready — skip measurement.",
+    },
+  ];
+
+  const salesMember = resolveProjectMemberDisplay(
+    project?.assignedSales,
+    project?.assignedSalesId,
+    authUser,
+    "Assigned sales",
+  );
+  const designerFromList = designerId
+    ? (designersQuery.data ?? []).find((item) => item.accountId === designerId)
+    : null;
+  const designerMember = resolveProjectMemberDisplay(
+    designerFromList
+      ? { accountId: designerFromList.accountId, fullName: designerFromList.fullName }
+      : project?.assignedDesigner,
+    designerId,
+    authUser,
+    "Assigned designer",
+  );
   const customerLabel = project?.customerId ? `ID · ${project.customerId.slice(0, 8)}` : "Not linked";
+  const targetCompletionDate =
+    project?.targetCompletionDate ?? phaseQuery.data?.targetCompletionDate ?? null;
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      setShowProposalPicker(false);
+      return;
+    }
+
+    const deadlines = phaseQuery.data?.deadlines ?? [];
+    const proposalExisting = deadlines.find((item) => item.phase === "PROPOSAL")?.dueDate;
+    setProposalDeadline(
+      parseApiDateOnly(proposalExisting) ?? defaultProposalDueDate(targetCompletionDate),
+    );
+  }, [pickerOpen, phaseQuery.data, targetCompletionDate]);
+
+  const handleProposalPickerChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowProposalPicker(false);
+    }
+    if (event.type === "dismissed" || !date) {
+      return;
+    }
+    setProposalDeadline(date);
+  };
 
   const handleAssign = () => {
     if (!selectedDesignerId) {
       Alert.alert("Select a designer", "Choose an available designer first.");
       return;
     }
+
+    const validationError = validateProposalDeadline(proposalDeadline, targetCompletionDate);
+    if (validationError) {
+      Alert.alert("Invalid deadline", validationError);
+      return;
+    }
+
     assignMutation.mutate(
-      { designerId: selectedDesignerId, note: "Assigned from Sales mobile" },
+      {
+        designerId: selectedDesignerId,
+        spaceDataStatus,
+        proposalDeadline: formatApiDateOnly(proposalDeadline),
+        note: "Assigned from Sales mobile",
+      },
       {
         onSuccess: () => {
           setSelectedDesignerId(null);
+          setSpaceDataStatus("INSUFFICIENT");
+          setShowProposalPicker(false);
+          onAssigned?.();
           Alert.alert("Assigned", "Designer has been assigned to this project.");
         },
         onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to assign designer.")),
@@ -397,14 +841,19 @@ function MemberTab({
       <View style={s.card}>
         <Text style={s.sectionLabel}>Sales</Text>
         <View style={s.memberRow}>
-          <Avatar initials={getInitials(sales?.fullName)} color={SALE.gold} />
+          <Avatar initials={getInitials(salesMember.fullName)} color={SALE.gold} />
           <View style={s.memberCopy}>
-            <Text style={s.memberName}>{sales?.fullName ?? "Unassigned"}</Text>
+            <Text style={s.memberName}>{salesMember.fullName ?? "Unassigned"}</Text>
             <Text style={s.memberRole}>Sales manager</Text>
           </View>
-          <View style={[s.memberBadge, sales ? s.memberBadgeReady : s.memberBadgeWait]}>
-            <Text style={[s.memberBadgeText, sales ? s.memberBadgeReadyText : s.memberBadgeWaitText]}>
-              {sales ? "Assigned" : "Open"}
+          <View style={[s.memberBadge, salesMember.isAssigned ? s.memberBadgeReady : s.memberBadgeWait]}>
+            <Text
+              style={[
+                s.memberBadgeText,
+                salesMember.isAssigned ? s.memberBadgeReadyText : s.memberBadgeWaitText,
+              ]}
+            >
+              {salesMember.isAssigned ? "Assigned" : "Open"}
             </Text>
           </View>
         </View>
@@ -413,29 +862,35 @@ function MemberTab({
       <View style={s.card}>
         <View style={s.sectionRow}>
           <Text style={s.sectionLabel}>Designer</Text>
-          {!designer ? (
+          {!designerMember.isAssigned ? (
             <Pressable onPress={onTogglePicker}>
               <Text style={s.sectionAction}>{pickerOpen ? "Hide list" : "Pick designer"}</Text>
             </Pressable>
           ) : null}
         </View>
         <View style={s.memberRow}>
-          <Avatar initials={getInitials(designer?.fullName)} color="#4A7A5A" />
+          <Avatar initials={getInitials(designerMember.fullName)} color="#4A7A5A" />
           <View style={s.memberCopy}>
-            <Text style={s.memberName}>{designer?.fullName ?? "No designer yet"}</Text>
+            <Text style={s.memberName}>{designerMember.fullName ?? "No designer yet"}</Text>
             <Text style={s.memberRole}>
-              {designer ? "Lead designer" : "Waiting for designer assignment"}
+              {designerMember.isAssigned ? "Lead designer" : "Waiting for designer assignment"}
             </Text>
           </View>
-          <View style={[s.memberBadge, designer ? s.memberBadgeReady : s.memberBadgeWait]}>
-            <Text style={[s.memberBadgeText, designer ? s.memberBadgeReadyText : s.memberBadgeWaitText]}>
-              {designer ? "Assigned" : "Needed"}
+          <View style={[s.memberBadge, designerMember.isAssigned ? s.memberBadgeReady : s.memberBadgeWait]}>
+            <Text
+              style={[
+                s.memberBadgeText,
+                designerMember.isAssigned ? s.memberBadgeReadyText : s.memberBadgeWaitText,
+              ]}
+            >
+              {designerMember.isAssigned ? "Assigned" : "Needed"}
             </Text>
           </View>
         </View>
 
-        {!designer && pickerOpen ? (
+        {!designerMember.isAssigned && pickerOpen ? (
           <>
+            <Text style={[s.infoLabel, { marginTop: 14 }]}>Available designers</Text>
             {designersQuery.isLoading ? (
               <ActivityIndicator color={SALE.gold} style={{ marginTop: 12 }} />
             ) : designersQuery.isError ? (
@@ -463,8 +918,73 @@ function MemberTab({
                 );
               })
             )}
+
+            <Text style={[s.infoLabel, { marginTop: 16 }]}>Proposal deadline</Text>
+            <Text style={[s.memberRole, { marginTop: 4 }]}>
+              Required · must be on or before target completion
+              {targetCompletionDate ? ` (${formatSaleDate(targetCompletionDate)})` : ""}.
+            </Text>
             <Pressable
-              style={[s.buttonPrimary, { marginTop: 14, height: 40 }]}
+              style={[s.dateField, { marginTop: 10, height: 44, alignSelf: "stretch" }]}
+              onPress={() => setShowProposalPicker(true)}
+            >
+              <Text style={s.dateText}>{formatSaleDate(formatApiDateOnly(proposalDeadline))}</Text>
+            </Pressable>
+            {showProposalPicker ? (
+              <>
+                <DateTimePicker
+                  value={proposalDeadline}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={handleProposalPickerChange}
+                />
+                {Platform.OS === "ios" ? (
+                  <Pressable
+                    style={[s.buttonPrimary, { marginTop: 8, height: 40 }]}
+                    onPress={() => setShowProposalPicker(false)}
+                  >
+                    <Text style={s.buttonPrimaryText}>Done</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+
+            <Text style={[s.infoLabel, { marginTop: 16 }]}>Space data status</Text>
+            <View style={{ marginTop: 8, gap: 8 }}>
+              {spaceDataOptions.map((option) => {
+                const selected = spaceDataStatus === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={[
+                      s.designerPickRow,
+                      { marginTop: 0, paddingVertical: 12, alignItems: "flex-start" },
+                      selected && s.designerPickSelected,
+                    ]}
+                    onPress={() => setSpaceDataStatus(option.value)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.memberName, selected && { color: SALE.charcoal }]}>{option.label}</Text>
+                      <Text style={[s.memberRole, { marginTop: 4, lineHeight: 16 }]}>{option.description}</Text>
+                    </View>
+                    {selected ? <Text style={s.availability}>Selected</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {!selectedDesignerId ? (
+              <Text style={[s.cardMeta, { marginTop: 12, color: SALE.red }]}>
+                Select a designer above to continue.
+              </Text>
+            ) : null}
+
+            <Pressable
+              style={[
+                s.buttonPrimary,
+                { marginTop: 14, height: 44 },
+                (assignMutation.isPending || !selectedDesignerId) && { opacity: 0.45 },
+              ]}
               disabled={assignMutation.isPending || !selectedDesignerId}
               onPress={handleAssign}
             >
@@ -617,7 +1137,7 @@ function SchedulesTab({
       ) : schedules.length === 0 ? (
         <Pressable style={[s.card, s.dashed]} onPress={onCreate}>
           <Text style={s.bodyText}>No schedules yet</Text>
-          <Text style={[s.sectionAction, { marginTop: 7 }]}>＋ Add Measurement / Delivery</Text>
+          <Text style={[s.sectionAction, { marginTop: 7 }]}>＋ Add schedule</Text>
         </Pressable>
       ) : (
         schedules.map((schedule) => (
@@ -694,7 +1214,7 @@ function CreateScheduleModal({
   project: ProjectDetailDto | null;
 }): React.JSX.Element {
   const createMutation = useCreateProjectScheduleMutation(projectId);
-  const [type, setType] = useState<"MEASUREMENT" | "DELIVERY" | "CONSULTATION">("MEASUREMENT");
+  const [type, setType] = useState<"MEASUREMENT" | "CONSULTATION">("MEASUREMENT");
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState(project?.projectAddress ?? "");
   const [customerNote, setCustomerNote] = useState("");
@@ -715,7 +1235,6 @@ function CreateScheduleModal({
 
   const typeOptions: Array<{ label: string; value: typeof type }> = [
     { label: "Measurement", value: "MEASUREMENT" },
-    { label: "Delivery", value: "DELIVERY" },
     { label: "Consultation", value: "CONSULTATION" },
   ];
 

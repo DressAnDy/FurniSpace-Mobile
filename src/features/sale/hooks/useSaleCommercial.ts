@@ -1,10 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
+import type { ProjectDetailDto } from "../../project/models/project.model";
 import {
   BulkQuotationFinancialsRequestDto,
   CreateProposalSceneRequestDto,
   PublishProposalRequestDto,
+  QuotationDetailDto,
+  QuotationSummaryDto,
   UpdateProposalItemRequestDto,
   UpdateQuotationHeaderRequestDto,
   UpdateQuotationItemFinancialsRequestDto,
@@ -29,6 +32,60 @@ import {
   updateQuotationHeaderApi,
   updateQuotationItemFinancialsApi,
 } from "../services/sale.commercial.api";
+
+export async function refetchSaleProjectOverviewQueries(
+  queryClient: QueryClient,
+  projectId: string,
+): Promise<void> {
+  await Promise.all([
+    queryClient.refetchQueries({ queryKey: queryKeys.project.detail(projectId) }),
+    queryClient.refetchQueries({ queryKey: queryKeys.sale.quotations(projectId) }),
+    queryClient.refetchQueries({ queryKey: queryKeys.sale.orders(projectId) }),
+    queryClient.refetchQueries({ queryKey: queryKeys.sale.proposals(projectId) }),
+  ]);
+}
+
+function syncSaleQuotationInOverviewCache(
+  queryClient: QueryClient,
+  projectId: string,
+  quotation: QuotationDetailDto,
+): void {
+  queryClient.setQueryData(["sale", "quotation", quotation.quotationId], quotation);
+
+  queryClient.setQueryData<QuotationSummaryDto[]>(queryKeys.sale.quotations(projectId), (current) => {
+    const { items: _items, ...summary } = quotation;
+    const list = current ?? [];
+    const index = list.findIndex((item) => item.quotationId === quotation.quotationId);
+    if (index < 0) {
+      return [...list, summary];
+    }
+
+    const next = [...list];
+    next[index] = { ...next[index], ...summary };
+    return next;
+  });
+
+  if (quotation.status === "SENT") {
+    queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(projectId), (current) =>
+      current ? { ...current, status: "QUOTATION_SENT" } : current,
+    );
+  }
+}
+
+function refreshSaleProjectOverviewAfterQuotationChange(
+  queryClient: QueryClient,
+  projectId: string,
+  quotation?: QuotationDetailDto,
+): void {
+  if (quotation) {
+    syncSaleQuotationInOverviewCache(queryClient, projectId, quotation);
+  }
+
+  void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.sale.quotations(projectId) });
+  void queryClient.invalidateQueries({ queryKey: ["sale"] });
+}
 
 export function useSaleProposalsQuery(projectId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -203,10 +260,12 @@ export function useSendQuotationMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (quotationId: string) => sendQuotationApi(quotationId),
-    onSuccess: () => {
+    onSuccess: (data, quotationId) => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.quotations(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        refreshSaleProjectOverviewAfterQuotationChange(queryClient, projectId, data);
+        void refetchSaleProjectOverviewQueries(queryClient, projectId);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ["sale", "quotation", quotationId] });
       }
     },
   });
@@ -216,9 +275,12 @@ export function useReviseQuotationMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (quotationId: string) => reviseQuotationApi(quotationId),
-    onSuccess: () => {
+    onSuccess: (data, quotationId) => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.quotations(projectId) });
+        refreshSaleProjectOverviewAfterQuotationChange(queryClient, projectId, data);
+        void refetchSaleProjectOverviewQueries(queryClient, projectId);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ["sale", "quotation", quotationId] });
       }
     },
   });
@@ -228,9 +290,12 @@ export function useCancelQuotationMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (quotationId: string) => cancelQuotationApi(quotationId),
-    onSuccess: () => {
+    onSuccess: (data, quotationId) => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.quotations(projectId) });
+        refreshSaleProjectOverviewAfterQuotationChange(queryClient, projectId, data);
+        void refetchSaleProjectOverviewQueries(queryClient, projectId);
+      } else {
+        void queryClient.invalidateQueries({ queryKey: ["sale", "quotation", quotationId] });
       }
     },
   });

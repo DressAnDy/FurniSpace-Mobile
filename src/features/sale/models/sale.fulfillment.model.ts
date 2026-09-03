@@ -15,11 +15,34 @@ export type SaleOrderStatus =
 export type SaleOrderItemDto = {
   orderItemId: string;
   productNameSnapshot?: string;
+  itemName?: string;
   quantity: number;
   unitPrice: number;
   discountAmount?: number;
   subtotalAmount?: number;
+  deliveredQuantity?: number;
+  remainingDeliveryQuantity?: number;
   status?: string;
+  isCustomized?: boolean;
+};
+
+export type SaleOrderDeliveryDetailsDto = {
+  orderId: string;
+  deliveryAddress?: string | null;
+  receiverName?: string | null;
+  receiverPhone?: string | null;
+  deliveryNote?: string | null;
+};
+
+export type SaleOrderDeliverySummaryDto = {
+  totalOrderedQuantity?: number;
+  totalDeliveredQuantity?: number;
+  remainingQuantity?: number;
+  deliveryProgressPercent?: number;
+  completedDeliveryCount?: number;
+  inProgressDeliveryCount?: number;
+  upcomingDeliveryCount?: number;
+  nextDeliveryAt?: string | null;
 };
 
 export type SaleOrderDetailDto = {
@@ -32,6 +55,9 @@ export type SaleOrderDetailDto = {
   salesId?: string;
   vatRate?: number;
   vatAmount?: number;
+  itemsGrossAmount?: number;
+  totalItemDiscountAmount?: number;
+  preVatAmount?: number;
   originalTotalAmount?: number;
   itemAdjustmentAmount?: number;
   additionalDiscountAmount?: number;
@@ -42,6 +68,11 @@ export type SaleOrderDetailDto = {
   remainingAmount?: number;
   status: SaleOrderStatus;
   items?: SaleOrderItemDto[];
+  customerConfirmedDeliveryAt?: string | null;
+  awaitingCustomerConfirmation?: boolean;
+  deliveryDetails?: SaleOrderDeliveryDetailsDto | null;
+  deliverySummary?: SaleOrderDeliverySummaryDto | null;
+  deliveries?: DeliveryDto[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -140,4 +171,52 @@ export type DeliveryTrackingDto = {
 export type CreateOrderPaymentRequestDto = {
   expiredAt?: string;
   note?: string;
+};
+
+export type OrderPaymentTransactionDto = {
+  paymentTransactionId: string;
+  transactionType?: string;
+  amount?: number;
+  status?: string;
+  paymentProvider?: string;
+  paymentMethod?: string;
+  providerTransactionId?: string | null;
+  providerReferenceCode?: string | null;
+  transactionTime?: string | null;
+  failureReason?: string | null;
+};
+
+export type OrderPaymentDto = {
+  paymentId: string;
+  paymentCode?: string;
+  paymentType?: string;
+  amount?: number;
+  currency?: string;
+  status?: string;
+  createdAt?: string;
+  paidAt?: string | null;
+  expiredAt?: string | null;
+  cancelledAt?: string | null;
+  transactions?: OrderPaymentTransactionDto[];
+};
+
+export type OrderPaymentsResponseDto = {
+  orderId: string;
+  totalAmount?: number;
+  depositAmount?: number;
+  paidAmount?: number;
+  remainingAmount?: number;
+  payments: OrderPaymentDto[];
+};
+
+export type CompleteOrderResponseDto = {
+  orderId: string;
+  orderStatus: string;
+  projectId: string;
+  projectStatus: string;
+  completedAt?: string;
+};
+
+export type UpsertProductionPhaseDeadlineRequestDto = {
+  productionDeadline: string;
 };

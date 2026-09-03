@@ -164,3 +164,82 @@ export const ACTION_GROUP_ORDER = [
   "Order and Payment",
   "Delivery",
 ] as const;
+
+export function normalizeComparableText(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function isSameProjectText(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalizeComparableText(a);
+  const right = normalizeComparableText(b);
+  return left.length > 0 && left === right;
+}
+
+function splitProjectRequirementItems(value: string | null | undefined): string[] {
+  if (!value?.trim()) {
+    return [];
+  }
+
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function buildProjectOverviewContent(project: {
+  description: string | null;
+  businessPurpose: string | null;
+  furnitureRequirement: string | null;
+}): {
+  brief: string | null;
+  businessPurpose: string | null;
+  furnitureItems: string[];
+} {
+  const description = project.description?.trim() ?? "";
+  const businessPurpose = project.businessPurpose?.trim() ?? "";
+  const seenFurniture = new Set<string>();
+
+  const furnitureItems = splitProjectRequirementItems(project.furnitureRequirement).filter((item) => {
+    const key = normalizeComparableText(item);
+    if (!key || seenFurniture.has(key)) {
+      return false;
+    }
+    if (isSameProjectText(item, description) || isSameProjectText(item, businessPurpose)) {
+      return false;
+    }
+    seenFurniture.add(key);
+    return true;
+  });
+
+  const showBusinessPurpose = Boolean(businessPurpose) && !isSameProjectText(businessPurpose, description);
+
+  if (description) {
+    return {
+      brief: description,
+      businessPurpose: showBusinessPurpose ? businessPurpose : null,
+      furnitureItems,
+    };
+  }
+
+  if (showBusinessPurpose) {
+    return {
+      brief: null,
+      businessPurpose,
+      furnitureItems,
+    };
+  }
+
+  if (furnitureItems.length > 0) {
+    return {
+      brief: null,
+      businessPurpose: null,
+      furnitureItems,
+    };
+  }
+
+  return {
+    brief: "No project brief provided yet.",
+    businessPurpose: null,
+    furnitureItems: [],
+  };
+}

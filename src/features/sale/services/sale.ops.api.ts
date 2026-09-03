@@ -5,6 +5,7 @@ import {
   PhaseDeadlinesResponseDto,
   ProjectScheduleDto,
   ProjectScheduleListResponseDto,
+  UpdateProjectScheduleStatusRequestDto,
 } from "../../project/models/project.tracking.model";
 import {
   CreateProjectScheduleRequestDto,
@@ -14,6 +15,8 @@ import {
   ProjectFileDto,
   ProjectFileListQuery,
   ProjectFileListResponseDto,
+  ProjectMeasurementImagesQuery,
+  ProjectMeasurementImagesResponseDto,
   UpdateProjectScheduleRequestDto,
   UploadProjectFileInput,
   UpsertPhaseDeadlinesRequestDto,
@@ -238,4 +241,39 @@ export async function linkAreaMeasurementImageApi(areaId: string, fileId: string
 
 export async function unlinkAreaMeasurementImageApi(areaId: string, fileId: string): Promise<void> {
   await httpClient.delete<ApiResponse<null>>(endpoints.projectAreas.unlinkMeasurementImage(areaId, fileId));
+}
+
+export async function getProjectMeasurementImagesApi(
+  projectId: string,
+  query: ProjectMeasurementImagesQuery = {},
+): Promise<ProjectMeasurementImagesResponseDto> {
+  const response = await httpClient.get<ApiResponse<ProjectMeasurementImagesResponseDto>>(
+    endpoints.projects.measurementImages(projectId),
+    {
+      params: {
+        ...(query.scheduleId ? { scheduleId: query.scheduleId } : {}),
+        ...(query.projectAreaId ? { projectAreaId: query.projectAreaId } : {}),
+        ...(query.assigned != null ? { assigned: query.assigned } : {}),
+        page: query.page ?? 1,
+        limit: query.limit ?? 20,
+      },
+    },
+  );
+  return response.data.data;
+}
+
+export async function updateProjectScheduleStatusApi(
+  scheduleId: string,
+  payload: UpdateProjectScheduleStatusRequestDto,
+): Promise<ProjectScheduleDto> {
+  const response = await httpClient.patch<ApiResponse<ProjectScheduleDto>>(
+    endpoints.projectSchedules.updateStatus(scheduleId),
+    payload,
+  );
+  return normalizeSchedule(response.data.data);
+}
+
+export async function getProjectScheduleByIdApi(scheduleId: string): Promise<ProjectScheduleDto> {
+  const response = await httpClient.get<ApiResponse<ProjectScheduleDto>>(endpoints.projectSchedules.detail(scheduleId));
+  return normalizeSchedule(response.data.data);
 }
