@@ -64,15 +64,17 @@ function formatDashboardSubtitle(): string {
 export function SaleDashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const currentUser = useAuthStore((state) => state.user);
-  const [selectedGroup, setSelectedGroup] = useState<SaleActionGroup>("Intake");
+  const [selectedGroup, setSelectedGroup] = useState<SaleActionGroup | "All">("All");
+  const [queuePage, setQueuePage] = useState(1);
+  const queuePageSize = 5;
 
   const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
   const queueQuery = useSalesActionQueueQuery({
     scope: "mine",
     dateRange: "thisWeek",
-    group: selectedGroup,
-    page: 1,
-    limit: 20,
+    ...(selectedGroup !== "All" ? { group: selectedGroup } : {}),
+    page: queuePage,
+    limit: queuePageSize,
   });
 
   const metrics = useMemo(
@@ -81,19 +83,42 @@ export function SaleDashboardScreen(): React.JSX.Element {
   );
   const queueItems = queueQuery.data?.items ?? [];
   const countsByGroup = queueQuery.data?.countsByGroup ?? {};
+  const totalActions = queueQuery.data?.total ?? 0;
+  const allCount = useMemo(() => {
+    const fromGroups = ACTION_GROUP_ORDER.reduce((sum, group) => sum + (countsByGroup[group] ?? 0), 0);
+    return fromGroups > 0 ? fromGroups : totalActions;
+  }, [countsByGroup, totalActions]);
+
   const groupChips = useMemo(() => {
-    return ACTION_GROUP_ORDER.map((group) => {
-      const count = countsByGroup[group] ?? 0;
-      return `${group.split(" ")[0]}  ${count}`;
-    });
-  }, [countsByGroup]);
+    return [
+      `All  ${allCount}`,
+      ...ACTION_GROUP_ORDER.map((group) => {
+        const count = countsByGroup[group] ?? 0;
+        return `${group.split(" ")[0]}  ${count}`;
+      }),
+    ];
+  }, [allCount, countsByGroup]);
 
   const selectedChip =
-    groupChips.find((chip) => chip.startsWith(selectedGroup.split(" ")[0])) ?? groupChips[0] ?? "Intake  0";
+    selectedGroup === "All"
+      ? groupChips[0]
+      : groupChips.find((chip) => chip.startsWith(selectedGroup.split(" ")[0])) ?? groupChips[0];
 
-  const topQueueItems = queueItems.slice(0, 3);
+  const totalPages = Math.max(1, Math.ceil(totalActions / queuePageSize));
+  const canPrev = queuePage > 1;
+  const canNext = queuePage < totalPages;
   const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
-  const totalActions = queueQuery.data?.total ?? 0;
+
+  const handleGroupSelect = (value: string) => {
+    const label = value.split("  ")[0];
+    if (label === "All") {
+      setSelectedGroup("All");
+    } else {
+      const matched = ACTION_GROUP_ORDER.find((group) => group.startsWith(label)) ?? "Intake";
+      setSelectedGroup(matched);
+    }
+    setQueuePage(1);
+  };
 
   return (
     <SaleFrame>
@@ -170,41 +195,64 @@ export function SaleDashboardScreen(): React.JSX.Element {
             <SectionTitle
               title="Action queue"
               action={totalActions > 0 ? `${totalActions} open` : undefined}
-              onAction={() => navigation.navigate("SaleProjects")}
             />
             <View style={s.queueChipsWrap}>
               <FilterChips
-                options={groupChips.length > 0 ? groupChips : ["Intake  0"]}
+                options={groupChips.length > 0 ? groupChips : ["All  0"]}
                 selected={selectedChip}
-                onSelect={(value) => {
-                  const label = value.split("  ")[0];
-                  const matched = ACTION_GROUP_ORDER.find((group) => group.startsWith(label)) ?? "Intake";
-                  setSelectedGroup(matched);
-                }}
+                onSelect={handleGroupSelect}
               />
             </View>
 
             {queueQuery.isLoading ? (
               <ActivityIndicator color={SALE.gold} />
-            ) : topQueueItems.length === 0 ? (
+            ) : queueItems.length === 0 ? (
               <View style={s.emptyState}>
-                <Text style={s.emptyStateText}>Nothing waiting in {selectedGroup.split(" ")[0].toLowerCase()} right now.</Text>
+                <Text style={s.emptyStateText}>
+                  {selectedGroup === "All"
+                    ? "Nothing waiting in your queue right now."
+                    : `Nothing waiting in ${selectedGroup.split(" ")[0].toLowerCase()} right now.`}
+                </Text>
               </View>
             ) : (
-              <View style={s.queueList}>
-                {topQueueItems.map((item) => (
-                  <ActionQueueCard
-                    key={item.id}
-                    item={item}
-                    onOpen={() =>
-                      navigation.navigate("SaleProjectDetail", {
-                        projectId: item.projectId,
-                        tab: "Overview",
-                      })
-                    }
-                  />
-                ))}
-              </View>
+              <>
+                <View style={s.queueList}>
+                  {queueItems.map((item) => (
+                    <ActionQueueCard
+                      key={item.id}
+                      item={item}
+                      onOpen={() =>
+                        navigation.navigate("SaleProjectDetail", {
+                          projectId: item.projectId,
+                          tab: "Overview",
+                        })
+                      }
+                    />
+                  ))}
+                </View>
+                {totalActions > 0 ? (
+                  <View style={s.paginationRow}>
+                    <Pressable
+                      style={[s.paginationButton, !canPrev && s.paginationButtonDisabled]}
+                      disabled={!canPrev || queueQuery.isFetching}
+                      onPress={() => setQueuePage((current) => Math.max(1, current - 1))}
+                    >
+                      <Text style={[s.paginationButtonText, !canPrev && s.paginationButtonTextDisabled]}>Previous</Text>
+                    </Pressable>
+                    <Text style={s.paginationMeta}>
+                      {(queuePage - 1) * queuePageSize + 1}–{Math.min(queuePage * queuePageSize, totalActions)} of{" "}
+                      {totalActions}
+                    </Text>
+                    <Pressable
+                      style={[s.paginationButton, !canNext && s.paginationButtonDisabled]}
+                      disabled={!canNext || queueQuery.isFetching}
+                      onPress={() => setQueuePage((current) => Math.min(totalPages, current + 1))}
+                    >
+                      <Text style={[s.paginationButtonText, !canNext && s.paginationButtonTextDisabled]}>Next</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </>
             )}
           </View>
         </View>
@@ -252,9 +300,30 @@ function ActionQueueCard({
 
 export function SaleRequestsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "New" | "In Review" | "Waiting Info">("New");
-  const inboxQuery = useSaleInboxProjectsQuery({ filter, search: query.trim() || undefined });
+  const [filter, setFilter] = useState<"All" | "New" | "In Review" | "Waiting Info">("All");
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+  const inboxQuery = useSaleInboxProjectsQuery({
+    filter,
+    search: query.trim() || undefined,
+    page,
+    limit: pageSize,
+  });
   const items = inboxQuery.data?.items ?? [];
+  const total = inboxQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+
+  const handleSearchChange = (value: string) => {
+    setQuery(value);
+    setPage(1);
+  };
+
+  const handleFilterChange = (value: string) => {
+    setFilter(value as typeof filter);
+    setPage(1);
+  };
 
   return (
     <SaleFrame>
@@ -266,7 +335,7 @@ export function SaleRequestsScreen(): React.JSX.Element {
       >
         <SaleHeader title="Project Requests">
           <View style={s.searchRow}>
-            <SearchBar value={query} onChange={setQuery} placeholder="Search by name or code…" />
+            <SearchBar value={query} onChange={handleSearchChange} placeholder="Search by name or code…" />
             <View style={s.filterButton}>
               <AppIcon definition={filterIconDefinition} size={15} color={SALE.white} />
             </View>
@@ -275,10 +344,12 @@ export function SaleRequestsScreen(): React.JSX.Element {
         <FilterChips
           options={["All", "New", "In Review", "Waiting Info"]}
           selected={filter}
-          onSelect={(value) => setFilter(value as typeof filter)}
+          onSelect={handleFilterChange}
         />
         <View style={[s.content, s.contentGap]}>
-          <Text style={s.sectionLabel}>{items.length} requests</Text>
+          <Text style={s.sectionLabel}>
+            {total} requests · Page {Math.min(page, totalPages)}/{totalPages}
+          </Text>
           {inboxQuery.isLoading ? (
             <ActivityIndicator color={SALE.gold} />
           ) : inboxQuery.isError ? (
@@ -288,6 +359,28 @@ export function SaleRequestsScreen(): React.JSX.Element {
           ) : (
             items.map((item) => <RequestCard key={item.projectId} item={item} />)
           )}
+
+          {total > 0 ? (
+            <View style={s.paginationRow}>
+              <Pressable
+                style={[s.paginationButton, !canPrev && s.paginationButtonDisabled]}
+                disabled={!canPrev || inboxQuery.isFetching}
+                onPress={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                <Text style={[s.paginationButtonText, !canPrev && s.paginationButtonTextDisabled]}>Previous</Text>
+              </Pressable>
+              <Text style={s.paginationMeta}>
+                {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+              </Text>
+              <Pressable
+                style={[s.paginationButton, !canNext && s.paginationButtonDisabled]}
+                disabled={!canNext || inboxQuery.isFetching}
+                onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                <Text style={[s.paginationButtonText, !canNext && s.paginationButtonTextDisabled]}>Next</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
       <SaleBottomNav active="requests" />
@@ -382,7 +475,7 @@ function mapRequestItem(item: {
 
 export function SaleProjectsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Active" | "Production" | "Delivery">("Active");
+  const [filter, setFilter] = useState<"All" | "Active" | "Production" | "Delivery">("All");
   const [page, setPage] = useState(1);
   const pageSize = 5;
 

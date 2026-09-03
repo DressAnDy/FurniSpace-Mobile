@@ -10,7 +10,10 @@ import {
   SalesKpisQuery,
 } from "../models/sale.model";
 import {
+  AssignDesignerRequestDto,
+  assignProjectDesignerApi,
   claimSalesAssignmentApi,
+  getAvailableDesignersApi,
   getSalesActionQueueApi,
   getSalesKpisApi,
   requestProjectInformationApi,
@@ -37,27 +40,68 @@ export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
   });
 }
 
+const INTAKE_STATUSES: ProjectStatus[] = ["SUBMITTED", "IN_CONSULTATION", "NEED_BASIC_INFORMATION"];
+
 export function useSaleInboxProjectsQuery(options: {
   filter: "All" | "New" | "In Review" | "Waiting Info";
   search?: string;
-} ) {
+  page?: number;
+  limit?: number;
+}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   const status = requestFilterToStatus(options.filter);
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 5;
 
   return useQuery({
     queryKey: queryKeys.project.list({
       status: status ?? "ALL_INTAKE",
       search: options.search,
-      page: 1,
-      limit: 50,
+      page,
+      limit,
     }),
     enabled: isLoggedIn,
     queryFn: async () => {
+      // "All" must merge intake statuses — a bare list page mixes non-inbox work and truncates.
+      if (!status) {
+        const responses = await Promise.all(
+          INTAKE_STATUSES.map((intakeStatus) =>
+            getProjectsApi({
+              status: intakeStatus,
+              ...(options.search ? { search: options.search } : {}),
+              page: 1,
+              limit: 100,
+            }),
+          ),
+        );
+
+        const seen = new Set<string>();
+        const merged = responses
+          .flatMap((response) => response.items)
+          .filter((item) => {
+            if (seen.has(item.projectId)) {
+              return false;
+            }
+            seen.add(item.projectId);
+            return matchesSaleRequestFilter(item.status, "All");
+          })
+          .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
+          .map(mapProjectToSaleRequestCard);
+
+        const start = (page - 1) * limit;
+        return {
+          items: merged.slice(start, start + limit),
+          page,
+          limit,
+          total: merged.length,
+        };
+      }
+
       const response = await getProjectsApi({
-        ...(status ? { status } : {}),
+        status,
         ...(options.search ? { search: options.search } : {}),
-        page: 1,
-        limit: 50,
+        page,
+        limit,
       });
 
       const items = response.items
@@ -67,7 +111,7 @@ export function useSaleInboxProjectsQuery(options: {
       return {
         ...response,
         items,
-        total: items.length,
+        total: response.total,
       };
     },
   });
@@ -145,6 +189,31 @@ export function useRequestProjectInformationMutation() {
       void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(variables.projectId) });
       void queryClient.invalidateQueries({ queryKey: ["sale"] });
+    },
+  });
+}
+
+export function useAvailableDesignersQuery(enabled = true) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: ["sale", "available-designers"] as const,
+    enabled: isLoggedIn && enabled,
+    queryFn: () => getAvailableDesignersApi(),
+  });
+}
+
+export function useAssignProjectDesignerMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: AssignDesignerRequestDto) => assignProjectDesignerApi(projectId!, payload),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
+        void queryClient.invalidateQueries({ queryKey: ["sale"] });
+      }
     },
   });
 }

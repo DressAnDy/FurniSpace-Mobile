@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { plusIconDefinition } from "../../../icons/action/definitions";
@@ -36,6 +37,10 @@ import type { ProjectScheduleDto, ProjectScheduleType } from "../../project/mode
 import { getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { getScheduleStartAt } from "../../project/services/project.tracking.api";
 import { saleConversations, type ProjectDetailTab } from "../data/sale.mock";
+import {
+  useAssignProjectDesignerMutation,
+  useAvailableDesignersQuery,
+} from "../hooks/useSaleDashboard";
 import { useSaleProposalsQuery, useSaleQuotationsQuery, useSendQuotationMutation } from "../hooks/useSaleCommercial";
 import { useSaleOrdersQuery } from "../hooks/useSaleFulfillment";
 import {
@@ -48,7 +53,7 @@ import {
   useUploadProjectFileMutation,
 } from "../hooks/useSaleOps";
 import type { ProjectFileDto } from "../models/sale.ops.model";
-import { formatSaleDate } from "../utils/sale.mapper";
+import { formatSaleDate, getInitials } from "../utils/sale.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
@@ -67,21 +72,52 @@ function formatScheduleTimeRange(schedule: ProjectScheduleDto): string {
   return endLabel ? `${startLabel}–${endLabel}` : startLabel;
 }
 
-function defaultScheduleWindow(): { start: string; end: string } {
+function defaultScheduleWindow(): { start: Date; end: Date } {
   const start = new Date();
   start.setDate(start.getDate() + 1);
   start.setHours(9, 0, 0, 0);
   const end = new Date(start);
   end.setHours(11, 0, 0, 0);
-  return { start: start.toISOString(), end: end.toISOString() };
+  return { start, end };
 }
 
-export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Element {
+function formatScheduleClock(value: Date): string {
+  return value.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function applyDateKeepTime(base: Date, nextDate: Date): Date {
+  const merged = new Date(nextDate);
+  merged.setHours(base.getHours(), base.getMinutes(), 0, 0);
+  return merged;
+}
+
+function applyTimeKeepDate(base: Date, nextTime: Date): Date {
+  const merged = new Date(base);
+  merged.setHours(nextTime.getHours(), nextTime.getMinutes(), 0, 0);
+  return merged;
+}
+
+export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): React.JSX.Element {
+  const insets = useSafeAreaInsets();
   const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
   const projectId = route.params?.projectId ?? null;
   const [scheduleModal, setScheduleModal] = useState(route.params?.openScheduleModal ?? false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const projectQuery = useProjectDetailQuery(projectId);
   const project = projectQuery.data ?? null;
+  const needsDesigner =
+    Boolean(project) &&
+    !project?.assignedDesignerId &&
+    (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" ||
+      project?.status === "IN_CONSULTATION" ||
+      project?.status === "NEED_BASIC_INFORMATION" ||
+      !project?.assignedDesigner);
+  const showFixedActions = activeTab !== "Chat";
+  const bottomPad = showFixedActions ? 88 + Math.max(insets.bottom, 12) : 24;
 
   return (
     <SaleFrame>
@@ -89,6 +125,7 @@ export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Elem
         projectCode={project?.projectCode}
         projectName={project?.projectName}
         businessType={project?.businessType}
+        status={project?.status}
         statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
       />
       <ProjectTabs active={activeTab} projectId={projectId ?? undefined} />
@@ -97,7 +134,7 @@ export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Elem
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.content, s.contentGap, { paddingTop: 15, paddingBottom: 105 }]}
+          contentContainerStyle={[s.content, s.contentGap, { paddingTop: 16, paddingBottom: bottomPad }]}
         >
           {activeTab === "Overview" ? (
             projectQuery.isLoading ? (
@@ -108,14 +145,38 @@ export function SaleProjectDetailScreen({ route }: ProjectProps): React.JSX.Elem
               <OverviewTab project={project} projectId={projectId} />
             )
           ) : null}
-          {activeTab === "Member" ? <MemberTab /> : null}
+          {activeTab === "Member" ? (
+            projectQuery.isLoading ? (
+              <ActivityIndicator color={SALE.gold} />
+            ) : (
+              <MemberTab
+                project={project}
+                projectId={projectId}
+                pickerOpen={pickerOpen}
+                onTogglePicker={() => setPickerOpen((open) => !open)}
+              />
+            )
+          ) : null}
           {activeTab === "Files" ? <FilesTab projectId={projectId} /> : null}
           {activeTab === "Schedules" ? (
             <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
           ) : null}
         </ScrollView>
       )}
-      {activeTab !== "Chat" ? <DetailFixedActions /> : null}
+      {showFixedActions ? (
+        <DetailFixedActions
+          showAssignDesigner={Boolean(needsDesigner)}
+          onAssignDesigner={() => {
+            if (activeTab !== "Member") {
+              navigation.setParams({ tab: "Member", ...(projectId ? { projectId } : {}) } as never);
+            }
+            setPickerOpen(true);
+          }}
+          onMoreActions={() =>
+            Alert.alert("More actions", "Request info, reopen proposal, and commercial shortcuts coming next.")
+          }
+        />
+      ) : null}
       <CreateScheduleModal
         visible={scheduleModal}
         projectId={projectId}
@@ -170,7 +231,8 @@ function OverviewTab({
         </View>
       </View>
 
-      <View style={s.card}>
+      <View style={s.detailPanel}>
+        <View style={s.detailPanelAccent} />
         <Text style={s.sectionLabel}>Ops snapshot</Text>
         <View style={s.infoGrid}>
           <Info label="Areas" value={String(areasQuery.data?.length ?? "—")} />
@@ -274,24 +336,144 @@ function RequirementCard({
   );
 }
 
-function MemberTab(): React.JSX.Element {
+function MemberTab({
+  project,
+  projectId,
+  pickerOpen,
+  onTogglePicker,
+}: {
+  project: ProjectDetailDto | null;
+  projectId: string | null;
+  pickerOpen: boolean;
+  onTogglePicker: () => void;
+}): React.JSX.Element {
+  const designersQuery = useAvailableDesignersQuery(pickerOpen || !project?.assignedDesignerId);
+  const assignMutation = useAssignProjectDesignerMutation(projectId);
+  const [selectedDesignerId, setSelectedDesignerId] = useState<string | null>(null);
+
+  const sales = project?.assignedSales;
+  const designer = project?.assignedDesigner;
+  const customerLabel = project?.customerId ? `ID · ${project.customerId.slice(0, 8)}` : "Not linked";
+
+  const handleAssign = () => {
+    if (!selectedDesignerId) {
+      Alert.alert("Select a designer", "Choose an available designer first.");
+      return;
+    }
+    assignMutation.mutate(
+      { designerId: selectedDesignerId, note: "Assigned from Sales mobile" },
+      {
+        onSuccess: () => {
+          setSelectedDesignerId(null);
+          Alert.alert("Assigned", "Designer has been assigned to this project.");
+        },
+        onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to assign designer.")),
+      },
+    );
+  };
+
+  if (!project) {
+    return <Text style={s.centerMuted}>Select a project to view members.</Text>;
+  }
+
   return (
     <>
-      <View style={s.card}>
+      <View style={s.detailPanel}>
+        <View style={s.detailPanelAccent} />
         <Text style={s.sectionLabel}>Customer</Text>
         <View style={s.memberRow}>
-          <Avatar initials="NA" color={SALE.charcoal} />
+          <Avatar initials="CU" color={SALE.charcoal} />
           <View style={s.memberCopy}>
-            <Text style={s.memberName}>Customer profile</Text>
-            <Text style={s.memberRole}>Loaded from project detail next</Text>
+            <Text style={s.memberName}>Project customer</Text>
+            <Text style={s.memberRole}>{customerLabel}</Text>
+            <Text style={s.memberMeta}>{project.projectAddress || "Address not provided"}</Text>
+          </View>
+          <View style={[s.memberBadge, s.memberBadgeReady]}>
+            <Text style={[s.memberBadgeText, s.memberBadgeReadyText]}>Owner</Text>
           </View>
         </View>
       </View>
+
       <View style={s.card}>
-        <Text style={s.sectionLabel}>Designer Assignment</Text>
-        <Text style={[s.bodyText, { marginTop: 8 }]}>
-          Use start-fee eligibility + available designers APIs (wired in services). UI picker coming next.
-        </Text>
+        <Text style={s.sectionLabel}>Sales</Text>
+        <View style={s.memberRow}>
+          <Avatar initials={getInitials(sales?.fullName)} color={SALE.gold} />
+          <View style={s.memberCopy}>
+            <Text style={s.memberName}>{sales?.fullName ?? "Unassigned"}</Text>
+            <Text style={s.memberRole}>Sales manager</Text>
+          </View>
+          <View style={[s.memberBadge, sales ? s.memberBadgeReady : s.memberBadgeWait]}>
+            <Text style={[s.memberBadgeText, sales ? s.memberBadgeReadyText : s.memberBadgeWaitText]}>
+              {sales ? "Assigned" : "Open"}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={s.card}>
+        <View style={s.sectionRow}>
+          <Text style={s.sectionLabel}>Designer</Text>
+          {!designer ? (
+            <Pressable onPress={onTogglePicker}>
+              <Text style={s.sectionAction}>{pickerOpen ? "Hide list" : "Pick designer"}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        <View style={s.memberRow}>
+          <Avatar initials={getInitials(designer?.fullName)} color="#4A7A5A" />
+          <View style={s.memberCopy}>
+            <Text style={s.memberName}>{designer?.fullName ?? "No designer yet"}</Text>
+            <Text style={s.memberRole}>
+              {designer ? "Lead designer" : "Waiting for designer assignment"}
+            </Text>
+          </View>
+          <View style={[s.memberBadge, designer ? s.memberBadgeReady : s.memberBadgeWait]}>
+            <Text style={[s.memberBadgeText, designer ? s.memberBadgeReadyText : s.memberBadgeWaitText]}>
+              {designer ? "Assigned" : "Needed"}
+            </Text>
+          </View>
+        </View>
+
+        {!designer && pickerOpen ? (
+          <>
+            {designersQuery.isLoading ? (
+              <ActivityIndicator color={SALE.gold} style={{ marginTop: 12 }} />
+            ) : designersQuery.isError ? (
+              <Text style={[s.centerMuted, { marginTop: 8 }]}>
+                {getErrorMessage(designersQuery.error, "Unable to load designers.")}
+              </Text>
+            ) : (designersQuery.data ?? []).length === 0 ? (
+              <Text style={[s.centerMuted, { marginTop: 8 }]}>No available designers right now.</Text>
+            ) : (
+              (designersQuery.data ?? []).map((item) => {
+                const selected = selectedDesignerId === item.accountId;
+                return (
+                  <Pressable
+                    key={item.accountId}
+                    style={[s.designerPickRow, selected && s.designerPickSelected]}
+                    onPress={() => setSelectedDesignerId(item.accountId)}
+                  >
+                    <Avatar initials={getInitials(item.fullName)} color={selected ? SALE.gold : SALE.charcoal} size={34} />
+                    <View style={s.memberCopy}>
+                      <Text style={s.memberName}>{item.fullName}</Text>
+                      <Text style={s.memberRole}>{item.email ?? item.phone ?? "Available"}</Text>
+                    </View>
+                    {selected ? <Text style={s.availability}>Selected</Text> : null}
+                  </Pressable>
+                );
+              })
+            )}
+            <Pressable
+              style={[s.buttonPrimary, { marginTop: 14, height: 40 }]}
+              disabled={assignMutation.isPending || !selectedDesignerId}
+              onPress={handleAssign}
+            >
+              <Text style={s.buttonPrimaryText}>
+                {assignMutation.isPending ? "Assigning…" : "Confirm assignment"}
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
     </>
   );
@@ -315,12 +497,12 @@ function FilesTab({ projectId }: { projectId: string | null }): React.JSX.Elemen
 
   return (
     <>
-      <Pressable style={[s.card, s.dashed]} onPress={() => void handleUpload()} disabled={uploadMutation.isPending}>
-        <AppIcon definition={uploadIconDefinition} size={20} color={SALE.gold} />
-        <Text style={[s.cardTitle, { marginTop: 8 }]}>
+      <Pressable style={s.uploadZone} onPress={() => void handleUpload()} disabled={uploadMutation.isPending}>
+        <AppIcon definition={uploadIconDefinition} size={22} color={SALE.gold} />
+        <Text style={[s.cardTitle, { marginTop: 10 }]}>
           {uploadMutation.isPending ? "Uploading…" : "Upload project files"}
         </Text>
-        <Text style={s.centerMuted}>PDF, images or documents up to 20 MB</Text>
+        <Text style={[s.centerMuted, { marginTop: 4 }]}>PDF, images or documents up to 20 MB</Text>
       </Pressable>
 
       <View style={s.card}>
@@ -330,7 +512,10 @@ function FilesTab({ projectId }: { projectId: string | null }): React.JSX.Elemen
         ) : filesQuery.isError ? (
           <Text style={s.centerMuted}>{getErrorMessage(filesQuery.error, "Unable to load files.")}</Text>
         ) : files.length === 0 ? (
-          <Text style={s.centerMuted}>No files uploaded yet.</Text>
+          <View style={s.emptyFilesBox}>
+            <Text style={s.bodyText}>No files uploaded yet.</Text>
+            <Text style={[s.centerMuted, { marginTop: 4 }]}>Floor plans, references, and reports appear here.</Text>
+          </View>
         ) : (
           files.map((file) => <FileRow key={file.fileId} file={file} />)
         )}
@@ -513,7 +698,20 @@ function CreateScheduleModal({
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState(project?.projectAddress ?? "");
   const [customerNote, setCustomerNote] = useState("");
-  const window = useMemo(() => defaultScheduleWindow(), [visible]);
+  const [startAt, setStartAt] = useState(() => defaultScheduleWindow().start);
+  const [endAt, setEndAt] = useState(() => defaultScheduleWindow().end);
+  const [pickerMode, setPickerMode] = useState<"date" | "start" | "end" | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    const window = defaultScheduleWindow();
+    setStartAt(window.start);
+    setEndAt(window.end);
+    setLocation(project?.projectAddress ?? "");
+    setPickerMode(null);
+  }, [visible, project?.projectAddress]);
 
   const typeOptions: Array<{ label: string; value: typeof type }> = [
     { label: "Measurement", value: "MEASUREMENT" },
@@ -521,7 +719,41 @@ function CreateScheduleModal({
     { label: "Consultation", value: "CONSULTATION" },
   ];
 
-  const canCreate = Boolean(projectId && title.trim());
+  const canCreate = Boolean(projectId && title.trim() && endAt.getTime() > startAt.getTime());
+
+  const closePicker = () => setPickerMode(null);
+
+  const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === "android") {
+      setPickerMode(null);
+    }
+
+    if (event.type === "dismissed" || !date || !pickerMode) {
+      return;
+    }
+
+    if (pickerMode === "date") {
+      setStartAt((current) => applyDateKeepTime(current, date));
+      setEndAt((current) => applyDateKeepTime(current, date));
+      return;
+    }
+
+    if (pickerMode === "start") {
+      const nextStart = applyTimeKeepDate(startAt, date);
+      setStartAt(nextStart);
+      setEndAt((current) => (current.getTime() <= nextStart.getTime()
+        ? new Date(nextStart.getTime() + 2 * 60 * 60 * 1000)
+        : current));
+      return;
+    }
+
+    const nextEnd = applyTimeKeepDate(endAt, date);
+    if (nextEnd.getTime() <= startAt.getTime()) {
+      Alert.alert("Invalid time", "End time must be after start time.");
+      return;
+    }
+    setEndAt(nextEnd);
+  };
 
   const handleCreate = () => {
     if (!projectId || !canCreate) {
@@ -542,8 +774,8 @@ function CreateScheduleModal({
         scheduleType,
         title: title.trim(),
         assignedStaffId,
-        scheduledStart: window.start,
-        scheduledEnd: window.end,
+        scheduledStart: startAt.toISOString(),
+        scheduledEnd: endAt.toISOString(),
         location: location.trim() || project?.projectAddress || null,
         customerNote: customerNote.trim() || null,
       },
@@ -551,6 +783,7 @@ function CreateScheduleModal({
         onSuccess: () => {
           setTitle("");
           setCustomerNote("");
+          setPickerMode(null);
           onClose();
           Alert.alert("Created", "Schedule created and waiting for confirmation.");
         },
@@ -573,7 +806,7 @@ function CreateScheduleModal({
               <Text style={{ color: SALE.muted, fontSize: 18 }}>×</Text>
             </Pressable>
           </View>
-          <View style={s.sheetBody}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.sheetBody}>
             <View style={s.typeRow}>
               {typeOptions.map((item) => (
                 <Pressable
@@ -581,7 +814,7 @@ function CreateScheduleModal({
                   style={[s.typeOption, type === item.value && s.typeSelected]}
                   onPress={() => setType(item.value)}
                 >
-                  <Text style={[s.chipText, type === item.value && { color: "#432DD7" }]}>{item.label}</Text>
+                  <Text style={[s.chipText, type === item.value && { color: SALE.charcoal }]}>{item.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -593,16 +826,34 @@ function CreateScheduleModal({
               style={s.sheetInput}
             />
             <View style={s.dateRow}>
-              <View style={s.dateField}>
-                <Text style={s.dateText}>{formatSaleDate(window.start)}</Text>
-              </View>
-              <View style={s.dateField}>
-                <Text style={s.dateText}>09:00</Text>
-              </View>
-              <View style={s.dateField}>
-                <Text style={s.dateText}>11:00</Text>
-              </View>
+              <Pressable style={s.dateField} onPress={() => setPickerMode("date")}>
+                <Text style={s.dateText}>{formatSaleDate(startAt.toISOString())}</Text>
+              </Pressable>
+              <Pressable style={s.dateField} onPress={() => setPickerMode("start")}>
+                <Text style={s.dateText}>{formatScheduleClock(startAt)}</Text>
+              </Pressable>
+              <Pressable style={s.dateField} onPress={() => setPickerMode("end")}>
+                <Text style={s.dateText}>{formatScheduleClock(endAt)}</Text>
+              </Pressable>
             </View>
+
+            {pickerMode ? (
+              <>
+                <DateTimePicker
+                  value={pickerMode === "end" ? endAt : startAt}
+                  mode={pickerMode === "date" ? "date" : "time"}
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  minimumDate={pickerMode === "date" ? new Date() : undefined}
+                  onChange={handlePickerChange}
+                />
+                {Platform.OS === "ios" ? (
+                  <Pressable style={s.buttonSecondary} onPress={closePicker}>
+                    <Text style={s.buttonSecondaryText}>Done</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+
             <TextInput
               value={location}
               onChangeText={setLocation}
@@ -633,7 +884,7 @@ function CreateScheduleModal({
                 <Text style={s.buttonPrimaryText}>{createMutation.isPending ? "Creating…" : "Create"}</Text>
               </Pressable>
             </View>
-          </View>
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>

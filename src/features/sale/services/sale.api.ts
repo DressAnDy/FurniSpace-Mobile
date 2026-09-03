@@ -64,3 +64,53 @@ export async function requestProjectInformationApi(
   );
   return response.data.data;
 }
+
+export type AvailableDesignerDto = {
+  accountId: string;
+  fullName: string;
+  email?: string | null;
+  phone?: string | null;
+  workload?: number | null;
+};
+
+export type AssignDesignerRequestDto = {
+  designerId: string;
+  note?: string;
+};
+
+export type AssignDesignerResponseDto = {
+  projectId: string;
+  assignedDesignerId: string;
+  status: string;
+};
+
+function unwrapDesignerList(data: unknown): AvailableDesignerDto[] {
+  if (!data) {
+    return [];
+  }
+  if (Array.isArray(data)) {
+    return data as AvailableDesignerDto[];
+  }
+  if (typeof data === "object" && data !== null && Array.isArray((data as { items?: unknown }).items)) {
+    return (data as { items: AvailableDesignerDto[] }).items;
+  }
+  return [];
+}
+
+export async function getAvailableDesignersApi(): Promise<AvailableDesignerDto[]> {
+  const response = await httpClient.get<ApiResponse<AvailableDesignerDto[] | { items: AvailableDesignerDto[] }>>(
+    endpoints.accounts.availableDesigners,
+  );
+  return unwrapDesignerList(response.data.data);
+}
+
+export async function assignProjectDesignerApi(
+  projectId: string,
+  payload: AssignDesignerRequestDto,
+): Promise<AssignDesignerResponseDto> {
+  const response = await httpClient.patch<ApiResponse<AssignDesignerResponseDto>>(
+    endpoints.projects.designerAssignment(projectId),
+    payload,
+  );
+  return response.data.data;
+}
