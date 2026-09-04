@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
@@ -24,6 +24,7 @@ import { resolveOrderDisplayTotal } from "../../project/utils/order.mapper";
 import { useProjectDetailQuery } from "../../project/hooks/useProjects";
 import { formatVndAmount } from "../../payment/utils/payment.mapper";
 import { useSalePhaseDeadlinesQuery } from "../hooks/useSaleOps";
+import { useSaleOrderDetailRealtime } from "../hooks/useSaleOrderDetailRealtime";
 import {
   useAvailableProductionStaffQuery,
   useCompleteOrderMutation,
@@ -44,6 +45,7 @@ import {
   canShowProductionSection,
   canSalesStartProductionSetup,
   getExistingProductionRequest,
+  hasExistingProductionRequest,
   canSalesCreateRemainingPayment,
   findPendingSaleOrderPayment,
   getProductionPhaseDeadline,
@@ -107,7 +109,6 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
   const paymentsQuery = useSaleOrderPaymentsQuery(orderId);
   const phaseQuery = useSalePhaseDeadlinesQuery(projectId);
   const productionRequestsQuery = useSaleProductionRequestsQuery(projectId, orderId);
-  const productionStaffQuery = useAvailableProductionStaffQuery(projectId);
 
   const depositMutation = useCreateSaleDepositMutation(projectId);
   const remainingMutation = useCreateSaleRemainingPaymentMutation(projectId);
@@ -121,6 +122,11 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
   const deadlines = phaseQuery.data?.deadlines ?? [];
   const productionRequests = productionRequestsQuery.data ?? [];
   const productionDeadline = getProductionPhaseDeadline(deadlines);
+  const showProductionSetup = canSalesStartProductionSetup(order, productionRequests);
+  const productionStaffQuery = useAvailableProductionStaffQuery({
+    projectId,
+    enabled: showProductionSetup,
+  });
 
   const [productionDueDate, setProductionDueDate] = useState<Date>(() => defaultProductionDueDate());
   const [showProductionDatePicker, setShowProductionDatePicker] = useState(false);
@@ -147,14 +153,7 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
     setSelectedStaffId(productionStaff[0].accountId);
   }, [productionStaff, selectedStaffId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void orderQuery.refetch();
-      void paymentsQuery.refetch();
-      void productionRequestsQuery.refetch();
-      void phaseQuery.refetch();
-    }, [orderQuery, paymentsQuery, productionRequestsQuery, phaseQuery]),
-  );
+  useSaleOrderDetailRealtime({ orderId, projectId });
 
   const statusColors = getSaleOrderStatusColors(order?.status ?? "CREATED");
   const displayTotal = order ? resolveOrderDisplayTotal(order) : 0;
@@ -165,7 +164,6 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
     canSalesCreateRemainingPayment(order) && !hasPaidSaleOrderPayment(payments, "REMAINING_PAYMENT");
   const existingProductionRequest = getExistingProductionRequest(productionRequests, orderId);
   const showProductionSection = canShowProductionSection(order, productionRequests);
-  const showProductionSetup = canSalesStartProductionSetup(order, productionRequests);
   const showCompleteAction = canSalesCompleteOrder(order);
   const showCompleteProjectAction = canSalesCompleteProject(order, projectQuery.data?.status);
 
@@ -276,10 +274,18 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
       return;
     }
 
+    const deadlineAlreadySet = Boolean(productionDeadline?.dueDate);
+    let deadlineSaved = deadlineAlreadySet;
+
     try {
-      await productionDeadlineMutation.mutateAsync({
-        productionDeadline: deadline,
-      });
+      if (!deadlineAlreadySet || productionDeadline?.dueDate?.slice(0, 10) !== deadline) {
+        await productionDeadlineMutation.mutateAsync({
+          productionDeadline: deadline,
+        });
+        deadlineSaved = true;
+        await phaseQuery.refetch();
+      }
+
       await productionRequestMutation.mutateAsync({
         orderId,
         payload: {
@@ -287,10 +293,19 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
           priority: selectedPriority,
         },
       });
-      Alert.alert("Production created", "Deadline saved and production staff assigned.");
+      Alert.alert("Production assigned", "Deadline saved and production staff assigned.");
       await Promise.all([phaseQuery.refetch(), productionRequestsQuery.refetch(), orderQuery.refetch()]);
     } catch (error) {
-      Alert.alert("Error", getErrorMessage(error, "Unable to create production."));
+      if (deadlineSaved && !hasExistingProductionRequest(productionRequests, orderId)) {
+        Alert.alert(
+          "Production request failed",
+          `${getErrorMessage(error, "Unable to assign production.")}\n\nProduction deadline was saved. Tap Assign Production again to retry assigning staff.`,
+        );
+        await phaseQuery.refetch();
+        return;
+      }
+
+      Alert.alert("Error", getErrorMessage(error, "Unable to assign production."));
     }
   };
 
@@ -424,9 +439,9 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                     <View>
                       <Text style={s.productionAssignTitle}>Production Assignment</Text>
                       <Text style={s.productionAssignSubtitle}>
-                        {!showProductionSetup && existingProductionRequest
-                          ? "Production request is already created for this order."
-                          : "Choose staff, priority, and deadline before creating the request."}
+                        {showProductionSetup
+                          ? "Choose staff, priority, and deadline before creating the request."
+                          : "Production request is already created for this order."}
                       </Text>
                     </View>
 
@@ -434,7 +449,7 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                       <View style={s.infoGrid}>
                         <InfoRow
                           label="Staff"
-                          value={existingProductionRequest.assignedToName ?? selectedStaff?.fullName ?? "Assigned"}
+                          value={existingProductionRequest.assignedToName ?? "Assigned"}
                         />
                         <InfoRow
                           label="Priority"
@@ -446,7 +461,10 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                             existingProductionRequest.productionDeadline ?? productionDeadline?.dueDate,
                           )}
                         />
-                        <InfoRow label="Status" value={existingProductionRequest.status ?? "PENDING"} />
+                        <InfoRow
+                          label="Status"
+                          value={(existingProductionRequest.status ?? "PENDING").replaceAll("_", " ")}
+                        />
                       </View>
                     ) : (
                       <View style={{ gap: 14 }}>
@@ -567,7 +585,7 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                           onPress={() => void handleStartProduction()}
                         >
                           <Text style={s.quotationFooterPrimaryText}>
-                            {isStartingProduction ? "Creating…" : "Create Production"}
+                            {isStartingProduction ? "Assigning…" : "Assign Production"}
                           </Text>
                         </Pressable>
                       </View>
@@ -598,6 +616,54 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                     Customer has not submitted delivery details yet. Deposit payment requires address, receiver name,
                     and phone.
                   </Text>
+                )}
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.sectionLabel}>Payments</Text>
+                {paymentsQuery.isLoading ? (
+                  <ActivityIndicator color={SALE.gold} style={{ marginTop: 12 }} />
+                ) : payments.length === 0 ? (
+                  <Text style={[s.cardMeta, { marginTop: 10 }]}>No payments yet.</Text>
+                ) : (
+                  <View style={{ marginTop: 10, gap: 8 }}>
+                    {payments.map((payment) => {
+                      const canOpen =
+                        payment.status === "PENDING" || payment.status === "PROCESSING";
+                      return (
+                        <Pressable
+                          key={payment.paymentId}
+                          style={s.quotationItemCard}
+                          disabled={!canOpen}
+                          onPress={() => {
+                            if (!canOpen) {
+                              return;
+                            }
+                            openPaymentMethod(
+                              payment.paymentId,
+                              payment.paymentType === "REMAINING_PAYMENT" ? "REMAINING_PAYMENT" : "DEPOSIT",
+                            );
+                          }}
+                        >
+                          <View style={s.quotationItemHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={s.quotationItemName}>
+                                {(payment.paymentType ?? "Payment").replaceAll("_", " ")}
+                              </Text>
+                              <Text style={s.quotationItemMergedHint}>
+                                {payment.paymentCode ?? payment.paymentId.slice(0, 8)}
+                              </Text>
+                            </View>
+                            <Text style={s.quotationItemTotal}>{formatVndAmount(payment.amount ?? 0)}</Text>
+                          </View>
+                          <Text style={s.cardMeta}>
+                            {(payment.status ?? "—").replaceAll("_", " ")}
+                            {canOpen ? " · Tap to open" : ""}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
               </View>
 

@@ -1,13 +1,25 @@
 import type { IconDefinition } from "../../../icons/types";
 
-export type NotificationCategory = "order" | "payment" | "project";
+export type NotificationCategory =
+  | "order"
+  | "payment"
+  | "project"
+  | "lead"
+  | "proposal"
+  | "quotation"
+  | "chat"
+  | "production";
 
 export type NotificationReferenceType =
+  | "PROJECT"
+  | "PROPOSAL"
   | "QUOTATION"
   | "ORDER"
   | "PAYMENT"
-  | "PROJECT_CHAT_MESSAGE"
+  | "PRODUCTION_REQUEST"
   | "CUSTOMIZATION_REQUEST"
+  | "PROJECT_SCHEDULE"
+  | "PROJECT_CHAT_MESSAGE"
   | string
   | null;
 
@@ -62,7 +74,8 @@ export type NotificationListQuery = {
   limit?: number;
 };
 
-export type NotificationFilter = "all" | NotificationCategory;
+export type NotificationFilter = "all" | Extract<NotificationCategory, "order" | "payment" | "project">;
+export type SaleNotificationFilter = "all" | "unread" | NotificationCategory;
 
 export type NotificationListItem = {
   id: string;

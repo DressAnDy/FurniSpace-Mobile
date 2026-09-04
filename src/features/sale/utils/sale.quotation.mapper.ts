@@ -372,9 +372,6 @@ export function validateQuotationHeaderForSend(params: {
   if (depositValue <= 0) {
     return "Cần nhập deposit trước khi gửi.";
   }
-  if (depositValue > params.estimatedTotal) {
-    return "Deposit không được lớn hơn tổng quotation.";
-  }
 
   return null;
 }

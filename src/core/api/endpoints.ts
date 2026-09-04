@@ -17,6 +17,7 @@ export const endpoints = {
     messages: (chatId: string) => `/project-chats/${chatId}/messages`,
     sendMessage: (chatId: string) => `/project-chats/${chatId}/messages`,
     sendFile: (chatId: string) => `/project-chats/${chatId}/messages/files`,
+    updateStatus: (chatId: string) => `/project-chats/${chatId}/status`,
     search: (projectId: string) => `/projects/${projectId}/chat-messages/search`,
   },
   projects: {

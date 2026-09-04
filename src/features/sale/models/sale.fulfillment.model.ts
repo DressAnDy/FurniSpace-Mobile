@@ -131,6 +131,14 @@ export type AssignProductionRequestDto = {
   assignmentNote?: string | null;
 };
 
+export type AssignProductionRequestResponseDto = {
+  productionRequestId: string;
+  previousAssignedTo?: string | null;
+  assignedTo: string;
+  status?: string;
+  updatedAt?: string;
+};
+
 export type CreateDeliveryRequestDto = {
   projectScheduleId: string;
   note?: string | null;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -18,11 +18,6 @@ import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/dat
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { plusIconDefinition } from "../../../icons/action/definitions";
-import {
-  sendIconDefinition,
-  paperclipIconDefinition,
-  phoneIconDefinition,
-} from "../../../icons/communication/definitions";
 import { calendarIconDefinition, clockIconDefinition } from "../../../icons/project/definitions";
 import {
   downloadIconDefinition,
@@ -45,15 +40,15 @@ import {
 } from "../../payment/hooks/usePayments";
 import { formatVndAmount, getPaymentStatusLabel } from "../../payment/utils/payment.mapper";
 import type { PaymentStatus } from "../../payment/models/payment.model";
-import { saleConversations, type ProjectDetailTab } from "../data/sale.mock";
+import { type ProjectDetailTab } from "../data/sale.mock";
 import {
   useAssignProjectDesignerMutation,
   useAvailableDesignersQuery,
 } from "../hooks/useSaleDashboard";
 import type { SpaceDataStatus } from "../services/sale.api";
-import { useSaleProposalsQuery, useSaleQuotationsQuery } from "../hooks/useSaleCommercial";
+import { useSaleProposalsQuery, useSaleQuotationsQuery, useCreateQuotationMutation } from "../hooks/useSaleCommercial";
 import { useSaleProjectOverviewRealtime } from "../hooks/useSaleProjectOverviewRealtime";
-import { useSaleOrdersQuery, useCompleteProjectMutation } from "../hooks/useSaleFulfillment";
+import { useSaleOrdersQuery, useCompleteProjectMutation, useSaleProductionRequestsQuery } from "../hooks/useSaleFulfillment";
 import {
   pickAndUploadProjectFile,
   useCreateProjectScheduleMutation,
@@ -65,15 +60,19 @@ import {
 } from "../hooks/useSaleOps";
 import type { ProjectFileDto } from "../models/sale.ops.model";
 import { resolveOrderDisplayTotal } from "../../project/utils/order.mapper";
-import { buildProjectOverviewContent, formatSaleDate, getInitials } from "../utils/sale.mapper";
+import { buildProjectOverviewContent, formatSaleDate, getInitials, getSaleProjectStatusColors } from "../utils/sale.mapper";
 import { formatSaleOrderStatusLabel } from "../utils/sale.order.mapper";
-import { canSalesCompleteProject, getSaleOrderStatusColors } from "../utils/sale.order.actions";
+import {
+  canSalesCompleteProject,
+  canSalesStartProductionSetup,
+  getSaleOrderStatusColors,
+} from "../utils/sale.order.actions";
 import { getQuotationStatusPillColors } from "../utils/sale.quotation.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
+import { SaleProjectChatTab } from "./SaleProjectChatTab";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
 type ProjectProps = NativeStackScreenProps<RootStackParamList, "SaleProjectDetail">;
-type ChatProps = NativeStackScreenProps<RootStackParamList, "SaleChat">;
 
 function formatScheduleTimeRange(schedule: ProjectScheduleDto): string {
   const start = getScheduleStartAt(schedule);
@@ -156,6 +155,34 @@ function validateProposalDeadline(
   return null;
 }
 
+function getDesignerSlotCount(item: {
+  availableSlot?: number | null;
+  maxActiveProjects?: number | null;
+  currentActiveProjectCount?: number | null;
+  workload?: number | null;
+}): number | null {
+  if (typeof item.availableSlot === "number") {
+    return item.availableSlot;
+  }
+  if (typeof item.maxActiveProjects === "number" && typeof item.currentActiveProjectCount === "number") {
+    return Math.max(0, item.maxActiveProjects - item.currentActiveProjectCount);
+  }
+  if (typeof item.workload === "number") {
+    return Math.max(0, 2 - item.workload);
+  }
+  return null;
+}
+
+function formatDesignerSlotPill(slots: number | null): string {
+  if (slots == null) {
+    return "Open";
+  }
+  if (slots <= 0) {
+    return "Full";
+  }
+  return slots === 1 ? "1 slot" : `${slots} slots`;
+}
+
 const MIN_START_FEE_AMOUNT = 5_000;
 
 function parseAmountDigits(value: string): number | null {
@@ -222,7 +249,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
     !project?.assignedDesignerId &&
     !project?.assignedDesigner &&
     (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" || Boolean(startFeeStatus?.isEligibleForDesignerAssignment));
-  const showFixedActions = activeTab !== "Chat";
+  const showFixedActions = activeTab !== "Chat" && Boolean(needsDesigner);
   const bottomPad = showFixedActions ? 88 + Math.max(insets.bottom, 12) : 24;
 
   return (
@@ -236,7 +263,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
       />
       <ProjectTabs active={activeTab} projectId={projectId ?? undefined} />
       {activeTab === "Chat" ? (
-        <ProjectChat />
+        <SaleProjectChatTab projectId={projectId} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -279,9 +306,6 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
             }
             setPickerOpen(true);
           }}
-          onMoreActions={() =>
-            Alert.alert("More actions", "Request info, reopen proposal, and commercial shortcuts coming next.")
-          }
         />
       ) : null}
       <CreateScheduleModal
@@ -440,6 +464,8 @@ function OverviewTab({
   const proposalsQuery = useSaleProposalsQuery(projectId);
   const quotationsQuery = useSaleQuotationsQuery(projectId);
   const ordersQuery = useSaleOrdersQuery(projectId);
+  const primaryOrderId = ordersQuery.data?.[0]?.orderId ?? null;
+  const productionRequestsQuery = useSaleProductionRequestsQuery(projectId, primaryOrderId);
   const startFeeStatusQuery = useProjectStartFeeStatusQuery(projectId);
   const completeProjectMutation = useCompleteProjectMutation();
 
@@ -459,14 +485,35 @@ function OverviewTab({
       item.status === "REVISED" ||
       item.status === "REVISION_REQUESTED",
   );
+  const overviewQuotation =
+    actionableQuotation ??
+    (quotationsQuery.data ?? []).find(
+      (item) => item.status !== "CANCELLED" && item.status !== "REJECTED",
+    ) ??
+    null;
+  const needsQuotationFallback =
+    project.status === "PROPOSAL_SELECTED" &&
+    (quotationsQuery.data?.length ?? 0) === 0 &&
+    !quotationsQuery.isLoading;
+  const createQuotationMutation = useCreateQuotationMutation(projectId);
   const primaryOrder = (ordersQuery.data ?? [])[0] ?? null;
+  const productionRequests = productionRequestsQuery.data ?? [];
+  const showAssignProduction = canSalesStartProductionSetup(primaryOrder, productionRequests);
+  // Once an order exists, ACCEPTED/SENT quotation mirrors the same commercial totals — keep only actionable drafts.
+  const showOverviewQuotation = Boolean(
+    overviewQuotation && projectId && (actionableQuotation || !primaryOrder),
+  );
+  const statusTone = getSaleProjectStatusColors(project.status);
 
   return (
     <>
-      <View style={s.alert}>
+      <View style={[s.alert, { backgroundColor: statusTone.backgroundColor, borderColor: statusTone.borderColor }]}>
+        <View style={[s.detailPanelAccent, { backgroundColor: statusTone.color }]} />
         <View style={s.alertCopy}>
           <Text style={s.alertHeading}>Current status</Text>
-          <Text style={s.alertBody}>{getProjectStatusLabel(project.status)}</Text>
+          <Text style={[s.alertBody, { color: statusTone.color }]}>
+            {getProjectStatusLabel(project.status)}
+          </Text>
         </View>
       </View>
 
@@ -506,61 +553,153 @@ function OverviewTab({
         </View>
       </View>
 
-      {actionableQuotation && projectId ? (
+      {needsQuotationFallback && projectId ? (
         <View style={s.quotationOverviewCard}>
           <View style={s.quotationOverviewAccent} />
           <View style={s.quotationOverviewBody}>
-            <View style={s.quotationOverviewTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.sectionLabel}>
-                  {actionableQuotation.status === "REVISION_REQUESTED" ? "Revision requested" : "Quotation"}
-                </Text>
-                <Text style={s.quotationOverviewAmount}>
-                  {formatVndAmount(actionableQuotation.totalAmount, actionableQuotation.currency)}
-                </Text>
-                <Text style={s.quotationOverviewCode}>
-                  {actionableQuotation.quotationCode ?? "Draft"} · v{actionableQuotation.versionNo ?? 1}
-                </Text>
-              </View>
-              <View
-                style={[
-                  s.quotationStatusPill,
-                  {
-                    backgroundColor: getQuotationStatusPillColors(actionableQuotation.status).backgroundColor,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    s.quotationStatusText,
-                    { color: getQuotationStatusPillColors(actionableQuotation.status).color },
-                  ]}
-                >
-                  {actionableQuotation.status.replaceAll("_", " ")}
-                </Text>
-              </View>
-            </View>
-
-            {actionableQuotation.revisionReason ? (
-              <View style={s.quotationOverviewNote}>
-                <Text style={s.quotationOverviewNoteText}>{actionableQuotation.revisionReason}</Text>
-              </View>
-            ) : null}
-
+            <Text style={s.sectionLabel}>Quotation missing</Text>
+            <Text style={[s.cardMeta, { lineHeight: 16 }]}>
+              Proposal is selected but no quotation draft was found. Create a recovery draft to continue.
+            </Text>
             <Pressable
-              style={[s.fixedPrimary, { flex: undefined, width: "100%" }]}
+              style={[
+                s.fixedPrimary,
+                { flex: undefined, width: "100%" },
+                createQuotationMutation.isPending && { opacity: 0.6 },
+              ]}
+              disabled={createQuotationMutation.isPending}
+              onPress={() =>
+                createQuotationMutation.mutate(undefined, {
+                  onSuccess: (quotation) => {
+                    Alert.alert("Draft created", "Quotation draft is ready to edit.", [
+                      {
+                        text: "Open",
+                        onPress: () =>
+                          navigation.navigate("SaleQuotationDetail", {
+                            quotationId: quotation.quotationId,
+                            projectId,
+                            projectName: project.projectName,
+                          }),
+                      },
+                      { text: "OK" },
+                    ]);
+                    void quotationsQuery.refetch();
+                  },
+                  onError: (error) =>
+                    Alert.alert("Error", getErrorMessage(error, "Unable to create quotation draft.")),
+                })
+              }
+            >
+              <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
+                {createQuotationMutation.isPending ? "Creating…" : "Create quotation draft"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {showOverviewQuotation && overviewQuotation && projectId ? (
+        <View style={s.quotationOverviewCard}>
+          <View style={s.quotationOverviewAccent} />
+          <View style={s.quotationOverviewBody}>
+            <Pressable
               onPress={() =>
                 navigation.navigate("SaleQuotationDetail", {
-                  quotationId: actionableQuotation.quotationId,
+                  quotationId: overviewQuotation.quotationId,
                   projectId,
                   projectName: project.projectName,
                 })
               }
             >
-              <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
-                {actionableQuotation.status === "REVISION_REQUESTED" ? "Review & revise" : "Edit & send"}
-              </Text>
+              <View style={s.quotationOverviewTop}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.sectionLabel}>
+                    {overviewQuotation.status === "REVISION_REQUESTED"
+                      ? "Revision requested"
+                      : actionableQuotation
+                        ? "Quotation"
+                        : "Latest quotation"}
+                  </Text>
+                  <Text style={s.quotationOverviewAmount}>
+                    {formatVndAmount(overviewQuotation.totalAmount, overviewQuotation.currency)}
+                  </Text>
+                  <Text style={s.quotationOverviewCode}>
+                    {overviewQuotation.quotationCode ?? "Draft"} · v{overviewQuotation.versionNo ?? 1}
+                    {overviewQuotation.validUntil ? ` · Until ${formatSaleDate(overviewQuotation.validUntil)}` : ""}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    s.quotationStatusPill,
+                    {
+                      backgroundColor: getQuotationStatusPillColors(overviewQuotation.status).backgroundColor,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      s.quotationStatusText,
+                      { color: getQuotationStatusPillColors(overviewQuotation.status).color },
+                    ]}
+                  >
+                    {overviewQuotation.status.replaceAll("_", " ")}
+                  </Text>
+                </View>
+              </View>
+
+              {!actionableQuotation ? (
+                <View style={[s.quotationBreakdown, { marginTop: 12 }]}>
+                  <View style={s.quotationBreakdownCell}>
+                    <Text style={s.quotationBreakdownValue}>
+                      {formatVndAmount(overviewQuotation.depositAmount ?? 0, overviewQuotation.currency)}
+                    </Text>
+                    <Text style={s.quotationBreakdownLabel}>Deposit</Text>
+                  </View>
+                  <View style={s.quotationBreakdownCell}>
+                    <Text style={s.quotationBreakdownValue}>
+                      {overviewQuotation.validUntil ? formatSaleDate(overviewQuotation.validUntil) : "—"}
+                    </Text>
+                    <Text style={s.quotationBreakdownLabel}>Valid until</Text>
+                  </View>
+                </View>
+              ) : null}
             </Pressable>
+
+            {overviewQuotation.revisionReason ? (
+              <View style={s.quotationOverviewNote}>
+                <Text style={s.quotationOverviewNoteText}>{overviewQuotation.revisionReason}</Text>
+              </View>
+            ) : null}
+
+            {actionableQuotation ? (
+              <Pressable
+                style={[s.fixedPrimary, { flex: undefined, width: "100%" }]}
+                onPress={() =>
+                  navigation.navigate("SaleQuotationDetail", {
+                    quotationId: actionableQuotation.quotationId,
+                    projectId,
+                    projectName: project.projectName,
+                  })
+                }
+              >
+                <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
+                  {actionableQuotation.status === "REVISION_REQUESTED" ? "Review & revise" : "Edit & send"}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[s.buttonSecondary, { flex: undefined, width: "100%", height: 40 }]}
+                onPress={() =>
+                  navigation.navigate("SaleQuotationDetail", {
+                    quotationId: overviewQuotation.quotationId,
+                    projectId,
+                    projectName: project.projectName,
+                  })
+                }
+              >
+                <Text style={s.buttonSecondaryText}>View quotation</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       ) : null}
@@ -612,19 +751,28 @@ function OverviewTab({
                   <Text style={s.quotationBreakdownLabel}>Paid</Text>
                 </View>
                 <View style={s.quotationBreakdownCell}>
-                  <Text style={s.quotationBreakdownValue}>{formatVndAmount(primaryOrder.remainingAmount ?? 0)}</Text>
-                  <Text style={s.quotationBreakdownLabel}>Remaining</Text>
-                </View>
-                <View style={s.quotationBreakdownCell}>
                   <Text style={[s.quotationBreakdownValue, { color: SALE.gold }]}>
-                    {formatVndAmount(primaryOrder.depositAmount ?? 0)}
+                    {formatVndAmount(primaryOrder.remainingAmount ?? 0)}
                   </Text>
-                  <Text style={s.quotationBreakdownLabel}>Deposit</Text>
+                  <Text style={s.quotationBreakdownLabel}>Remaining</Text>
                 </View>
               </View>
             </Pressable>
 
-            {canSalesCompleteProject(primaryOrder, project.status) ? (
+            {showAssignProduction ? (
+              <Pressable
+                style={[s.fixedPrimary, { flex: undefined, width: "100%" }]}
+                onPress={() =>
+                  navigation.navigate("SaleOrderDetail", {
+                    orderId: primaryOrder.orderId,
+                    projectId,
+                    projectName: project.projectName,
+                  })
+                }
+              >
+                <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>Assign production</Text>
+              </Pressable>
+            ) : canSalesCompleteProject(primaryOrder, project.status) ? (
               <Pressable
                 style={[s.fixedPrimary, { flex: undefined, width: "100%" }, completeProjectMutation.isPending && { opacity: 0.6 }]}
                 disabled={completeProjectMutation.isPending}
@@ -647,7 +795,20 @@ function OverviewTab({
                   {completeProjectMutation.isPending ? "Completing…" : "Complete project"}
                 </Text>
               </Pressable>
-            ) : null}
+            ) : (
+              <Pressable
+                style={[s.buttonSecondary, { flex: undefined, width: "100%", height: 40 }]}
+                onPress={() =>
+                  navigation.navigate("SaleOrderDetail", {
+                    orderId: primaryOrder.orderId,
+                    projectId,
+                    projectName: project.projectName,
+                  })
+                }
+              >
+                <Text style={s.buttonSecondaryText}>View order</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       ) : null}
@@ -760,6 +921,18 @@ function MemberTab({
   const customerLabel = project?.customerId ? `ID · ${project.customerId.slice(0, 8)}` : "Not linked";
   const targetCompletionDate =
     project?.targetCompletionDate ?? phaseQuery.data?.targetCompletionDate ?? null;
+  const availableDesigners = useMemo(() => {
+    const items = [...(designersQuery.data ?? [])];
+    items.sort((a, b) => {
+      const slotA = getDesignerSlotCount(a) ?? -1;
+      const slotB = getDesignerSlotCount(b) ?? -1;
+      if (slotB !== slotA) {
+        return slotB - slotA;
+      }
+      return (a.fullName ?? "").localeCompare(b.fullName ?? "");
+    });
+    return items;
+  }, [designersQuery.data]);
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -890,108 +1063,152 @@ function MemberTab({
 
         {!designerMember.isAssigned && pickerOpen ? (
           <>
-            <Text style={[s.infoLabel, { marginTop: 14 }]}>Available designers</Text>
-            {designersQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} style={{ marginTop: 12 }} />
-            ) : designersQuery.isError ? (
-              <Text style={[s.centerMuted, { marginTop: 8 }]}>
-                {getErrorMessage(designersQuery.error, "Unable to load designers.")}
-              </Text>
-            ) : (designersQuery.data ?? []).length === 0 ? (
-              <Text style={[s.centerMuted, { marginTop: 8 }]}>No available designers right now.</Text>
-            ) : (
-              (designersQuery.data ?? []).map((item) => {
-                const selected = selectedDesignerId === item.accountId;
-                return (
-                  <Pressable
-                    key={item.accountId}
-                    style={[s.designerPickRow, selected && s.designerPickSelected]}
-                    onPress={() => setSelectedDesignerId(item.accountId)}
-                  >
-                    <Avatar initials={getInitials(item.fullName)} color={selected ? SALE.gold : SALE.charcoal} size={34} />
-                    <View style={s.memberCopy}>
-                      <Text style={s.memberName}>{item.fullName}</Text>
-                      <Text style={s.memberRole}>{item.email ?? item.phone ?? "Available"}</Text>
-                    </View>
-                    {selected ? <Text style={s.availability}>Selected</Text> : null}
-                  </Pressable>
-                );
-              })
-            )}
-
-            <Text style={[s.infoLabel, { marginTop: 16 }]}>Proposal deadline</Text>
-            <Text style={[s.memberRole, { marginTop: 4 }]}>
-              Required · must be on or before target completion
-              {targetCompletionDate ? ` (${formatSaleDate(targetCompletionDate)})` : ""}.
-            </Text>
-            <Pressable
-              style={[s.dateField, { marginTop: 10, height: 44, alignSelf: "stretch" }]}
-              onPress={() => setShowProposalPicker(true)}
-            >
-              <Text style={s.dateText}>{formatSaleDate(formatApiDateOnly(proposalDeadline))}</Text>
-            </Pressable>
-            {showProposalPicker ? (
-              <>
-                <DateTimePicker
-                  value={proposalDeadline}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleProposalPickerChange}
-                />
-                {Platform.OS === "ios" ? (
-                  <Pressable
-                    style={[s.buttonPrimary, { marginTop: 8, height: 40 }]}
-                    onPress={() => setShowProposalPicker(false)}
-                  >
-                    <Text style={s.buttonPrimaryText}>Done</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            ) : null}
-
-            <Text style={[s.infoLabel, { marginTop: 16 }]}>Space data status</Text>
-            <View style={{ marginTop: 8, gap: 8 }}>
-              {spaceDataOptions.map((option) => {
-                const selected = spaceDataStatus === option.value;
-                return (
-                  <Pressable
-                    key={option.value}
-                    style={[
-                      s.designerPickRow,
-                      { marginTop: 0, paddingVertical: 12, alignItems: "flex-start" },
-                      selected && s.designerPickSelected,
-                    ]}
-                    onPress={() => setSpaceDataStatus(option.value)}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.memberName, selected && { color: SALE.charcoal }]}>{option.label}</Text>
-                      <Text style={[s.memberRole, { marginTop: 4, lineHeight: 16 }]}>{option.description}</Text>
-                    </View>
-                    {selected ? <Text style={s.availability}>Selected</Text> : null}
-                  </Pressable>
-                );
-              })}
+            <View style={[s.quotationFieldBlock, { marginTop: 14 }]}>
+              <Text style={s.quotationFieldLabel}>Available designers</Text>
+              <Text style={s.productionFieldHint}>Shows designers with open assignment slots.</Text>
+              {designersQuery.isLoading ? (
+                <ActivityIndicator color={SALE.gold} style={{ marginTop: 8 }} />
+              ) : designersQuery.isError ? (
+                <Text style={[s.centerMuted, { marginTop: 4 }]}>
+                  {getErrorMessage(designersQuery.error, "Unable to load designers.")}
+                </Text>
+              ) : availableDesigners.length === 0 ? (
+                <Text style={[s.centerMuted, { marginTop: 4 }]}>No designers with open slots right now.</Text>
+              ) : (
+                <View style={s.designerPickList}>
+                  {availableDesigners.map((item) => {
+                    const selected = selectedDesignerId === item.accountId;
+                    const slots = getDesignerSlotCount(item);
+                    const full = slots != null && slots <= 0;
+                    const low = slots != null && slots === 1;
+                    return (
+                      <Pressable
+                        key={item.accountId}
+                        style={[
+                          s.designerPickCard,
+                          selected && s.designerPickCardSelected,
+                          full && s.designerPickCardDisabled,
+                        ]}
+                        disabled={full}
+                        onPress={() => setSelectedDesignerId(item.accountId)}
+                      >
+                        <Avatar
+                          initials={getInitials(item.fullName)}
+                          color={selected ? SALE.gold : SALE.charcoal}
+                          size={36}
+                        />
+                        <View style={[s.memberCopy, { flex: 1 }]}>
+                          <Text style={s.memberName} numberOfLines={1}>
+                            {item.fullName}
+                          </Text>
+                          <Text style={s.designerPickMeta} numberOfLines={1}>
+                            {item.email ?? item.phone ?? "Designer"}
+                            {typeof item.currentActiveProjectCount === "number"
+                              ? ` · ${item.currentActiveProjectCount} active`
+                              : ""}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            s.designerSlotPill,
+                            low && s.designerSlotPillLow,
+                            full && s.designerSlotPillFull,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.designerSlotPillText,
+                              low && s.designerSlotPillTextLow,
+                              full && s.designerSlotPillTextFull,
+                            ]}
+                          >
+                            {formatDesignerSlotPill(slots)}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
-            {!selectedDesignerId ? (
-              <Text style={[s.cardMeta, { marginTop: 12, color: SALE.red }]}>
-                Select a designer above to continue.
-              </Text>
-            ) : null}
+            <View style={s.assignSetupBlock}>
+              <View style={s.quotationFieldBlock}>
+                <Text style={s.quotationFieldLabel}>Proposal deadline</Text>
+                <Text style={s.productionFieldHint}>
+                  Required · on or before target
+                  {targetCompletionDate ? ` (${formatSaleDate(targetCompletionDate)})` : ""}
+                </Text>
+                <Pressable style={s.assignDateRow} onPress={() => setShowProposalPicker(true)}>
+                  <AppIcon definition={calendarIconDefinition} size={15} color={SALE.gold} />
+                  <Text style={s.assignDateValue}>
+                    {formatSaleDate(formatApiDateOnly(proposalDeadline))}
+                  </Text>
+                </Pressable>
+                {showProposalPicker ? (
+                  <>
+                    <DateTimePicker
+                      value={proposalDeadline}
+                      mode="date"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      onChange={handleProposalPickerChange}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <Pressable
+                        style={[s.buttonPrimary, { marginTop: 4, height: 40, flex: undefined }]}
+                        onPress={() => setShowProposalPicker(false)}
+                      >
+                        <Text style={s.buttonPrimaryText}>Done</Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                ) : null}
+              </View>
 
-            <Pressable
-              style={[
-                s.buttonPrimary,
-                { marginTop: 14, height: 44 },
-                (assignMutation.isPending || !selectedDesignerId) && { opacity: 0.45 },
-              ]}
-              disabled={assignMutation.isPending || !selectedDesignerId}
-              onPress={handleAssign}
-            >
-              <Text style={s.buttonPrimaryText}>
-                {assignMutation.isPending ? "Assigning…" : "Confirm assignment"}
-              </Text>
-            </Pressable>
+              <View style={s.quotationFieldBlock}>
+                <Text style={s.quotationFieldLabel}>Space data status</Text>
+                <View style={{ gap: 8 }}>
+                  {spaceDataOptions.map((option) => {
+                    const selected = spaceDataStatus === option.value;
+                    return (
+                      <Pressable
+                        key={option.value}
+                        style={[s.spaceStatusOption, selected && s.spaceStatusOptionSelected]}
+                        onPress={() => setSpaceDataStatus(option.value)}
+                      >
+                        <View style={[s.spaceStatusRadio, selected && s.spaceStatusRadioSelected]}>
+                          {selected ? <View style={s.spaceStatusRadioDot} /> : null}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.spaceStatusTitle}>{option.label}</Text>
+                          <Text style={s.spaceStatusDesc}>{option.description}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {!selectedDesignerId ? (
+                <Text style={[s.cardMeta, { color: SALE.red }]}>
+                  Select a designer above to continue.
+                </Text>
+              ) : null}
+
+              <Pressable
+                style={[
+                  s.productionCreateButton,
+                  { marginTop: 2 },
+                  (assignMutation.isPending || !selectedDesignerId) && { opacity: 0.45 },
+                ]}
+                disabled={assignMutation.isPending || !selectedDesignerId}
+                onPress={handleAssign}
+              >
+                <Text style={s.quotationFooterPrimaryText}>
+                  {assignMutation.isPending ? "Assigning…" : "Confirm assignment"}
+                </Text>
+              </Pressable>
+            </View>
           </>
         ) : null}
       </View>
@@ -1064,47 +1281,6 @@ function FileRow({ file }: { file: ProjectFileDto }): React.JSX.Element {
       </View>
       <AppIcon definition={downloadIconDefinition} size={15} color={SALE.muted} />
     </View>
-  );
-}
-
-function ProjectChat(): React.JSX.Element {
-  const insets = useSafeAreaInsets();
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    "Hi, your start fee has been confirmed.",
-    "Thank you. When will the designer be assigned?",
-  ]);
-  const send = () => {
-    if (message.trim()) {
-      setMessages((current) => [...current, message.trim()]);
-      setMessage("");
-    }
-  };
-  return (
-    <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView style={s.fill} contentContainerStyle={s.messageArea}>
-        <Text style={s.centerMuted}>CHAT API · COMING NEXT</Text>
-        {messages.map((item, index) => (
-          <View key={`${item}-${index}`} style={[s.bubble, index % 2 ? s.bubbleOther : s.bubbleOwn]}>
-            <Text style={[s.bubbleText, index % 2 ? null : s.bubbleOwnText]}>{item}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 9) }]}>
-        <AppIcon definition={paperclipIconDefinition} size={19} color={SALE.muted} />
-        <TextInput
-          multiline
-          value={message}
-          onChangeText={setMessage}
-          placeholder="Write a message…"
-          placeholderTextColor="rgba(122,111,104,.5)"
-          style={s.composerInput}
-        />
-        <Pressable style={s.send} onPress={send}>
-          <AppIcon definition={sendIconDefinition} size={16} color={SALE.white} />
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -1407,65 +1583,6 @@ function CreateScheduleModal({
         </Pressable>
       </Pressable>
     </Modal>
-  );
-}
-
-export function SaleChatScreen({ route, navigation }: ChatProps): React.JSX.Element {
-  const insets = useSafeAreaInsets();
-  const conversation = saleConversations.find((item) => item.id === route.params.conversationId) ?? saleConversations[0];
-  const [message, setMessage] = useState("");
-  const [items, setItems] = useState([
-    "Xin chào, tôi muốn hỏi về tiến độ hiện tại.",
-    "Chào anh/chị. Phí khởi động đã được xác nhận và chúng tôi đang phân công designer.",
-  ]);
-  const send = () => {
-    if (message.trim()) {
-      setItems((current) => [...current, message.trim()]);
-      setMessage("");
-    }
-  };
-  return (
-    <SaleFrame>
-      <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={[s.header, { paddingTop: Math.max(insets.top, 18) + 8 }]}>
-          <View style={s.detailHeaderTop}>
-            <Pressable style={s.backButton} onPress={() => navigation.goBack()}>
-              <Text style={{ color: SALE.white, fontSize: 19 }}>‹</Text>
-            </Pressable>
-            <Avatar initials={conversation.initials} color={conversation.color} size={36} />
-            <View style={s.detailTitleWrap}>
-              <Text style={s.detailTitle}>{conversation.name}</Text>
-              <Text style={s.headerSubtitle}>{conversation.meta}</Text>
-            </View>
-            <AppIcon definition={phoneIconDefinition} size={18} color={SALE.white} />
-          </View>
-        </View>
-        <ScrollView style={s.fill} contentContainerStyle={s.messageArea} keyboardShouldPersistTaps="handled">
-          {items.map((item, index) => {
-            const own = index % 2 === 1;
-            return (
-              <View key={`${item}-${index}`} style={[s.bubble, own ? s.bubbleOwn : s.bubbleOther]}>
-                <Text style={[s.bubbleText, own && s.bubbleOwnText]}>{item}</Text>
-              </View>
-            );
-          })}
-        </ScrollView>
-        <View style={[s.composer, { paddingBottom: Math.max(insets.bottom, 9) }]}>
-          <AppIcon definition={paperclipIconDefinition} size={19} color={SALE.muted} />
-          <TextInput
-            multiline
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Write a message…"
-            placeholderTextColor="rgba(122,111,104,.5)"
-            style={s.composerInput}
-          />
-          <Pressable style={s.send} onPress={send}>
-            <AppIcon definition={sendIconDefinition} size={16} color={SALE.white} />
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SaleFrame>
   );
 }
 

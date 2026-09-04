@@ -29,7 +29,7 @@ import { ChatMessageListItem } from "../models/chat.model";
 import { mapChatMessageToListItem, getInitials } from "../utils/chat.mapper";
 import { styles } from "./MessageChatScreen.styles";
 
-type MessageChatRoute = RouteProp<RootStackParamList, "MessageChat">;
+type MessageChatRoute = RouteProp<RootStackParamList, "MessageChat" | "SaleChat">;
 
 function resolveAndroidKeyboardOffset(
   event: { endCoordinates: { height: number; screenY: number } },
@@ -53,6 +53,7 @@ export function MessageChatScreen(): React.JSX.Element {
   const route = useRoute<MessageChatRoute>();
   const insets = useSafeAreaInsets();
   const { chatId, projectId, title, staffName, status } = route.params;
+  const isSaleShell = route.name === "SaleChat";
   const [draft, setDraft] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -282,7 +283,16 @@ export function MessageChatScreen(): React.JSX.Element {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Pressable style={styles.headerCircleButton} onPress={() => navigation.navigate("Messages", { projectId })}>
+        <Pressable
+          style={styles.headerCircleButton}
+          onPress={() => {
+            if (isSaleShell) {
+              navigation.navigate("SaleMessages");
+              return;
+            }
+            navigation.navigate("Messages", { projectId });
+          }}
+        >
           <AppIcon definition={arrowLeftIconDefinition} size={18} color="#FFFFFF" />
         </Pressable>
 

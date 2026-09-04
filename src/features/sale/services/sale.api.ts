@@ -94,7 +94,20 @@ export type AvailableDesignerDto = {
   fullName: string;
   email?: string | null;
   phone?: string | null;
+  avatarUrl?: string | null;
+  status?: string | null;
   workload?: number | null;
+  currentActiveProjectCount?: number | null;
+  maxActiveProjects?: number | null;
+  availableSlot?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type AvailableDesignersQuery = {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
 };
 
 /** BE values for PATCH /projects/{id}/designer-assignment */
@@ -133,9 +146,18 @@ function unwrapDesignerList(data: unknown): AvailableDesignerDto[] {
   return [];
 }
 
-export async function getAvailableDesignersApi(): Promise<AvailableDesignerDto[]> {
+export async function getAvailableDesignersApi(
+  query: AvailableDesignersQuery = {},
+): Promise<AvailableDesignerDto[]> {
   const response = await httpClient.get<ApiResponse<AvailableDesignerDto[] | { items: AvailableDesignerDto[] }>>(
     endpoints.accounts.availableDesigners,
+    {
+      params: {
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 10,
+        ...(query.keyword ? { keyword: query.keyword } : {}),
+      },
+    },
   );
   return unwrapDesignerList(response.data.data);
 }

@@ -5,6 +5,7 @@ import type { PhaseDeadlinesResponseDto } from "../../project/models/project.tra
 import { PaymentDetailDto } from "../../payment/models/payment.model";
 import {
   AssignProductionRequestDto,
+  AssignProductionRequestResponseDto,
   AvailableProductionStaffDto,
   AvailableProductionStaffListResponseDto,
   CompleteOrderResponseDto,
@@ -157,8 +158,8 @@ export async function getProductionRequestsApi(query: {
 export async function assignProductionRequestApi(
   productionRequestId: string,
   payload: AssignProductionRequestDto,
-): Promise<ProductionRequestDto> {
-  const response = await httpClient.patch<ApiResponse<ProductionRequestDto>>(
+): Promise<AssignProductionRequestResponseDto> {
+  const response = await httpClient.patch<ApiResponse<AssignProductionRequestResponseDto>>(
     endpoints.productionRequests.assign(productionRequestId),
     payload,
   );

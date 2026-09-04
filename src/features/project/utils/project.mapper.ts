@@ -15,10 +15,58 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   IN_PRODUCTION: "In Production",
   READY_FOR_DELIVERY: "Ready for Delivery",
   DELIVERING: "Delivering",
+  AWAITING_CUSTOMER_CONFIRMATION: "Awaiting Customer Confirmation",
   DELIVERED: "Delivered",
   COMPLETED: "Completed",
   REJECTED: "Rejected",
 };
+
+/** Pipeline order for Sales project lists — earlier = higher priority. */
+export const PROJECT_STATUS_FLOW_ORDER: readonly ProjectStatus[] = [
+  "SUBMITTED",
+  "IN_CONSULTATION",
+  "NEED_BASIC_INFORMATION",
+  "WAITING_FOR_DESIGNER_ASSIGNMENT",
+  "MEASUREMENT_REQUIRED",
+  "SPACE_VERIFIED",
+  "PROPOSAL_CONSULTING",
+  "PROPOSAL_SELECTED",
+  "QUOTATION_SENT",
+  "QUOTATION_REVISION_REQUESTED",
+  "ORDER_CONFIRMED",
+  "IN_PRODUCTION",
+  "READY_FOR_DELIVERY",
+  "DELIVERING",
+  "AWAITING_CUSTOMER_CONFIRMATION",
+  "DELIVERED",
+  "COMPLETED",
+] as const;
+
+const PROJECT_STATUS_FLOW_RANK = new Map<string, number>(
+  PROJECT_STATUS_FLOW_ORDER.map((status, index) => [status, index]),
+);
+
+export function getProjectStatusFlowRank(status: string | null | undefined): number {
+  const normalized = (status ?? "").trim().toUpperCase().replace(/\s+/g, "_");
+  if (normalized === "REJECTED") {
+    return PROJECT_STATUS_FLOW_ORDER.length;
+  }
+  return PROJECT_STATUS_FLOW_RANK.get(normalized) ?? PROJECT_STATUS_FLOW_ORDER.length + 1;
+}
+
+export function compareProjectsByStatusFlow(
+  left: { status: string; submittedAt?: string | null },
+  right: { status: string; submittedAt?: string | null },
+): number {
+  const rankDiff = getProjectStatusFlowRank(left.status) - getProjectStatusFlowRank(right.status);
+  if (rankDiff !== 0) {
+    return rankDiff;
+  }
+
+  const leftTime = left.submittedAt ? new Date(left.submittedAt).getTime() : 0;
+  const rightTime = right.submittedAt ? new Date(right.submittedAt).getTime() : 0;
+  return rightTime - leftTime;
+}
 
 export function getProjectStatusLabel(status: ProjectStatus): string {
   return STATUS_LABELS[status] ?? status.replaceAll("_", " ");

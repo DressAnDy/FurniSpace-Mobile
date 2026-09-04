@@ -20,6 +20,11 @@ const CATEGORY_LABELS: Record<NotificationCategory, string> = {
   order: "Order",
   payment: "Payment",
   project: "Project",
+  lead: "Lead",
+  proposal: "Proposal",
+  quotation: "Quotation",
+  chat: "Chat",
+  production: "Production",
 };
 
 export function resolveNotificationCategory(

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
@@ -7,12 +7,19 @@ import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/dat
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
+  Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  UIManager,
   View,
+  type FocusEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
@@ -138,6 +145,11 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
   const [sourceItemDrafts, setSourceItemDrafts] = useState<QuotationItemDraft[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showValidationHints, setShowValidationHints] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffsetRef = useRef(0);
+  const focusedInputTagRef = useRef<number | null>(null);
+  const keyboardHeightRef = useRef(0);
 
   useEffect(() => {
     if (!quotation) {
@@ -153,6 +165,73 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
     setSourceItemDrafts(itemDrafts);
     setGroupedDrafts(mergeQuotationItemDrafts(itemDrafts));
   }, [quotation]);
+
+  const showFooterRef = useRef(showFooter);
+  showFooterRef.current = showFooter;
+  const insetsBottomRef = useRef(insets.bottom);
+  insetsBottomRef.current = insets.bottom;
+
+  const scrollFocusedInputIntoView = (knownKeyboardHeight?: number) => {
+    const nodeHandle = focusedInputTagRef.current;
+    if (nodeHandle == null) {
+      return;
+    }
+    const kb = knownKeyboardHeight ?? keyboardHeightRef.current;
+    const footerReserve = showFooterRef.current ? 96 : 24;
+    // Android resize already shrinks the window; still reserve footer + cushion.
+    const reservedBottom =
+      Platform.OS === "android"
+        ? footerReserve + insetsBottomRef.current + 24
+        : Math.max(kb, 280) + footerReserve + insetsBottomRef.current;
+    UIManager.measureInWindow(nodeHandle, (_x, y, _width, height) => {
+      if (typeof y !== "number" || typeof height !== "number") {
+        return;
+      }
+      const windowHeight = Dimensions.get("window").height;
+      const visibleBottom = windowHeight - reservedBottom;
+      const overflow = y + height - visibleBottom;
+      if (overflow > 0) {
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, scrollOffsetRef.current + overflow + 20),
+          animated: true,
+        });
+      }
+    });
+  };
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const nextHeight = event.endCoordinates.height;
+      keyboardHeightRef.current = nextHeight;
+      setKeyboardHeight(nextHeight);
+      requestAnimationFrame(() => {
+        scrollFocusedInputIntoView(nextHeight);
+      });
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      keyboardHeightRef.current = 0;
+      setKeyboardHeight(0);
+      focusedInputTagRef.current = null;
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+  };
+
+  const handlePricingInputFocus = (event: FocusEvent) => {
+    focusedInputTagRef.current = event.nativeEvent.target;
+    const delay = Platform.OS === "ios" ? 100 : 180;
+    setTimeout(() => {
+      scrollFocusedInputIntoView();
+    }, delay);
+  };
 
   const isBusy =
     updateHeaderMutation.isPending ||
@@ -322,7 +401,11 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <View style={[s.frame, s.fill]}>
+      <KeyboardAvoidingView
+        style={[s.frame, s.fill]}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 8 : 0}
+      >
         <View style={[s.header, { paddingTop: 12, paddingBottom: 16 }]}>
           <View style={s.headerTopRow}>
             <Pressable style={s.headerIcon} onPress={() => navigation.goBack()}>
@@ -341,8 +424,27 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
         </View>
 
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[s.content, s.contentGap, { paddingBottom: footerPad, paddingTop: 12 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          contentContainerStyle={[
+            s.content,
+            s.contentGap,
+            {
+              paddingBottom:
+                footerPad +
+                (keyboardHeight > 0
+                  ? Platform.OS === "ios"
+                    ? Math.max(keyboardHeight * 0.25, 80)
+                    : 160
+                  : 0),
+              paddingTop: 12,
+            },
+          ]}
         >
           {quotationQuery.isLoading ? (
             <ActivityIndicator color={SALE.gold} />
@@ -432,6 +534,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                             <TextInput
                               value={formatDigits(depositAmount)}
                               onChangeText={(value) => setDepositAmount(value.replace(/\D/g, ""))}
+                              onFocus={handlePricingInputFocus}
                               keyboardType="number-pad"
                               placeholder="0"
                               placeholderTextColor="rgba(122,111,104,.45)"
@@ -525,6 +628,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                                 onChangeText={(value) =>
                                   updateGroupedDraft(item.groupKey, { quantity: value.replace(/\D/g, "") })
                                 }
+                                onFocus={handlePricingInputFocus}
                                 keyboardType="number-pad"
                                 style={[
                                   s.quotationFieldInput,
@@ -539,6 +643,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                                 onChangeText={(value) =>
                                   updateGroupedDraft(item.groupKey, { unitPrice: value.replace(/\D/g, "") })
                                 }
+                                onFocus={handlePricingInputFocus}
                                 keyboardType="number-pad"
                                 style={[
                                   s.quotationFieldInput,
@@ -555,6 +660,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                                   discountAmount: value.replace(/\D/g, ""),
                                 })
                               }
+                              onFocus={handlePricingInputFocus}
                               keyboardType="number-pad"
                               placeholder="0"
                               placeholderTextColor="rgba(122,111,104,.45)"
@@ -641,7 +747,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
             ) : null}
           </View>
         ) : null}
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }

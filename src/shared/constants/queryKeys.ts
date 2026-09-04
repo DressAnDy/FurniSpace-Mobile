@@ -75,6 +75,7 @@ type PaymentListQueryKey = {
 
 type ProjectListQueryKey = {
   status?: string;
+  filter?: string;
   search?: string;
   assignedSalesId?: string;
   assignedDesignerId?: string;
