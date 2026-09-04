@@ -1,9 +1,15 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { CustomerChatTab, ProjectChatMessageSentPayload } from "../models/chat.model";
-import { getProjectChatsApi, searchProjectChatMessagesApi } from "../services/chat.api";
+import { CustomerChatTab, ProjectChatMessageSentPayload, ProjectChatType } from "../models/chat.model";
+import {
+  getProjectChatsApi,
+  searchProjectChatMessagesApi,
+  updateProjectChatStatusApi,
+} from "../services/chat.api";
 import { mapProjectChatToListItem } from "../utils/chat.mapper";
+
+const SALES_VISIBLE_CHAT_TYPES = new Set<ProjectChatType>(["SALES", "DESIGNER"]);
 
 export function useProjectChatsQuery(projectId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -13,7 +19,9 @@ export function useProjectChatsQuery(projectId: string | null) {
     enabled: isLoggedIn && Boolean(projectId),
     queryFn: async () => {
       const response = await getProjectChatsApi(projectId!);
-      return response.items.map(mapProjectChatToListItem);
+      return response.items
+        .filter((item) => SALES_VISIBLE_CHAT_TYPES.has(item.chatType))
+        .map(mapProjectChatToListItem);
     },
   });
 }
@@ -38,6 +46,21 @@ export function useChatSearchQuery(projectId: string | null, query: string) {
     queryFn: async () => {
       const response = await searchProjectChatMessagesApi(projectId!, { q: trimmedQuery, limit: 20 });
       return response.items;
+    },
+  });
+}
+
+export function useCloseProjectChatMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (chatId: string) => updateProjectChatStatusApi(chatId, "CLOSED"),
+    onSuccess: async () => {
+      if (projectId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(projectId) });
+      } else {
+        await queryClient.invalidateQueries({ queryKey: ["chat", "project-list"] });
+      }
     },
   });
 }

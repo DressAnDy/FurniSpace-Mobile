@@ -63,11 +63,13 @@ export function SaleBottomNav({ active }: { active: SaleNavTab }): React.JSX.Ele
 
 export function SaleHeader({
   title,
+  titleNode,
   subtitle,
   children,
   trailing,
 }: {
   title: string;
+  titleNode?: React.ReactNode;
   subtitle?: string;
   children?: React.ReactNode;
   trailing?: React.ReactNode;
@@ -78,7 +80,7 @@ export function SaleHeader({
       <View style={s.headerTopRow}>
         <View style={s.headerCopy}>
           <Text style={s.headerEyebrow}>FurniSpace · Sales</Text>
-          <Text style={s.headerTitle}>{title}</Text>
+          {titleNode ?? <Text style={s.headerTitle}>{title}</Text>}
           {subtitle ? <Text style={s.headerSubtitle}>{subtitle}</Text> : null}
         </View>
         {trailing ? <View style={s.headerActions}>{trailing}</View> : null}
@@ -228,26 +230,19 @@ export function ProjectTabs({ active, projectId }: { active: ProjectDetailTab; p
 export function DetailFixedActions({
   showAssignDesigner = true,
   onAssignDesigner,
-  onMoreActions,
 }: {
   showAssignDesigner?: boolean;
   onAssignDesigner?: () => void;
-  onMoreActions?: () => void;
 } = {}): React.JSX.Element | null {
   const insets = useSafeAreaInsets();
-  if (!showAssignDesigner && !onMoreActions) {
+  if (!showAssignDesigner) {
     return null;
   }
 
   return (
     <View style={[s.fixedActions, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      {showAssignDesigner ? (
-        <Pressable style={s.fixedPrimary} onPress={onAssignDesigner}>
-          <Text style={s.buttonPrimaryText}>Assign Designer</Text>
-        </Pressable>
-      ) : null}
-      <Pressable style={[s.fixedSecondary, !showAssignDesigner && { flex: 1 }]} onPress={onMoreActions}>
-        <Text style={s.buttonSecondaryText}>More Actions</Text>
+      <Pressable style={s.fixedPrimary} onPress={onAssignDesigner}>
+        <Text style={s.buttonPrimaryText}>Assign Designer</Text>
       </Pressable>
     </View>
   );

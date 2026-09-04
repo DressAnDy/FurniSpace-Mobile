@@ -12,6 +12,7 @@ export const linking: LinkingOptions<RootStackParamList> = {
       MessageChat: "message-chat",
       Messages: "messages",
       Notifications: "notifications",
+      SaleNotifications: "sale/notifications",
       Profile: "profile",
       Register: "register",
       PaymentMethod: "payment",

@@ -11,6 +11,7 @@ import { MessageChatScreen } from "../../features/communication/screens/MessageC
 import { MessagesScreen } from "../../features/communication/screens/MessagesScreen";
 import { HomeScreen } from "../../features/home/screens/HomeScreen";
 import { NotificationsScreen } from "../../features/notification/screens/NotificationsScreen";
+import { SaleNotificationsScreen } from "../../features/notification/screens/SaleNotificationsScreen";
 import { ProfileScreen } from "../../features/profile/screens/ProfileScreen";
 import { ProjectTrackingScreen } from "../../features/project/screens/ProjectTrackingScreen";
 import { CreateProjectRequestScreen } from "../../features/project/screens/CreateProjectRequestScreen";
@@ -34,7 +35,7 @@ import {
   SaleProjectsScreen,
   SaleRequestsScreen,
 } from "../../features/sale/screens/SaleMainScreens";
-import { SaleChatScreen, SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
+import { SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
 import { SaleQuotationDetailScreen } from "../../features/sale/screens/SaleQuotationDetailScreen";
 import { SaleOrderDetailScreen } from "../../features/sale/screens/SaleOrderDetailScreen";
 import type { ProjectDetailTab } from "../../features/sale/data/sale.mock";
@@ -55,6 +56,7 @@ export type RootStackParamList = {
   };
   Messages: { projectId?: string } | undefined;
   Notifications: undefined;
+  SaleNotifications: undefined;
   Profile: undefined;
   Register: undefined;
   ResetPassword: { email?: string; token?: string } | undefined;
@@ -77,7 +79,14 @@ export type RootStackParamList = {
   SaleProjects: undefined;
   SaleMessages: undefined;
   SaleMore: undefined;
-  SaleChat: { conversationId: string };
+  SaleChat: {
+    chatId: string;
+    projectId: string;
+    title: string;
+    staffName: string;
+    chatType: ProjectChatType;
+    status: ProjectChatStatus;
+  };
   SaleProjectDetail: { projectId?: string; tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
   SaleQuotationDetail: { quotationId: string; projectId: string; projectName?: string };
   SaleOrderDetail: { orderId: string; projectId: string; projectName?: string };
@@ -96,6 +105,7 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="MessageChat" component={MessageChatScreen} />
         <Stack.Screen name="Messages" component={MessagesScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
+        <Stack.Screen name="SaleNotifications" component={SaleNotificationsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Register" component={RegisterScreen} />
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
@@ -118,7 +128,7 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="SaleProjects" component={SaleProjectsScreen} />
         <Stack.Screen name="SaleMessages" component={SaleMessagesScreen} />
         <Stack.Screen name="SaleMore" component={SaleMoreScreen} />
-        <Stack.Screen name="SaleChat" component={SaleChatScreen} />
+        <Stack.Screen name="SaleChat" component={MessageChatScreen} />
         <Stack.Screen name="SaleProjectDetail" component={SaleProjectDetailScreen} />
         <Stack.Screen name="SaleQuotationDetail" component={SaleQuotationDetailScreen} />
         <Stack.Screen name="SaleOrderDetail" component={SaleOrderDetailScreen} />

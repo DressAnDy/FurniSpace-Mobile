@@ -47,13 +47,10 @@ export function getOrderProductionRequests(
   orderId: string | null | undefined,
 ): ProductionRequestDto[] {
   if (!orderId) {
-    return requests;
+    return [];
   }
-  const matched = requests.filter((item) => item.orderId === orderId);
-  if (matched.length > 0) {
-    return matched;
-  }
-  return requests.every((item) => !item.orderId) ? requests : [];
+  // Only count requests that belong to this order — never attribute project-wide / orderId-less rows.
+  return requests.filter((item) => item.orderId === orderId);
 }
 
 export function getExistingProductionRequest(
@@ -98,16 +95,15 @@ export function canShowProductionSection(
   order: SaleOrderDetailDto | null | undefined,
   productionRequests: ProductionRequestDto[] = [],
 ): boolean {
-  if (canSalesStartProductionSetup(order, productionRequests)) {
+  const status = normalizeSaleOrderStatus(order?.status);
+  // Always surface the card once deposit is paid so Sales can create (or review) production.
+  if (status === "DEPOSIT_PAID") {
     return true;
   }
-
-  const status = normalizeSaleOrderStatus(order?.status);
-  if (status !== "DEPOSIT_PAID" && status !== "IN_PRODUCTION") {
-    return false;
+  if (status === "IN_PRODUCTION" && getExistingProductionRequest(productionRequests, order?.orderId)) {
+    return true;
   }
-
-  return hasExistingProductionRequest(productionRequests, order?.orderId);
+  return false;
 }
 
 export function canSalesCreateDeposit(order: SaleOrderDetailDto | null | undefined): boolean {
@@ -140,6 +136,9 @@ export function canSalesCreateRemainingPayment(order: SaleOrderDetailDto | null 
   if (!order) {
     return false;
   }
+  if ((order.remainingAmount ?? 0) <= 0) {
+    return false;
+  }
   return (
     order.status === "FINAL_PAYMENT_PENDING" ||
     order.status === "DELIVERED"
@@ -150,7 +149,11 @@ export function canSalesCompleteOrder(order: SaleOrderDetailDto | null | undefin
   if (!order) {
     return false;
   }
-  return order.status === "DELIVERED" || order.status === "FINAL_PAYMENT_PENDING";
+  const status = normalizeSaleOrderStatus(order.status);
+  if (status !== "DELIVERED" && status !== "FINAL_PAYMENT_PENDING") {
+    return false;
+  }
+  return (order.remainingAmount ?? 0) <= 0;
 }
 
 export function canSalesCompleteProject(
@@ -209,15 +212,23 @@ export function getSaleOrderNextStepNote(
   }
 
   if (canSalesStartProductionSetup(order, productionRequests)) {
-    return "Choose staff, priority, and deadline, then create production.";
+    return "Choose staff, priority, and deadline, then assign production.";
   }
 
-  if (canSalesCreateRemainingPayment(order) && !hasPaidSaleOrderPayment(payments, "REMAINING_PAYMENT")) {
-    return "Create remaining payment if customer confirm-delivery did not auto-create it.";
+  if (canSalesCreateRemainingPayment(order) && !hasPendingSaleOrderPayment(payments, "REMAINING_PAYMENT")) {
+    return "Create remaining payment for the customer (or wait if BE already created it).";
+  }
+
+  if (
+    (normalizeSaleOrderStatus(order.status) === "DELIVERED" ||
+      normalizeSaleOrderStatus(order.status) === "FINAL_PAYMENT_PENDING") &&
+    (order.remainingAmount ?? 0) > 0
+  ) {
+    return "Remaining payment must be paid before completing the order.";
   }
 
   if (canSalesCompleteOrder(order)) {
-    return "Complete order after remaining payment is settled.";
+    return "Complete order when remaining balance is settled.";
   }
 
   if (order.status === "COMPLETED") {

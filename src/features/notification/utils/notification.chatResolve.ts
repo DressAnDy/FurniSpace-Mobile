@@ -28,6 +28,31 @@ export async function resolveChatNotificationTarget(
   const chatTypeFromMetadata = readMetadataString(item.metadata, "chatType") as ProjectChatType | undefined;
   const inferredChatType = chatTypeFromMetadata ?? inferChatTypeFromMessage(item.description) ?? "SALES";
   const parsedChatTitle = parseChatTitleFromMessage(item.description);
+  const statusFromMetadata = readMetadataString(item.metadata, "status") as ProjectChatStatus | undefined;
+
+  try {
+    const response = await getProjectChatsApi(projectId);
+    const chats = response.items;
+
+    const chat =
+      (chatIdFromMetadata ? chats.find((entry) => entry.chatId === chatIdFromMetadata) : undefined) ??
+      chats.find((entry) => entry.chatType === inferredChatType) ??
+      chats.find((entry) => entry.chatType === "SALES") ??
+      chats[0];
+
+    if (chat) {
+      return {
+        chatId: chat.chatId,
+        projectId,
+        chatType: chat.chatType,
+        title: chat.title || parsedChatTitle || "Project Chat",
+        staffName: readMetadataString(item.metadata, "senderName") ?? chat.staffName,
+        status: chat.status,
+      };
+    }
+  } catch {
+    // Fall through to metadata-only target when list fetch fails.
+  }
 
   if (chatIdFromMetadata) {
     return {
@@ -36,28 +61,9 @@ export async function resolveChatNotificationTarget(
       chatType: inferredChatType,
       title: parsedChatTitle ?? "Project Chat",
       staffName: readMetadataString(item.metadata, "senderName") ?? "Team member",
-      status: "OPEN",
+      status: statusFromMetadata === "CLOSED" || statusFromMetadata === "ARCHIVED" ? statusFromMetadata : "OPEN",
     };
   }
 
-  const response = await getProjectChatsApi(projectId);
-  const chats = response.items;
-
-  const chat =
-    chats.find((entry) => entry.chatType === inferredChatType) ??
-    chats.find((entry) => entry.chatType === "SALES") ??
-    chats[0];
-
-  if (!chat) {
-    return null;
-  }
-
-  return {
-    chatId: chat.chatId,
-    projectId,
-    chatType: chat.chatType,
-    title: chat.title || parsedChatTitle || "Project Chat",
-    staffName: readMetadataString(item.metadata, "senderName") ?? chat.staffName,
-    status: chat.status,
-  };
+  return null;
 }

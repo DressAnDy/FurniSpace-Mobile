@@ -61,12 +61,24 @@ export function useSaleOrderPaymentsQuery(
   });
 }
 
-export function useAvailableProductionStaffQuery(projectId?: string) {
+export function useAvailableProductionStaffQuery(options?: {
+  projectId?: string;
+  productionRequestId?: string | null;
+  enabled?: boolean;
+}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const projectId = options?.projectId;
+  const productionRequestId = options?.productionRequestId ?? null;
   return useQuery({
-    queryKey: ["sale", "production-staff", projectId ?? "all"],
-    enabled: isLoggedIn,
-    queryFn: () => getAvailableProductionStaffApi({ projectId, page: 1, pageSize: 50 }),
+    queryKey: ["sale", "production-staff", projectId ?? "all", productionRequestId ?? "none"],
+    enabled: isLoggedIn && (options?.enabled ?? true),
+    queryFn: () =>
+      getAvailableProductionStaffApi({
+        projectId,
+        productionRequestId: productionRequestId ?? undefined,
+        page: 1,
+        pageSize: 50,
+      }),
   });
 }
 
@@ -179,13 +191,17 @@ export function useAssignProductionRequestMutation(projectId: string | null) {
       payload: AssignProductionRequestDto;
     }) => assignProductionRequestApi(productionRequestId, payload),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sale", "production-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["sale", "production-staff"] });
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: ["sale", "production-requests"] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
 }
 
+/** ADMIN-only recovery endpoint. Do not expose in Sales UI. */
 export function usePrepareFinalPaymentMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({

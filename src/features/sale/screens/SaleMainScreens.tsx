@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
@@ -16,18 +16,20 @@ import { logoutIconDefinition, lockIconDefinition, shieldIconDefinition } from "
 import { bellIconDefinition } from "../../../icons/communication/definitions";
 import { helpIconDefinition } from "../../../icons/common/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
-import { chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
+import { chevronDownIconDefinition, chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
 import { projectIconDefinition } from "../../../icons/project/definitions";
-import { filterIconDefinition, moreHorizontalIconDefinition } from "../../../icons/action/definitions";
+import { filterIconDefinition } from "../../../icons/action/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import type { IconDefinition } from "../../../icons/types";
+import { AppError } from "../../../core/errors/AppError";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
+import { mapAxiosError } from "../../../core/errors/errorMapper";
 import { useLogoutAction } from "../../auth/hooks/useAuthActions";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { saleConversations } from "../data/sale.mock";
+import { useChatSearchQuery, useProjectChatsQuery } from "../../communication/hooks/useProjectChats";
+import { formatChatTime } from "../../communication/utils/chat.mapper";
 import {
-  matchesSaleProjectFilter,
-  saleProjectsFilterToStatus,
+  type SaleProjectListFilter,
   useClaimSalesAssignmentMutation,
   useSaleAssignedProjectsQuery,
   useSaleInboxProjectsQuery,
@@ -42,7 +44,20 @@ import {
   mapSalesKpisToMetrics,
 } from "../utils/sale.mapper";
 import { Avatar, FilterChips, SaleBottomNav, SaleFrame, SaleHeader, SectionTitle } from "../components/SaleShared";
+import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
+import { PROJECT_STATUS_FLOW_ORDER, getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
+
+const PROJECT_STATUS_FILTER_OPTIONS: Array<{ value: SaleProjectListFilter; label: string }> = [
+  { value: "All", label: "All statuses" },
+  { value: "Active", label: "Active" },
+  { value: "Production", label: "Production" },
+  { value: "Delivery", label: "Delivery" },
+  ...PROJECT_STATUS_FLOW_ORDER.map((status) => ({
+    value: status,
+    label: getProjectStatusLabel(status),
+  })),
+];
 
 function SearchBar({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }): React.JSX.Element {
   return (
@@ -64,6 +79,7 @@ function formatDashboardSubtitle(): string {
 export function SaleDashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const currentUser = useAuthStore((state) => state.user);
+  const alertsBadge = useNotificationBadgeLabel();
   const [selectedGroup, setSelectedGroup] = useState<SaleActionGroup | "All">("All");
   const [queuePage, setQueuePage] = useState(1);
   const queuePageSize = 5;
@@ -140,8 +156,13 @@ export function SaleDashboardScreen(): React.JSX.Element {
           subtitle={`${formatDashboardSubtitle()} · Live workspace`}
           trailing={
             <>
-              <Pressable style={s.headerIcon} onPress={() => navigation.navigate("Notifications")}>
+              <Pressable style={s.headerIcon} onPress={() => navigation.navigate("SaleNotifications")}>
                 <AppIcon definition={bellIconDefinition} size={15} color={SALE.white} />
+                {alertsBadge ? (
+                  <View style={s.badge}>
+                    <Text style={s.badgeText}>{alertsBadge}</Text>
+                  </View>
+                ) : null}
               </Pressable>
               <View style={s.avatarGold}>
                 <Text style={s.avatarText}>{getInitials(currentUser?.fullName)}</Text>
@@ -315,6 +336,13 @@ export function SaleRequestsScreen(): React.JSX.Element {
   const canPrev = page > 1;
   const canNext = page < totalPages;
 
+  // No claim-broadcast SignalR for other Sales — refresh when returning to this screen.
+  useFocusEffect(
+    useCallback(() => {
+      void inboxQuery.refetch();
+    }, [inboxQuery.refetch]),
+  );
+
   const handleSearchChange = (value: string) => {
     setQuery(value);
     setPage(1);
@@ -407,11 +435,27 @@ function RequestCard({
           claimMutation.mutate(
             { projectId: item.projectId },
             {
-              onSuccess: () => {
-                Alert.alert("Success", "Lead claimed. Project is now In Consultation.");
-                navigation.navigate("SaleProjectDetail", { projectId: item.projectId, tab: "Overview" });
+              onSuccess: (response) => {
+                const hasSalesChat = Boolean(response.salesChat?.chatId);
+                Alert.alert(
+                  "Lead claimed",
+                  hasSalesChat
+                    ? "Project is In Consultation. Sales chat is ready."
+                    : "Project is now In Consultation.",
+                );
+                navigation.navigate("SaleProjectDetail", {
+                  projectId: item.projectId,
+                  tab: hasSalesChat ? "Chat" : "Overview",
+                });
               },
-              onError: (error) => Alert.alert("Error", getErrorMessage(error, "Unable to claim this request.")),
+              onError: (error) => {
+                const appError = error instanceof AppError ? error : mapAxiosError(error);
+                if (appError.code === "CONFLICT" || appError.status === 409) {
+                  Alert.alert("Lead đã được nhận", "Sales khác đã claim lead này.");
+                  return;
+                }
+                Alert.alert("Error", getErrorMessage(error, "Unable to claim this request."));
+              },
             },
           );
         },
@@ -475,37 +519,34 @@ function mapRequestItem(item: {
 
 export function SaleProjectsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Active" | "Production" | "Delivery">("All");
+  const [filter, setFilter] = useState<SaleProjectListFilter>("All");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 5;
 
   const projectsQuery = useSaleAssignedProjectsQuery({
     search: query.trim() || undefined,
-    status: saleProjectsFilterToStatus(filter),
+    filter,
     page,
     limit: pageSize,
   });
 
-  const items = useMemo(() => {
-    const list = projectsQuery.data?.items ?? [];
-    if (filter === "Active") {
-      return list.filter((item) => matchesSaleProjectFilter(item.rawStatus, "Active"));
-    }
-    return list;
-  }, [filter, projectsQuery.data?.items]);
-
+  const items = projectsQuery.data?.items ?? [];
   const total = projectsQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const canPrev = page > 1;
   const canNext = page < totalPages;
+  const selectedFilterLabel =
+    PROJECT_STATUS_FILTER_OPTIONS.find((option) => option.value === filter)?.label ?? "All statuses";
 
   const handleSearchChange = (value: string) => {
     setQuery(value);
     setPage(1);
   };
 
-  const handleFilterChange = (value: string) => {
-    setFilter(value as typeof filter);
+  const handleFilterChange = (value: SaleProjectListFilter) => {
+    setFilter(value);
+    setFilterOpen(false);
     setPage(1);
   };
 
@@ -524,16 +565,60 @@ export function SaleProjectsScreen(): React.JSX.Element {
         <SaleHeader title="Assigned Projects">
           <View style={s.searchRow}>
             <SearchBar value={query} onChange={handleSearchChange} placeholder="Search project or code…" />
-            <View style={s.filterButton}>
+            <Pressable
+              style={[s.filterButton, filterOpen && { backgroundColor: "rgba(201,168,106,0.28)" }]}
+              onPress={() => setFilterOpen((open) => !open)}
+            >
               <AppIcon definition={filterIconDefinition} size={15} color={SALE.white} />
-            </View>
+            </Pressable>
           </View>
         </SaleHeader>
-        <FilterChips
-          options={["All", "Active", "Production", "Delivery"]}
-          selected={filter}
-          onSelect={handleFilterChange}
-        />
+
+        <View style={s.filterDropdownWrap}>
+          <Pressable
+            style={[s.filterDropdownTrigger, filterOpen && s.filterDropdownTriggerOpen]}
+            onPress={() => setFilterOpen((open) => !open)}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={s.filterDropdownLabel}>Status filter</Text>
+              <Text style={s.filterDropdownValue} numberOfLines={1}>
+                {selectedFilterLabel}
+              </Text>
+            </View>
+            <AppIcon
+              definition={chevronDownIconDefinition}
+              size={14}
+              color={SALE.muted}
+            />
+          </Pressable>
+
+          {filterOpen ? (
+            <View style={s.filterDropdownMenu}>
+              {PROJECT_STATUS_FILTER_OPTIONS.map((option) => {
+                const selected = filter === option.value;
+                return (
+                  <Pressable
+                    key={String(option.value)}
+                    style={[s.filterDropdownOption, selected && s.filterDropdownOptionSelected]}
+                    onPress={() => handleFilterChange(option.value)}
+                  >
+                    <Text
+                      style={[
+                        s.filterDropdownOptionText,
+                        selected && s.filterDropdownOptionTextSelected,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {option.label}
+                    </Text>
+                    {selected ? <Text style={s.filterDropdownCheck}>✓</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
+
         <View style={[s.content, s.contentGap]}>
           <Text style={s.sectionLabel}>
             {total} projects · Page {Math.min(page, totalPages)}/{totalPages}
@@ -627,61 +712,292 @@ function InfoCell({ label, value, color }: { label: string; value: string; color
   );
 }
 
+function formatSaleChatSubtitle(chat: {
+  chatType: string;
+  roleLabel: string;
+  staffName: string;
+}): string {
+  const typeLabel = chat.chatType === "DESIGNER" ? "Designer" : "Sales";
+  const name = chat.staffName?.trim();
+  if (!name) {
+    return typeLabel;
+  }
+  const normalizedName = name.toLowerCase();
+  if (
+    normalizedName === typeLabel.toLowerCase() ||
+    normalizedName === chat.roleLabel.toLowerCase() ||
+    (normalizedName.includes("consultant") && chat.chatType === "SALES")
+  ) {
+    return typeLabel;
+  }
+  return `${typeLabel} · ${name}`;
+}
+
 export function SaleMessagesScreen(): React.JSX.Element {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("All");
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const conversations = saleConversations.filter((item) =>
-    `${item.name} ${item.meta}`.toLowerCase().includes(query.toLowerCase()),
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filter, setFilter] = useState<"All" | "Sales" | "Designer">("All");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectOpen, setProjectOpen] = useState(false);
+
+  const projectsQuery = useSaleAssignedProjectsQuery({ filter: "All", page: 1, limit: 50 });
+  const projects = projectsQuery.data?.items ?? [];
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (selectedProjectId || projects.length === 0) {
+      return;
+    }
+    setSelectedProjectId(projects[0].projectId);
+  }, [projects, selectedProjectId]);
+
+  const chatsQuery = useProjectChatsQuery(selectedProjectId);
+  const searchQuery = useChatSearchQuery(selectedProjectId, debouncedQuery);
+  const isSearching = debouncedQuery.length >= 2;
+
+  const salesChat = useMemo(
+    () => chatsQuery.data?.find((item) => item.chatType === "SALES") ?? null,
+    [chatsQuery.data],
   );
+  const designerChat = useMemo(
+    () => chatsQuery.data?.find((item) => item.chatType === "DESIGNER") ?? null,
+    [chatsQuery.data],
+  );
+
+  const visibleChats = useMemo(() => {
+    const chats = [salesChat, designerChat].filter(Boolean) as NonNullable<typeof salesChat>[];
+    if (filter === "Sales") {
+      return chats.filter((item) => item.chatType === "SALES");
+    }
+    if (filter === "Designer") {
+      return chats.filter((item) => item.chatType === "DESIGNER");
+    }
+    return chats;
+  }, [designerChat, filter, salesChat]);
+
+  const selectedProject = projects.find((item) => item.projectId === selectedProjectId) ?? null;
+  const projectMeta = selectedProject
+    ? [
+        selectedProject.projectCode,
+        selectedProject.type && selectedProject.type !== "—" ? selectedProject.type : null,
+        `${visibleChats.length} thread${visibleChats.length === 1 ? "" : "s"}`,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : projectsQuery.isLoading
+      ? "Loading projects…"
+      : "No assigned projects";
+
+  const openChat = (chat: NonNullable<typeof salesChat>) => {
+    navigation.navigate("SaleChat", {
+      chatId: chat.chatId,
+      projectId: chat.projectId,
+      title: chat.title,
+      staffName: chat.staffName,
+      chatType: chat.chatType,
+      status: chat.status,
+    });
+  };
+
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setProjectOpen(false);
+    setFilter("All");
+    setQuery("");
+  };
+
   return (
     <SaleFrame>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={projectsQuery.isRefetching || chatsQuery.isRefetching}
+            onRefresh={() => {
+              void projectsQuery.refetch();
+              void chatsQuery.refetch();
+              if (isSearching) {
+                void searchQuery.refetch();
+              }
+            }}
+            tintColor={SALE.gold}
+          />
+        }
+      >
         <SaleHeader title="Messages">
-          <View style={{ position: "absolute", right: 19, bottom: 68 }}>
-            <View style={s.headerIcon}>
-              <AppIcon definition={moreHorizontalIconDefinition} size={15} color={SALE.white} />
-            </View>
-          </View>
           <View style={s.searchRow}>
-            <SearchBar value={query} onChange={setQuery} placeholder="Search conversations…" />
+            <SearchBar value={query} onChange={setQuery} placeholder="Search in this project…" />
           </View>
         </SaleHeader>
-        <FilterChips options={["All", "Customers", "Designers", "Internal"]} selected={filter} onSelect={setFilter} />
-        <View style={[s.content, s.contentGap]}>
-          <Text style={s.sectionLabel}>{conversations.length} conversations (mock)</Text>
-          {conversations.map((item) => (
-            <Pressable
-              key={item.id}
-              style={s.conversation}
-              onPress={() => navigation.navigate("SaleChat", { conversationId: item.id })}
-            >
-              <View>
-                <Avatar initials={item.initials} color={item.color} size={42} />
-                {item.online ? <View style={s.online} /> : null}
-              </View>
-              <View style={s.conversationBody}>
-                <View style={s.conversationTop}>
-                  <View>
-                    <Text style={s.conversationName}>{item.name}</Text>
-                    <Text style={s.conversationMeta}>{item.meta}</Text>
-                  </View>
-                  <View>
-                    <Text style={s.conversationTime}>{item.time}</Text>
-                    {item.unread ? (
-                      <View style={s.unread}>
-                        <Text style={s.badgeText}>{item.unread}</Text>
+
+        <View style={s.messagesProjectPicker}>
+          <Pressable
+            style={[s.messagesProjectTrigger, projectOpen && s.messagesProjectTriggerOpen]}
+            disabled={projects.length === 0}
+            onPress={() => setProjectOpen((open) => !open)}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.messagesProjectLabel}>Project</Text>
+              <Text style={s.messagesProjectValue} numberOfLines={1}>
+                {selectedProject?.name ?? (projectsQuery.isLoading ? "Loading…" : "Select project")}
+              </Text>
+              <Text style={s.messagesProjectMeta} numberOfLines={1}>
+                {projectMeta}
+              </Text>
+            </View>
+            <AppIcon definition={chevronDownIconDefinition} size={14} color={SALE.muted} />
+          </Pressable>
+
+          {projectOpen && projects.length > 0 ? (
+            <ScrollView style={s.messagesProjectMenu} nestedScrollEnabled>
+              {projects.map((project) => {
+                const selected = project.projectId === selectedProjectId;
+                return (
+                  <Pressable
+                    key={project.projectId}
+                    style={[s.messagesProjectOption, selected && s.messagesProjectOptionSelected]}
+                    onPress={() => handleSelectProject(project.projectId)}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={s.messagesProjectOptionText} numberOfLines={1}>
+                        {project.name}
+                      </Text>
+                      <Text style={s.messagesProjectOptionMeta} numberOfLines={1}>
+                        {project.projectCode}
+                        {project.type && project.type !== "—" ? ` · ${project.type}` : ""}
+                      </Text>
+                    </View>
+                    {selected ? <Text style={s.messagesProjectOptionCheck}>✓</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
+        </View>
+
+        <View style={s.messagesFilterWrap}>
+          <FilterChips
+            options={["All", "Sales", "Designer"]}
+            selected={filter}
+            onSelect={(value) => setFilter(value as typeof filter)}
+          />
+        </View>
+
+        <View style={s.messagesList}>
+          {projectsQuery.isLoading || chatsQuery.isLoading ? (
+            <ActivityIndicator color={SALE.gold} />
+          ) : projectsQuery.isError ? (
+            <Text style={s.centerMuted}>{getErrorMessage(projectsQuery.error, "Unable to load projects.")}</Text>
+          ) : projects.length === 0 ? (
+            <Text style={s.centerMuted}>No assigned projects yet.</Text>
+          ) : isSearching ? (
+            searchQuery.isLoading ? (
+              <ActivityIndicator color={SALE.gold} />
+            ) : (searchQuery.data?.length ?? 0) === 0 ? (
+              <Text style={s.centerMuted}>No messages match “{debouncedQuery}”.</Text>
+            ) : (
+              (searchQuery.data ?? []).map((item) => {
+                const chat = chatsQuery.data?.find((entry) => entry.chatId === item.chatId);
+                return (
+                  <Pressable
+                    key={item.messageId}
+                    style={s.conversation}
+                    onPress={() => {
+                      if (!chat) {
+                        return;
+                      }
+                      openChat(chat);
+                    }}
+                  >
+                    <View
+                      style={[
+                        s.conversationAccent,
+                        chat?.chatType === "DESIGNER" ? s.conversationAccentDesigner : s.conversationAccentSales,
+                      ]}
+                    />
+                    <Avatar initials={getInitials(item.senderName)} color={SALE.charcoal} size={44} />
+                    <View style={s.conversationBody}>
+                      <View style={s.conversationTop}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={s.conversationName} numberOfLines={1}>
+                            {item.senderName}
+                          </Text>
+                          <Text style={s.conversationMeta} numberOfLines={1}>
+                            {chat?.title ?? "Chat"}
+                          </Text>
+                        </View>
+                        <Text style={s.conversationTime}>{formatChatTime(item.createdAt)}</Text>
                       </View>
-                    ) : null}
-                  </View>
+                      <Text style={s.conversationPreview} numberOfLines={2}>
+                        {item.content}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )
+          ) : visibleChats.length === 0 ? (
+            <Text style={s.centerMuted}>
+              No chats yet for this project. Sales chat appears after claim; Designer chat after assign designer.
+            </Text>
+          ) : (
+            visibleChats.map((item) => (
+              <Pressable key={item.chatId} style={s.conversation} onPress={() => openChat(item)}>
+                <View
+                  style={[
+                    s.conversationAccent,
+                    item.chatType === "DESIGNER" ? s.conversationAccentDesigner : s.conversationAccentSales,
+                  ]}
+                />
+                <View>
+                  <Avatar
+                    initials={item.chatType === "DESIGNER" ? "DS" : "SC"}
+                    color={item.chatType === "DESIGNER" ? "#7A6F68" : SALE.charcoal}
+                    size={44}
+                  />
+                  {item.isOpen ? <View style={s.online} /> : null}
                 </View>
-                <Text style={s.conversationPreview} numberOfLines={1}>
-                  {item.preview}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-          <Text style={s.centerMuted}>Chat API for Sales will be wired next.</Text>
+                <View style={s.conversationBody}>
+                  <View style={s.conversationTop}>
+                    <View style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                      <Text style={s.conversationName} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={s.conversationMeta} numberOfLines={1}>
+                        {formatSaleChatSubtitle(item)}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text style={s.conversationTime}>{item.timeLabel}</Text>
+                      <View
+                        style={[
+                          s.conversationStatusPill,
+                          item.isOpen ? s.conversationStatusOpen : s.conversationStatusClosed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            s.conversationStatusText,
+                            item.isOpen ? s.conversationStatusTextOpen : s.conversationStatusTextClosed,
+                          ]}
+                        >
+                          {item.isOpen ? "Open" : "Closed"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={s.conversationPreview} numberOfLines={2}>
+                    {item.preview}
+                  </Text>
+                </View>
+              </Pressable>
+            ))
+          )}
         </View>
       </ScrollView>
       <SaleBottomNav active="messages" />
@@ -695,7 +1011,12 @@ export function SaleMoreScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
   const menu: { icon: IconDefinition; title: string; subtitle: string; action?: () => void }[] = [
-    { icon: bellIconDefinition, title: "Notification Settings", subtitle: "Manage alerts and reminders" },
+    {
+      icon: bellIconDefinition,
+      title: "Notifications",
+      subtitle: "Sales alerts and project updates",
+      action: () => navigation.navigate("SaleNotifications"),
+    },
     {
       icon: lockIconDefinition,
       title: "Change Password",
