@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -78,6 +78,12 @@ export function HomeScreen(): React.JSX.Element {
 
   const refetchProjects = useCallback(() => projectsQuery.refetch(), [projectsQuery]);
 
+  useEffect(() => {
+    if (user?.role === "SALES") {
+      navigation.reset({ index: 0, routes: [{ name: "SaleDashboard" }] });
+    }
+  }, [navigation, user?.role]);
+
   useHomeProjectRealtime({
     projectId: activeProjectId,
     enabled: true,
@@ -142,6 +148,10 @@ export function HomeScreen(): React.JSX.Element {
         break;
     }
   };
+
+  if (user?.role === "SALES") {
+    return <View style={styles.screen} />;
+  }
 
   return (
     <View style={styles.screen}>

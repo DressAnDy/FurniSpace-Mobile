@@ -15,17 +15,41 @@ const PRIORITY_COLORS: Record<string, string> = {
   LOW: "#51A2FF",
 };
 
-const STATUS_COLORS: Partial<Record<ProjectStatus, string>> = {
-  WAITING_FOR_DESIGNER_ASSIGNMENT: "#E17100",
-  PROPOSAL_CONSULTING: "#9810FA",
-  ORDER_CONFIRMED: "#009966",
-  DELIVERING: "#0092B8",
-  IN_PRODUCTION: "#497D00",
-  READY_FOR_DELIVERY: "#155DFC",
-  NEED_BASIC_INFORMATION: "#FF8904",
-  SUBMITTED: "#C9A86A",
-  IN_CONSULTATION: "#3A6B9A",
+export type SaleStatusTone = {
+  backgroundColor: string;
+  borderColor: string;
+  color: string;
 };
+
+/** Shared Sale status tones — same family as order/quotation pills. */
+export function getSaleProjectStatusColors(status: ProjectStatus | string): SaleStatusTone {
+  switch ((status ?? "").toUpperCase()) {
+    case "COMPLETED":
+    case "ORDER_CONFIRMED":
+    case "DELIVERED":
+    case "SPACE_VERIFIED":
+      return { backgroundColor: "#E8F8F0", borderColor: "#A7F3D0", color: "#009966" };
+    case "REJECTED":
+      return { backgroundColor: "#FFF5F5", borderColor: "#FECACA", color: "#FB2C36" };
+    case "SUBMITTED":
+    case "NEED_BASIC_INFORMATION":
+    case "IN_CONSULTATION":
+    case "WAITING_FOR_DESIGNER_ASSIGNMENT":
+    case "QUOTATION_REVISION_REQUESTED":
+      return { backgroundColor: "#FFF4E5", borderColor: "#FED7AA", color: "#BB4D00" };
+    case "MEASUREMENT_REQUIRED":
+    case "PROPOSAL_CONSULTING":
+    case "PROPOSAL_SELECTED":
+    case "QUOTATION_SENT":
+    case "IN_PRODUCTION":
+    case "READY_FOR_DELIVERY":
+    case "DELIVERING":
+    case "AWAITING_CUSTOMER_CONFIRMATION":
+      return { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE", color: "#155DFC" };
+    default:
+      return { backgroundColor: "#F5F2ED", borderColor: "#E8E4DE", color: "#7A6F68" };
+  }
+}
 
 export function mapSalesKpisToMetrics(kpis: SalesKpisDto): SaleMetricCard[] {
   return [
@@ -73,7 +97,7 @@ export function formatSaleDate(value: string | null | undefined): string {
 }
 
 export function getStatusColor(status: ProjectStatus | string): string {
-  return STATUS_COLORS[status as ProjectStatus] ?? "#7A6F68";
+  return getSaleProjectStatusColors(status).color;
 }
 
 export function mapProjectToSaleRequestCard(item: ProjectListItemDto) {
@@ -164,3 +188,82 @@ export const ACTION_GROUP_ORDER = [
   "Order and Payment",
   "Delivery",
 ] as const;
+
+export function normalizeComparableText(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function isSameProjectText(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalizeComparableText(a);
+  const right = normalizeComparableText(b);
+  return left.length > 0 && left === right;
+}
+
+function splitProjectRequirementItems(value: string | null | undefined): string[] {
+  if (!value?.trim()) {
+    return [];
+  }
+
+  return value
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function buildProjectOverviewContent(project: {
+  description: string | null;
+  businessPurpose: string | null;
+  furnitureRequirement: string | null;
+}): {
+  brief: string | null;
+  businessPurpose: string | null;
+  furnitureItems: string[];
+} {
+  const description = project.description?.trim() ?? "";
+  const businessPurpose = project.businessPurpose?.trim() ?? "";
+  const seenFurniture = new Set<string>();
+
+  const furnitureItems = splitProjectRequirementItems(project.furnitureRequirement).filter((item) => {
+    const key = normalizeComparableText(item);
+    if (!key || seenFurniture.has(key)) {
+      return false;
+    }
+    if (isSameProjectText(item, description) || isSameProjectText(item, businessPurpose)) {
+      return false;
+    }
+    seenFurniture.add(key);
+    return true;
+  });
+
+  const showBusinessPurpose = Boolean(businessPurpose) && !isSameProjectText(businessPurpose, description);
+
+  if (description) {
+    return {
+      brief: description,
+      businessPurpose: showBusinessPurpose ? businessPurpose : null,
+      furnitureItems,
+    };
+  }
+
+  if (showBusinessPurpose) {
+    return {
+      brief: null,
+      businessPurpose,
+      furnitureItems,
+    };
+  }
+
+  if (furnitureItems.length > 0) {
+    return {
+      brief: null,
+      businessPurpose: null,
+      furnitureItems,
+    };
+  }
+
+  return {
+    brief: "No project brief provided yet.",
+    businessPurpose: null,
+    furnitureItems: [],
+  };
+}

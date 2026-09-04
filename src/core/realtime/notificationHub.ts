@@ -48,6 +48,7 @@ export const NOTIFICATION_HUB_EVENTS = [
   "payment.updated",
   "payment.expired",
   "payment.cancelled",
+  "payment.paid",
   "payment.transaction.failed",
   "payment.transaction.cancelled",
   "production.request.assigned",

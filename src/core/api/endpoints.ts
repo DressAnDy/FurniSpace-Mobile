@@ -17,6 +17,7 @@ export const endpoints = {
     messages: (chatId: string) => `/project-chats/${chatId}/messages`,
     sendMessage: (chatId: string) => `/project-chats/${chatId}/messages`,
     sendFile: (chatId: string) => `/project-chats/${chatId}/messages/files`,
+    updateStatus: (chatId: string) => `/project-chats/${chatId}/status`,
     search: (projectId: string) => `/projects/${projectId}/chat-messages/search`,
   },
   projects: {
@@ -32,6 +33,8 @@ export const endpoints = {
     reopenProposal: (projectId: string) => `/projects/${projectId}/reopen-proposal`,
     complete: (projectId: string) => `/projects/${projectId}/complete`,
     orders: (projectId: string) => `/projects/${projectId}/orders`,
+    updateProductionPhaseDeadline: (projectId: string) =>
+      `/projects/${projectId}/phase-deadlines/production`,
     salesAssignment: (projectId: string) => `/projects/${projectId}/sales-assignment`,
     informationRequests: (projectId: string) => `/projects/${projectId}/information-requests`,
     updateStatus: (projectId: string) => `/projects/${projectId}/status`,
@@ -105,6 +108,7 @@ export const endpoints = {
     deliveryDetails: (orderId: string) => `/orders/${orderId}/delivery-details`,
     createDeposit: (orderId: string) => `/orders/${orderId}/payments/deposit`,
     createRemaining: (orderId: string) => `/orders/${orderId}/payments/remaining`,
+    payments: (orderId: string) => `/orders/${orderId}/payments`,
     confirmDelivery: (orderId: string) => `/orders/${orderId}/confirm-delivery`,
     prepareFinalPayment: (orderId: string) => `/orders/${orderId}/prepare-final-payment`,
     complete: (orderId: string) => `/orders/${orderId}/complete`,

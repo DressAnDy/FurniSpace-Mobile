@@ -1,21 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
+import { AppError } from "../../../core/errors/AppError";
+import { mapAxiosError } from "../../../core/errors/errorMapper";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { ProjectListQuery, ProjectStatus } from "../../project/models/project.model";
+import { ProjectDetailDto, ProjectListQuery, ProjectStatus } from "../../project/models/project.model";
 import { getProjectsApi } from "../../project/services/project.api";
+import { normalizeProjectDetailDto } from "../../project/utils/project.mapper";
 import {
+  AssignDesignerRequestDto,
+  assignProjectDesignerApi,
+  claimSalesAssignmentApi,
+  getAvailableDesignersApi,
+  getDashboardProjectPhaseDeadlinesApi,
+  getSalesActionQueueApi,
+  getSalesKpisApi,
+  requestProjectInformationApi,
+} from "../services/sale.api";
+import {
+  DashboardPhaseDeadlinesQuery,
   ClaimSalesAssignmentRequestDto,
   RequestProjectInformationDto,
   SalesActionQueueQuery,
   SalesKpisQuery,
 } from "../models/sale.model";
-import {
-  claimSalesAssignmentApi,
-  getSalesActionQueueApi,
-  getSalesKpisApi,
-  requestProjectInformationApi,
-} from "../services/sale.api";
 import { mapProjectToSaleProjectCard, mapProjectToSaleRequestCard } from "../utils/sale.mapper";
+import { removeProjectFromSaleInboxCaches } from "../utils/sale.lead.realtime";
+import { compareProjectsByStatusFlow } from "../../project/utils/project.mapper";
 
 export function useSalesKpisQuery(query: SalesKpisQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -37,27 +47,78 @@ export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
   });
 }
 
+export function useDashboardPhaseDeadlinesQuery(query: DashboardPhaseDeadlinesQuery = {}) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: queryKeys.sale.dashboardPhaseDeadlines(query),
+    enabled: isLoggedIn,
+    queryFn: () => getDashboardProjectPhaseDeadlinesApi(query),
+  });
+}
+
+const INTAKE_STATUSES: ProjectStatus[] = ["SUBMITTED", "IN_CONSULTATION", "NEED_BASIC_INFORMATION"];
+
 export function useSaleInboxProjectsQuery(options: {
   filter: "All" | "New" | "In Review" | "Waiting Info";
   search?: string;
-} ) {
+  page?: number;
+  limit?: number;
+}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   const status = requestFilterToStatus(options.filter);
+  const page = options.page ?? 1;
+  const limit = options.limit ?? 5;
 
   return useQuery({
     queryKey: queryKeys.project.list({
       status: status ?? "ALL_INTAKE",
       search: options.search,
-      page: 1,
-      limit: 50,
+      page,
+      limit,
     }),
     enabled: isLoggedIn,
     queryFn: async () => {
+      // "All" must merge intake statuses — a bare list page mixes non-inbox work and truncates.
+      if (!status) {
+        const responses = await Promise.all(
+          INTAKE_STATUSES.map((intakeStatus) =>
+            getProjectsApi({
+              status: intakeStatus,
+              ...(options.search ? { search: options.search } : {}),
+              page: 1,
+              limit: 100,
+            }),
+          ),
+        );
+
+        const seen = new Set<string>();
+        const merged = responses
+          .flatMap((response) => response.items)
+          .filter((item) => {
+            if (seen.has(item.projectId)) {
+              return false;
+            }
+            seen.add(item.projectId);
+            return matchesSaleRequestFilter(item.status, "All");
+          })
+          .sort((left, right) => new Date(right.submittedAt).getTime() - new Date(left.submittedAt).getTime())
+          .map(mapProjectToSaleRequestCard);
+
+        const start = (page - 1) * limit;
+        return {
+          items: merged.slice(start, start + limit),
+          page,
+          limit,
+          total: merged.length,
+        };
+      }
+
       const response = await getProjectsApi({
-        ...(status ? { status } : {}),
+        status,
         ...(options.search ? { search: options.search } : {}),
-        page: 1,
-        limit: 50,
+        page,
+        limit,
       });
 
       const items = response.items
@@ -67,7 +128,7 @@ export function useSaleInboxProjectsQuery(options: {
       return {
         ...response,
         items,
-        total: items.length,
+        total: response.total,
       };
     },
   });
@@ -88,23 +149,51 @@ function requestFilterToStatus(
   return undefined;
 }
 
-export function useSaleAssignedProjectsQuery(query: Omit<ProjectListQuery, "assignedSalesId"> = {}) {
+export type SaleProjectListFilter =
+  | "All"
+  | "Active"
+  | "Production"
+  | "Delivery"
+  | ProjectStatus;
+
+export function useSaleAssignedProjectsQuery(
+  query: Omit<ProjectListQuery, "assignedSalesId" | "status"> & {
+    filter?: SaleProjectListFilter;
+  } = {},
+) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   const accountId = useAuthStore((state) => state.user?.accountId);
+  const filter = query.filter ?? "All";
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 5;
+  const search = query.search?.trim() || undefined;
 
   return useQuery({
-    queryKey: queryKeys.project.list({ ...query, assignedSalesId: accountId }),
+    queryKey: queryKeys.project.list({
+      assignedSalesId: accountId,
+      filter,
+      search,
+      page,
+      limit,
+    }),
     enabled: isLoggedIn && Boolean(accountId),
     queryFn: async () => {
       const response = await getProjectsApi({
-        ...query,
         assignedSalesId: accountId!,
-        page: query.page ?? 1,
-        limit: query.limit ?? 5,
+        ...(search ? { search } : {}),
+        page: 1,
+        limit: 100,
       });
+
+      const filtered = response.items.filter((item) => matchesSaleProjectFilter(item.status, filter));
+      const sorted = [...filtered].sort(compareProjectsByStatusFlow);
+      const start = (page - 1) * limit;
+
       return {
-        ...response,
-        items: response.items.map(mapProjectToSaleProjectCard),
+        items: sorted.slice(start, start + limit).map(mapProjectToSaleProjectCard),
+        page,
+        limit,
+        total: sorted.length,
       };
     },
   });
@@ -124,13 +213,46 @@ export function saleProjectsFilterToStatus(
 
 export function useClaimSalesAssignmentMutation() {
   const queryClient = useQueryClient();
+  const authUser = useAuthStore((state) => state.user);
 
   return useMutation({
     mutationFn: ({ projectId, note }: { projectId: string; note?: string } & ClaimSalesAssignmentRequestDto) =>
       claimSalesAssignmentApi(projectId, note ? { note } : { note: "Taking this lead" }),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      removeProjectFromSaleInboxCaches(queryClient, response.projectId);
+
+      queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(response.projectId), (current) => {
+        if (!current) {
+          return current;
+        }
+
+        return normalizeProjectDetailDto({
+          ...current,
+          assignedSalesId: response.assignedSalesId,
+          assignedSales:
+            authUser && authUser.accountId === response.assignedSalesId
+              ? { accountId: authUser.accountId, fullName: authUser.fullName }
+              : current.assignedSales,
+          status: (response.status as ProjectStatus) ?? current.status,
+        });
+      });
+
+      if (response.salesChat?.chatId) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.chat.projectList(response.projectId),
+        });
+      }
+
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(response.projectId) });
       void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
       void queryClient.invalidateQueries({ queryKey: ["sale"] });
+    },
+    onError: (error, variables) => {
+      const appError = error instanceof AppError ? error : mapAxiosError(error);
+      if (appError.code === "CONFLICT" || appError.status === 409) {
+        removeProjectFromSaleInboxCaches(queryClient, variables.projectId);
+        void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
+      }
     },
   });
 }
@@ -149,9 +271,51 @@ export function useRequestProjectInformationMutation() {
   });
 }
 
+export function useAvailableDesignersQuery(enabled = true) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: ["sale", "available-designers", { page: 1, pageSize: 10 }] as const,
+    enabled: isLoggedIn && enabled,
+    queryFn: () => getAvailableDesignersApi({ page: 1, pageSize: 10 }),
+  });
+}
+
+export function useAssignProjectDesignerMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: AssignDesignerRequestDto) => assignProjectDesignerApi(projectId!, payload),
+    onSuccess: (response) => {
+      if (projectId) {
+        queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(projectId), (current) => {
+          if (!current) {
+            return current;
+          }
+
+          const assignedDesignerId =
+            response.assignedDesigner?.accountId ?? response.assignedDesignerId ?? current.assignedDesignerId;
+
+          return normalizeProjectDetailDto({
+            ...current,
+            assignedDesignerId,
+            assignedDesigner: response.assignedDesigner ?? current.assignedDesigner,
+            status: (response.status as ProjectStatus) ?? current.status,
+          });
+        });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.payment.projectStartFeeStatus(projectId) });
+        void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
+        void queryClient.invalidateQueries({ queryKey: ["sale"] });
+      }
+    },
+  });
+}
+
 export function matchesSaleProjectFilter(
   status: ProjectStatus,
-  filter: "All" | "Active" | "Production" | "Delivery",
+  filter: SaleProjectListFilter,
 ): boolean {
   if (filter === "All") {
     return true;
@@ -162,7 +326,14 @@ export function matchesSaleProjectFilter(
   if (filter === "Production") {
     return status === "IN_PRODUCTION" || status === "READY_FOR_DELIVERY";
   }
-  return status === "DELIVERING" || status === "DELIVERED";
+  if (filter === "Delivery") {
+    return (
+      status === "DELIVERING" ||
+      status === "AWAITING_CUSTOMER_CONFIRMATION" ||
+      status === "DELIVERED"
+    );
+  }
+  return status === filter;
 }
 
 export function matchesSaleRequestFilter(

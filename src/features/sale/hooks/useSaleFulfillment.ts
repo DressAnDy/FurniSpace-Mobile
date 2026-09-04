@@ -1,18 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
+import { refetchSaleProjectOverviewQueries } from "./useSaleCommercial";
 import {
   AssignProductionRequestDto,
-  CreateDeliveryRequestDto,
   CreateOrderPaymentRequestDto,
   CreateProductionRequestDto,
 } from "../models/sale.fulfillment.model";
 import {
   assignProductionRequestApi,
   completeOrderApi,
-  completeOrderDeliveryBatchApi,
   completeProjectApi,
-  createOrderDeliveryApi,
   createProductionRequestApi,
   createSaleOrderDepositPaymentApi,
   createSaleOrderRemainingPaymentApi,
@@ -21,9 +19,17 @@ import {
   getOrderDeliveryTrackingApi,
   getProductionRequestsApi,
   getSaleOrderByIdApi,
+  getSaleOrderPaymentsApi,
   getSaleProjectOrdersApi,
   prepareFinalPaymentApi,
+  putProductionPhaseDeadlineApi,
 } from "../services/sale.fulfillment.api";
+
+function refreshSaleProjectOverview(queryClient: QueryClient, projectId: string | null): void {
+  if (projectId) {
+    void refetchSaleProjectOverviewQueries(queryClient, projectId);
+  }
+}
 
 export function useSaleOrdersQuery(projectId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -37,27 +43,57 @@ export function useSaleOrdersQuery(projectId: string | null) {
 export function useSaleOrderDetailQuery(orderId: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   return useQuery({
-    queryKey: ["sale", "order", orderId ?? "none"],
+    queryKey: queryKeys.order.detail(orderId ?? "none"),
     enabled: isLoggedIn && Boolean(orderId),
     queryFn: () => getSaleOrderByIdApi(orderId!),
   });
 }
 
-export function useAvailableProductionStaffQuery(projectId?: string) {
+export function useSaleOrderPaymentsQuery(
+  orderId: string | null,
+  query: { status?: string; paymentType?: string } = {},
+) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   return useQuery({
-    queryKey: ["sale", "production-staff", projectId ?? "all"],
-    enabled: isLoggedIn,
-    queryFn: () => getAvailableProductionStaffApi({ projectId, page: 1, pageSize: 50 }),
+    queryKey: ["sale", "order", orderId ?? "none", "payments", query],
+    enabled: isLoggedIn && Boolean(orderId),
+    queryFn: () => getSaleOrderPaymentsApi(orderId!, query),
   });
 }
 
-export function useSaleProductionRequestsQuery(projectId: string | null) {
+export function useAvailableProductionStaffQuery(options?: {
+  projectId?: string;
+  productionRequestId?: string | null;
+  enabled?: boolean;
+}) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const projectId = options?.projectId;
+  const productionRequestId = options?.productionRequestId ?? null;
+  return useQuery({
+    queryKey: ["sale", "production-staff", projectId ?? "all", productionRequestId ?? "none"],
+    enabled: isLoggedIn && (options?.enabled ?? true),
+    queryFn: () =>
+      getAvailableProductionStaffApi({
+        projectId,
+        productionRequestId: productionRequestId ?? undefined,
+        page: 1,
+        pageSize: 50,
+      }),
+  });
+}
+
+export function useSaleProductionRequestsQuery(projectId: string | null, orderId?: string | null) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
   return useQuery({
-    queryKey: queryKeys.sale.productionRequests({ projectId }),
-    enabled: isLoggedIn && Boolean(projectId),
-    queryFn: () => getProductionRequestsApi({ projectId: projectId!, page: 1, limit: 20 }),
+    queryKey: queryKeys.sale.productionRequests({ projectId, orderId }),
+    enabled: isLoggedIn && Boolean(projectId || orderId),
+    queryFn: () =>
+      getProductionRequestsApi({
+        projectId: projectId ?? undefined,
+        orderId: orderId ?? undefined,
+        page: 1,
+        limit: 20,
+      }),
   });
 }
 
@@ -79,14 +115,33 @@ export function useOrderDeliveryTrackingQuery(orderId: string | null) {
   });
 }
 
+export function usePutProductionPhaseDeadlineMutation(projectId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { productionDeadline: string }) => putProductionPhaseDeadlineApi(projectId!, payload),
+    onSuccess: () => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
+      }
+    },
+  });
+}
+
 export function useCreateSaleDepositMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ orderId, payload }: { orderId: string; payload?: CreateOrderPaymentRequestDto }) =>
       createSaleOrderDepositPaymentApi(orderId, payload),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(variables.orderId) });
+      void queryClient.invalidateQueries({ queryKey: ["sale", "order", variables.orderId, "payments"] });
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
@@ -97,9 +152,13 @@ export function useCreateSaleRemainingPaymentMutation(projectId: string | null) 
   return useMutation({
     mutationFn: ({ orderId, payload }: { orderId: string; payload?: CreateOrderPaymentRequestDto }) =>
       createSaleOrderRemainingPaymentApi(orderId, payload),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(variables.orderId) });
+      void queryClient.invalidateQueries({ queryKey: ["sale", "order", variables.orderId, "payments"] });
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
@@ -112,9 +171,10 @@ export function useCreateProductionRequestMutation(projectId: string | null) {
       createProductionRequestApi(orderId, payload),
     onSuccess: () => {
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.productionRequests({ projectId }) });
+        void queryClient.invalidateQueries({ queryKey: ["sale", "production-requests"] });
         void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
@@ -131,39 +191,17 @@ export function useAssignProductionRequestMutation(projectId: string | null) {
       payload: AssignProductionRequestDto;
     }) => assignProductionRequestApi(productionRequestId, payload),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sale", "production-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["sale", "production-staff"] });
       if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.productionRequests({ projectId }) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
 }
 
-export function useCreateOrderDeliveryMutation(orderId: string | null) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: CreateDeliveryRequestDto) => createOrderDeliveryApi(orderId!, payload),
-    onSuccess: () => {
-      if (orderId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.deliveries(orderId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.deliveryTracking(orderId) });
-      }
-    },
-  });
-}
-
-export function useCompleteOrderDeliveryMutation(orderId: string | null) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (deliveryId: string) => completeOrderDeliveryBatchApi(orderId!, deliveryId),
-    onSuccess: () => {
-      if (orderId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.deliveries(orderId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.deliveryTracking(orderId) });
-      }
-    },
-  });
-}
-
+/** ADMIN-only recovery endpoint. Do not expose in Sales UI. */
 export function usePrepareFinalPaymentMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -180,10 +218,13 @@ export function useCompleteOrderMutation(projectId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderId: string) => completeOrderApi(orderId),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(data.orderId) });
+      void queryClient.invalidateQueries({ queryKey: ["sale", "order", data.orderId, "payments"] });
       if (projectId) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.sale.orders(projectId) });
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        refreshSaleProjectOverview(queryClient, projectId);
       }
     },
   });
@@ -196,6 +237,7 @@ export function useCompleteProjectMutation() {
     onSuccess: (_data, projectId) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
       void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
+      refreshSaleProjectOverview(queryClient, projectId);
     },
   });
 }

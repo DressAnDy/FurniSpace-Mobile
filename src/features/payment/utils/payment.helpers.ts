@@ -58,3 +58,10 @@ export function canCustomerPayRemaining(
     orderStatus === "DELIVERED"
   );
 }
+
+/** Sales/Designer/Admin use helper endpoints; Customer uses /transactions. */
+export function usesPaymentHelperCheckout(
+  role: "CUSTOMER" | "SALES" | "DESIGNER" | "PRODUCTION" | "ADMIN" | null | undefined,
+): boolean {
+  return role === "SALES" || role === "DESIGNER" || role === "ADMIN";
+}

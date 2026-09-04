@@ -8,9 +8,31 @@ import {
   ChatSearchResultDto,
   PaginatedResponse,
   ProjectChatListQuery,
+  ProjectChatStatus,
   ProjectChatSummaryDto,
   SendTextMessageRequest,
 } from "../models/chat.model";
+
+export type ChatUploadFileType =
+  | "REFERENCE_IMAGE"
+  | "FLOOR_PLAN"
+  | "PDF_DRAWING"
+  | "ORDER_DOCUMENT"
+  | "OTHER";
+
+export type ChatFileVisibility = "CUSTOMER_VISIBLE" | "STAFF_ONLY" | "PRIVATE";
+
+function resolveChatUploadFileType(mimeType: string, fileName: string): ChatUploadFileType {
+  const mime = (mimeType || "").toLowerCase();
+  const name = (fileName || "").toLowerCase();
+  if (mime.startsWith("image/")) {
+    return "REFERENCE_IMAGE";
+  }
+  if (mime.includes("pdf") || name.endsWith(".pdf")) {
+    return "PDF_DRAWING";
+  }
+  return "OTHER";
+}
 
 export async function getProjectChatsApi(
   projectId: string,
@@ -67,6 +89,10 @@ export async function sendChatFileMessageApi(
     type: string;
   },
   content?: string,
+  options?: {
+    fileType?: ChatUploadFileType;
+    visibility?: ChatFileVisibility;
+  },
 ): Promise<ChatMessageDto> {
   const formData = new FormData();
   formData.append("file", {
@@ -79,12 +105,25 @@ export async function sendChatFileMessageApi(
     formData.append("content", content.trim());
   }
 
+  formData.append("fileType", options?.fileType ?? resolveChatUploadFileType(file.type, file.name));
+  formData.append("visibility", options?.visibility ?? "CUSTOMER_VISIBLE");
+
   const response = await httpClient.post<ApiResponse<ChatMessageDto>>(endpoints.chat.sendFile(chatId), formData, {
     headers: {
       "Content-Type": "multipart/form-data",
     },
   });
 
+  return response.data.data;
+}
+
+export async function updateProjectChatStatusApi(
+  chatId: string,
+  status: Extract<ProjectChatStatus, "CLOSED">,
+): Promise<ProjectChatSummaryDto> {
+  const response = await httpClient.patch<ApiResponse<ProjectChatSummaryDto>>(endpoints.chat.updateStatus(chatId), {
+    status,
+  });
   return response.data.data;
 }
 

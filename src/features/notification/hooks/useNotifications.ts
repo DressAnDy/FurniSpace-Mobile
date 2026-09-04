@@ -1,7 +1,11 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { NotificationFilter, NotificationListItem } from "../models/notification.model";
+import {
+  NotificationFilter,
+  NotificationListItem,
+  SaleNotificationFilter,
+} from "../models/notification.model";
 import {
   getNotificationsApi,
   getUnreadNotificationCountApi,
@@ -9,6 +13,10 @@ import {
   markNotificationReadApi,
 } from "../services/notification.api";
 import { mapNotificationDtoToListItem } from "../utils/notification.mapper";
+import {
+  filterSaleNotificationItems,
+  mapSaleNotificationDtoToListItem,
+} from "../utils/sale.notification.mapper";
 
 export const NOTIFICATIONS_PAGE_SIZE = 20;
 const FILTERED_FETCH_LIMIT = 100;
@@ -55,6 +63,54 @@ async function fetchNotificationsPage(filter: NotificationFilter, page: number) 
   };
 }
 
+async function fetchSaleNotificationsPage(filter: SaleNotificationFilter, page: number) {
+  if (filter === "all") {
+    const response = await getNotificationsApi({
+      page,
+      limit: NOTIFICATIONS_PAGE_SIZE,
+    });
+
+    return {
+      items: response.items.map(mapSaleNotificationDtoToListItem),
+      page: response.page,
+      limit: response.limit,
+      total: response.total,
+    };
+  }
+
+  if (filter === "unread") {
+    const response = await getNotificationsApi({
+      isUnread: true,
+      page,
+      limit: NOTIFICATIONS_PAGE_SIZE,
+    });
+
+    return {
+      items: response.items.map(mapSaleNotificationDtoToListItem),
+      page: response.page,
+      limit: response.limit,
+      total: response.total,
+    };
+  }
+
+  const response = await getNotificationsApi({
+    page: 1,
+    limit: FILTERED_FETCH_LIMIT,
+  });
+
+  const filteredItems = filterSaleNotificationItems(
+    response.items.map(mapSaleNotificationDtoToListItem),
+    filter,
+  );
+
+  return {
+    items: paginateItems(filteredItems, page, NOTIFICATIONS_PAGE_SIZE),
+    page,
+    limit: NOTIFICATIONS_PAGE_SIZE,
+    total: filteredItems.length,
+  };
+}
+
 export function prefetchNotificationQueries(queryClient: ReturnType<typeof useQueryClient>): void {
   void queryClient.prefetchQuery({
     queryKey: queryKeys.notification.unreadCount,
@@ -78,6 +134,18 @@ export function useNotificationsQuery(filter: NotificationFilter, page: number) 
     staleTime: NOTIFICATIONS_STALE_TIME_MS,
     placeholderData: keepPreviousData,
     queryFn: () => fetchNotificationsPage(filter, page),
+  });
+}
+
+export function useSaleNotificationsQuery(filter: SaleNotificationFilter, page: number) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  return useQuery({
+    queryKey: [...queryKeys.notification.list(`sale:${filter}`), page],
+    enabled: isLoggedIn,
+    staleTime: NOTIFICATIONS_STALE_TIME_MS,
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchSaleNotificationsPage(filter, page),
   });
 }
 

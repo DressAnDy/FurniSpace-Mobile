@@ -13,6 +13,7 @@ export type ProjectStatus =
   | "IN_PRODUCTION"
   | "READY_FOR_DELIVERY"
   | "DELIVERING"
+  | "AWAITING_CUSTOMER_CONFIRMATION"
   | "DELIVERED"
   | "COMPLETED"
   | "REJECTED";
@@ -141,6 +142,31 @@ export type CreateProjectRequestDto = {
 };
 
 export type UpdateProjectBasicInfoRequestDto = CreateProjectRequestDto;
+
+export type UpdateProjectStatusRequestDto = {
+  status: ProjectStatus;
+  note?: string;
+};
+
+export type UpdateProjectStatusResponseDto = {
+  projectId: string;
+  status: ProjectStatus;
+  oldStatus: ProjectStatus;
+  newStatus: ProjectStatus;
+  note?: string | null;
+  updatedAt: string;
+};
+
+export type RejectProjectRequestDto = {
+  rejectionReason: string;
+};
+
+export type RejectProjectResponseDto = {
+  projectId: string;
+  status: "REJECTED";
+  rejectionReason: string;
+  rejectedAt: string;
+};
 
 export type UpdateTargetCompletionDateRequestDto = {
   targetCompletionDate: string;

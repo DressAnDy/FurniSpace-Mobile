@@ -74,16 +74,18 @@ export type UpdateProposalItemRequestDto = {
 export type QuotationStatus =
   | "DRAFT"
   | "SENT"
+  | "REVISION_REQUESTED"
   | "REVISED"
   | "ACCEPTED"
   | "REJECTED"
-  | "CANCELLED"
   | "EXPIRED"
+  | "CANCELLED"
   | string;
 
 export type QuotationItemDto = {
   quotationItemId: string;
   productNameSnapshot?: string;
+  itemName?: string;
   quantity: number;
   unitPrice: number;
   grossAmount?: number;
@@ -111,6 +113,12 @@ export type QuotationSummaryDto = {
   customerNote?: string | null;
   salesNote?: string | null;
   revisionReason?: string | null;
+  rejectReason?: string | null;
+  sentAt?: string | null;
+  acceptedAt?: string | null;
+  rejectedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type QuotationDetailDto = QuotationSummaryDto & {

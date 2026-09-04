@@ -4,6 +4,8 @@ import { ApiResponse } from "../../../shared/types/api";
 import {
   CancelPaymentTransactionRequestDto,
   CreateDepositRequestDto,
+  CreatePayOsPaymentLinkRequestDto,
+  CreateProjectStartFeeRequestDto,
   CreatePayOsTransactionRequestDto,
   CreatePaymentTransactionRequestDto,
   CreateSePayTransactionRequestDto,
@@ -11,8 +13,12 @@ import {
   PaymentDetailDto,
   PaymentListQuery,
   PaymentListResponseDto,
+  PaymentSummaryDto,
+  ProjectStartFeePaymentDto,
+  ProjectStartFeeStatusDto,
   PaymentStatusByCodeDto,
   PaymentTransactionDto,
+  SePayVietQrDto,
 } from "../models/payment.model";
 
 export async function createOrderDepositPaymentApi(
@@ -42,6 +48,29 @@ export async function getPaymentsApi(query: PaymentListQuery = {}): Promise<Paym
       limit: query.limit ?? 20,
     },
   });
+  return response.data.data;
+}
+
+export async function getPaymentSummaryApi(): Promise<PaymentSummaryDto> {
+  const response = await httpClient.get<ApiResponse<PaymentSummaryDto>>(endpoints.payments.summary);
+  return response.data.data;
+}
+
+export async function createProjectStartFeeApi(
+  projectId: string,
+  payload: CreateProjectStartFeeRequestDto = {},
+): Promise<ProjectStartFeePaymentDto> {
+  const response = await httpClient.post<ApiResponse<ProjectStartFeePaymentDto>>(
+    endpoints.projectStartFee.create(projectId),
+    payload,
+  );
+  return response.data.data;
+}
+
+export async function getProjectStartFeeStatusApi(projectId: string): Promise<ProjectStartFeeStatusDto> {
+  const response = await httpClient.get<ApiResponse<ProjectStartFeeStatusDto>>(
+    endpoints.projectStartFee.status(projectId),
+  );
   return response.data.data;
 }
 
@@ -79,10 +108,18 @@ export async function createPayOsTransactionApi(paymentId: string): Promise<Paym
   return createPaymentTransactionApi(paymentId, payload);
 }
 
-export async function createPayOsPaymentLinkApi(paymentId: string): Promise<PayOsPaymentLinkDto> {
+export async function createSePayVietQrApi(paymentId: string): Promise<SePayVietQrDto> {
+  const response = await httpClient.post<ApiResponse<SePayVietQrDto>>(endpoints.payments.sepayVietQr(paymentId), {});
+  return response.data.data;
+}
+
+export async function createPayOsPaymentLinkApi(
+  paymentId: string,
+  payload: CreatePayOsPaymentLinkRequestDto = {},
+): Promise<PayOsPaymentLinkDto> {
   const response = await httpClient.post<ApiResponse<PayOsPaymentLinkDto>>(
     endpoints.payments.payOsPaymentLink(paymentId),
-    {},
+    payload,
   );
   return response.data.data;
 }

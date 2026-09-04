@@ -17,6 +17,7 @@ import {
   UpdateQuotationItemFinancialsRequestDto,
   UpsertProposalRequestDto,
 } from "../models/sale.commercial.model";
+import { mapSaleQuotationDetail, mapSaleQuotationList } from "../utils/sale.quotation.mapper";
 
 function unwrapList<T>(data: { items?: T[] } | T[] | null | undefined): T[] {
   if (!data) {
@@ -117,12 +118,13 @@ export async function getProjectQuotationsApi(
     endpoints.projects.quotations(projectId),
     { params: status ? { status } : undefined },
   );
-  return unwrapList(response.data.data);
+  const rawItems = unwrapList(response.data.data);
+  return mapSaleQuotationList(rawItems);
 }
 
 export async function getQuotationByIdApi(quotationId: string): Promise<QuotationDetailDto> {
   const response = await httpClient.get<ApiResponse<QuotationDetailDto>>(endpoints.quotations.detail(quotationId));
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function createQuotationApi(projectId: string): Promise<QuotationDetailDto> {
@@ -130,7 +132,7 @@ export async function createQuotationApi(projectId: string): Promise<QuotationDe
     endpoints.projects.quotations(projectId),
     {},
   );
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function updateQuotationHeaderApi(
@@ -141,7 +143,7 @@ export async function updateQuotationHeaderApi(
     endpoints.quotations.update(quotationId),
     payload,
   );
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function updateQuotationItemFinancialsApi(
@@ -153,7 +155,7 @@ export async function updateQuotationItemFinancialsApi(
     endpoints.quotations.itemFinancials(quotationId, itemId),
     payload,
   );
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function bulkUpdateQuotationFinancialsApi(
@@ -164,20 +166,20 @@ export async function bulkUpdateQuotationFinancialsApi(
     endpoints.quotations.bulkFinancials(quotationId),
     payload,
   );
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function sendQuotationApi(quotationId: string): Promise<QuotationDetailDto> {
   const response = await httpClient.patch<ApiResponse<QuotationDetailDto>>(endpoints.quotations.send(quotationId), {});
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function reviseQuotationApi(quotationId: string): Promise<QuotationDetailDto> {
   const response = await httpClient.patch<ApiResponse<QuotationDetailDto>>(endpoints.quotations.revise(quotationId), {});
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }
 
 export async function cancelQuotationApi(quotationId: string): Promise<QuotationDetailDto> {
   const response = await httpClient.patch<ApiResponse<QuotationDetailDto>>(endpoints.quotations.cancel(quotationId), {});
-  return response.data.data;
+  return mapSaleQuotationDetail(response.data.data);
 }

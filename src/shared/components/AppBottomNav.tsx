@@ -8,6 +8,7 @@ import { chatIconDefinition } from "../../icons/communication/definitions";
 import { dashboardIconDefinition, homeIconDefinition } from "../../icons/navigation/definitions";
 import type { IconDefinition } from "../../icons/types";
 import type { RootStackParamList } from "../../app/navigation/RootNavigator";
+import { useAuthStore } from "../../features/auth/store/auth.store";
 import { useProjectStore } from "../../features/project/store/project.store";
 import { AppIcon } from "./AppIcon";
 import { BASE_NAV_HEIGHT, styles } from "./AppBottomNav.styles";
@@ -24,6 +25,8 @@ export function AppBottomNav({ activeTab, chatBadge, variant = "fixed" }: AppBot
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const role = useAuthStore((state) => state.user?.role ?? null);
+  const isSales = role === "SALES";
   const bottomInset = Math.max(insets.bottom, 8);
   const containerStyle: ViewStyle[] = [
     styles.bottomNav,
@@ -36,27 +39,31 @@ export function AppBottomNav({ activeTab, chatBadge, variant = "fixed" }: AppBot
       <BottomNavItem
         active={activeTab === "home"}
         iconDefinition={homeIconDefinition}
-        label="Home"
-        onPress={() => navigation.navigate("Home")}
+        label={isSales ? "Dashboard" : "Home"}
+        onPress={() => navigation.navigate(isSales ? "SaleDashboard" : "Home")}
       />
       <BottomNavItem
         active={activeTab === "tracking"}
         iconDefinition={dashboardIconDefinition}
-        label="Tracking"
-        onPress={() => navigation.navigate("Tracking")}
+        label={isSales ? "Projects" : "Tracking"}
+        onPress={() => navigation.navigate(isSales ? "SaleProjects" : "Tracking")}
       />
       <BottomNavItem
         active={activeTab === "chat"}
         badge={chatBadge}
         iconDefinition={chatIconDefinition}
         label="Chat"
-        onPress={() => navigation.navigate("Messages", activeProjectId ? { projectId: activeProjectId } : undefined)}
+        onPress={() =>
+          isSales
+            ? navigation.navigate("SaleMessages")
+            : navigation.navigate("Messages", activeProjectId ? { projectId: activeProjectId } : undefined)
+        }
       />
       <BottomNavItem
         active={activeTab === "profile"}
         iconDefinition={userIconDefinition}
-        label="Profile"
-        onPress={() => navigation.navigate("Profile")}
+        label={isSales ? "More" : "Profile"}
+        onPress={() => navigation.navigate(isSales ? "SaleMore" : "Profile")}
       />
     </View>
   );
