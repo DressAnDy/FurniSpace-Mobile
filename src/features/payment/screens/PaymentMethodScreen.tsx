@@ -7,6 +7,10 @@ import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
 import { checkIconDefinition } from "../../../icons/status/definitions";
+import { mapPinIconDefinition } from "../../../icons/common/definitions";
+import { phoneIconDefinition } from "../../../icons/communication/definitions";
+import { userIconDefinition } from "../../../icons/auth/definitions";
+import { truckIconDefinition } from "../../../icons/commerce/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { getProjectByIdApi } from "../../project/services/project.api";
@@ -36,6 +40,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [receiverName, setReceiverName] = useState(currentUser?.fullName ?? "");
   const [receiverPhone, setReceiverPhone] = useState(currentUser?.phone ?? "");
+  const [deliveryNote, setDeliveryNote] = useState("");
 
   const methodQueryKey = useMemo(
     () =>
@@ -64,6 +69,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
             setDeliveryAddress(defaultAddress);
             setReceiverName((prev) => order.receiverName?.trim() || prev || currentUser?.fullName || "");
             setReceiverPhone((prev) => order.receiverPhone?.trim() || prev || currentUser?.phone || "");
+            setDeliveryNote(order.deliveryNote?.trim() ?? "");
             setNeedsDeliveryDetails(true);
             throw new Error("ORDER_DELIVERY_DETAILS_REQUIRED");
           }
@@ -114,6 +120,17 @@ export function PaymentMethodScreen(): React.JSX.Element {
   });
 
   const payment = paymentQuery.data ?? null;
+  const isPaid = payment?.status === "PAID";
+  const isProcessing = payment?.status === "PROCESSING";
+  const isPending = payment?.status === "PENDING";
+  // PENDING/PROCESSING must stay checkoutable even if BE marks isPayable=false
+  // (e.g. expiredAt edge / leftover attempt). Terminal statuses stay locked.
+  const canChooseMethod = Boolean(
+    payment &&
+      (payment.status === "PENDING" ||
+        payment.status === "PROCESSING" ||
+        (payment.isPayable === true && !isPaymentTerminalStatus(payment.status))),
+  );
 
   const handleRealtimeUpdate = useCallback(
     (payload: PaymentUpdatedRealtimeDto) => {
@@ -151,10 +168,6 @@ export function PaymentMethodScreen(): React.JSX.Element {
     paymentType: route.params.paymentType,
   };
 
-  const isPaid = payment?.status === "PAID";
-  const canChooseMethod = Boolean(payment && !isPaymentTerminalStatus(payment.status) && payment.isPayable !== false);
-  const isProcessing = payment?.status === "PROCESSING";
-
   const handleBackToTracking = () => {
     if (route.params.projectId) {
       navigation.navigate("Tracking", { projectId: route.params.projectId });
@@ -168,6 +181,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
       deliveryAddress: deliveryAddress.trim(),
       receiverName: receiverName.trim(),
       receiverPhone: receiverPhone.trim(),
+      deliveryNote: deliveryNote.trim() || null,
     };
 
     if (!payload.deliveryAddress || !payload.receiverName || !payload.receiverPhone) {
@@ -216,7 +230,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
           </Text>
           <Text style={styles.pageSubtitle}>
             {needsDeliveryDetails
-              ? "Provide delivery details before creating the deposit invoice."
+              ? "Confirm where and to whom we should deliver before opening deposit payment."
               : isPaid
                 ? "This payment has already been confirmed."
                 : "Select how you want to pay"}
@@ -228,46 +242,106 @@ export function PaymentMethodScreen(): React.JSX.Element {
               <Text style={styles.stateText}>Loading payment details...</Text>
             </View>
           ) : needsDeliveryDetails ? (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>DELIVERY INFORMATION</Text>
-              <Text style={styles.fieldLabel}>Delivery address</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={deliveryAddress}
-                onChangeText={setDeliveryAddress}
-                placeholder="Street, district, city"
-                placeholderTextColor="#A89F97"
-                multiline
-              />
-              <Text style={styles.fieldLabel}>Receiver name</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={receiverName}
-                onChangeText={setReceiverName}
-                placeholder="Full name"
-                placeholderTextColor="#A89F97"
-              />
-              <Text style={styles.fieldLabel}>Receiver phone</Text>
-              <TextInput
-                style={styles.fieldInput}
-                value={receiverPhone}
-                onChangeText={setReceiverPhone}
-                placeholder="Phone number"
-                placeholderTextColor="#A89F97"
-                keyboardType="phone-pad"
-              />
-              {error ? <Text style={styles.formErrorText}>{error}</Text> : null}
-              <Pressable
-                style={[styles.primaryActionButton, isSavingDelivery && styles.primaryActionButtonDisabled]}
-                disabled={isSavingDelivery}
-                onPress={() => void handleSaveDeliveryDetails()}
-              >
-                {isSavingDelivery ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryActionButtonText}>Continue to payment</Text>
-                )}
-              </Pressable>
+            <View style={styles.deliveryCard}>
+              <View style={styles.deliveryCardAccent} />
+              <View style={styles.deliveryCardBody}>
+                <View style={styles.deliveryHeaderRow}>
+                  <View style={styles.deliveryIconBadge}>
+                    <AppIcon definition={truckIconDefinition} size={16} color="#B89558" strokeWidth={1.8} />
+                  </View>
+                  <View style={styles.deliveryHeaderCopy}>
+                    <Text style={styles.deliveryEyebrow}>BEFORE DEPOSIT</Text>
+                    <Text style={styles.deliveryHeaderTitle}>Where should we deliver?</Text>
+                  </View>
+                </View>
+
+                <View style={styles.deliveryFieldBlock}>
+                  <View style={styles.deliveryLabelRow}>
+                    <AppIcon definition={mapPinIconDefinition} size={12} color="#9B8F86" strokeWidth={1.8} />
+                    <Text style={styles.deliveryFieldLabel}>Delivery address</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.deliveryInput, styles.deliveryInputMultiline]}
+                    value={deliveryAddress}
+                    onChangeText={setDeliveryAddress}
+                    placeholder="Street, district, city"
+                    placeholderTextColor="#A89F97"
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                <View style={styles.deliverySplitRow}>
+                  <View style={[styles.deliveryFieldBlock, styles.deliveryFieldHalf]}>
+                    <View style={styles.deliveryLabelRow}>
+                      <AppIcon definition={userIconDefinition} size={12} color="#9B8F86" strokeWidth={1.8} />
+                      <Text style={styles.deliveryFieldLabel}>Receiver</Text>
+                    </View>
+                    <TextInput
+                      style={styles.deliveryInput}
+                      value={receiverName}
+                      onChangeText={setReceiverName}
+                      placeholder="Full name"
+                      placeholderTextColor="#A89F97"
+                    />
+                  </View>
+                  <View style={[styles.deliveryFieldBlock, styles.deliveryFieldHalf]}>
+                    <View style={styles.deliveryLabelRow}>
+                      <AppIcon definition={phoneIconDefinition} size={12} color="#9B8F86" strokeWidth={1.8} />
+                      <Text style={styles.deliveryFieldLabel}>Phone</Text>
+                    </View>
+                    <TextInput
+                      style={styles.deliveryInput}
+                      value={receiverPhone}
+                      onChangeText={setReceiverPhone}
+                      placeholder="Phone number"
+                      placeholderTextColor="#A89F97"
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.deliveryFieldBlock}>
+                  <View style={styles.deliveryLabelRow}>
+                    <Text style={styles.deliveryFieldLabel}>Delivery note</Text>
+                    <View style={styles.optionalPill}>
+                      <Text style={styles.optionalPillText}>Optional</Text>
+                    </View>
+                  </View>
+                  <TextInput
+                    style={[styles.deliveryInput, styles.deliveryInputNote]}
+                    value={deliveryNote}
+                    onChangeText={setDeliveryNote}
+                    placeholder="e.g. Call before arrival"
+                    placeholderTextColor="#A89F97"
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                {error ? <Text style={styles.formErrorText}>{error}</Text> : null}
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.deliveryContinueButton,
+                    isSavingDelivery && styles.primaryActionButtonDisabled,
+                    pressed && !isSavingDelivery ? styles.deliveryContinueButtonPressed : null,
+                  ]}
+                  disabled={isSavingDelivery}
+                  onPress={() => void handleSaveDeliveryDetails()}
+                >
+                  {isSavingDelivery ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <View style={styles.deliveryContinueContent}>
+                      <Text style={styles.deliveryContinueText}>Continue to payment</Text>
+                      <View style={styles.deliveryContinueIcon}>
+                        <AppIcon definition={chevronRightIconDefinition} size={14} color="#3A3330" strokeWidth={2.2} />
+                      </View>
+                    </View>
+                  )}
+                </Pressable>
+              </View>
             </View>
           ) : paymentQuery.isError && !payment ? (
             <View style={styles.centerState}>
@@ -288,6 +362,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
                       styles.statusPill,
                       isPaid && styles.statusPillPaid,
                       isProcessing && styles.statusPillProcessing,
+                      isPending && styles.statusPillPending,
                     ]}
                   >
                     <Text
@@ -295,6 +370,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
                         styles.statusPillText,
                         isPaid && styles.statusPillTextPaid,
                         isProcessing && styles.statusPillTextProcessing,
+                        isPending && styles.statusPillTextPending,
                       ]}
                     >
                       {getPaymentStatusLabel(payment.status)}
@@ -321,10 +397,19 @@ export function PaymentMethodScreen(): React.JSX.Element {
               ) : !canChooseMethod ? (
                 <>
                   <View style={styles.noticeCard}>
-                    <Text style={styles.noticeTitle}>Payment unavailable</Text>
+                    <Text style={styles.noticeTitle}>
+                      {payment.status === "EXPIRED"
+                        ? "Payment expired"
+                        : payment.status === "CANCELLED"
+                          ? "Payment cancelled"
+                          : "Payment unavailable"}
+                    </Text>
                     <Text style={styles.terminalText}>
-                      This payment is {getPaymentStatusLabel(payment.status).toLowerCase()}. Return to tracking
-                      to continue.
+                      {payment.status === "EXPIRED"
+                        ? "This invoice has expired. Ask sales to reissue payment, then try again."
+                        : payment.status === "CANCELLED"
+                          ? "This payment was cancelled. Return to tracking for the latest invoice."
+                          : `This payment is ${getPaymentStatusLabel(payment.status).toLowerCase()}. Return to tracking to continue.`}
                     </Text>
                   </View>
                   <Pressable style={styles.primaryActionButton} onPress={handleBackToTracking}>

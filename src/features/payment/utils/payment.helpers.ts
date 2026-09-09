@@ -14,6 +14,14 @@ export function hasPaidPayment(payments: PaymentDetailDto[], paymentType: Paymen
   return payments.some((payment) => payment.paymentType === paymentType && payment.status === "PAID");
 }
 
+export function canCustomerPayStartFee(payments: PaymentDetailDto[]): boolean {
+  if (hasPaidPayment(payments, "PROJECT_START_FEE")) {
+    return false;
+  }
+
+  return Boolean(findPendingPayment(payments, "PROJECT_START_FEE"));
+}
+
 export function canCustomerPayDeposit(
   payments: PaymentDetailDto[],
   orderStatus?: string | null,

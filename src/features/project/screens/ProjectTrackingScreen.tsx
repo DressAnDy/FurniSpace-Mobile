@@ -22,14 +22,17 @@ import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import {
   canCustomerPayDeposit,
   canCustomerPayRemaining,
+  canCustomerPayStartFee,
   findPendingPayment,
   hasPaidPayment,
 } from "../../payment/utils/payment.helpers";
 import type { MacroStageItem, PhaseDeadlineItemDto, ProjectScheduleDto } from "../models/project.tracking.model";
 import { ProjectSwitcherModal } from "../components/ProjectSwitcherModal";
+import { ProductIssuesCard } from "../components/ProductIssuesCard";
 import { useActiveProjectSummary } from "../hooks/useProjects";
 import { useActiveProjectId, useProjectStore } from "../store/project.store";
 import {
+  canConfirmDelivery,
   canReopenProposal,
   getPrimaryOrder,
   getUpcomingSchedules,
@@ -128,9 +131,11 @@ export function ProjectTrackingScreen(): React.JSX.Element {
   const primaryOrder = useMemo(() => getPrimaryOrder(data?.orders ?? []), [data?.orders]);
 
   const payments = data?.payments.items ?? [];
+  const pendingStartFeePayment = useMemo(() => findPendingPayment(payments, "PROJECT_START_FEE"), [payments]);
   const pendingDepositPayment = useMemo(() => findPendingPayment(payments, "DEPOSIT"), [payments]);
   const pendingRemainingPayment = useMemo(() => findPendingPayment(payments, "REMAINING_PAYMENT"), [payments]);
   const paidDeposit = useMemo(() => hasPaidPayment(payments, "DEPOSIT"), [payments]);
+  const canPayStartFee = canCustomerPayStartFee(payments);
 
   const handleConfirmDelivery = () => {
     if (!primaryOrder) {
@@ -167,6 +172,18 @@ export function ProjectTrackingScreen(): React.JSX.Element {
         },
       ],
     );
+  };
+
+  const handlePayStartFee = () => {
+    if (!pendingStartFeePayment) {
+      return;
+    }
+
+    navigation.navigate("PaymentMethod", {
+      paymentId: pendingStartFeePayment.paymentId,
+      projectId: projectId ?? undefined,
+      paymentType: "PROJECT_START_FEE",
+    });
   };
 
   const handlePayDeposit = () => {
@@ -244,6 +261,9 @@ export function ProjectTrackingScreen(): React.JSX.Element {
         case "view_orders":
           navigation.navigate("ProjectOrders", { projectId, projectName: project.projectName });
           break;
+        case "pay_start_fee":
+          handlePayStartFee();
+          break;
         case "pay_deposit":
           handlePayDeposit();
           break;
@@ -270,6 +290,7 @@ export function ProjectTrackingScreen(): React.JSX.Element {
       handleConfirmDelivery,
       handlePayDeposit,
       handlePayRemaining,
+      handlePayStartFee,
       handleReopenProposal,
       navigation,
       project,
@@ -380,8 +401,14 @@ export function ProjectTrackingScreen(): React.JSX.Element {
 
               <CustomerActionsCard
                 flowDecision={flowDecision}
+                canPayStartFee={canPayStartFee}
                 canPayDeposit={canCustomerPayDeposit(payments, primaryOrder?.status, project.status)}
                 canPayRemaining={canCustomerPayRemaining(payments, primaryOrder?.status, project.status)}
+                canConfirmDelivery={canConfirmDelivery(
+                  project.status,
+                  primaryOrder,
+                  project.deliverySummary?.remainingQuantity,
+                )}
                 canReopen={canReopenProposal(project.status, primaryOrder) && !paidDeposit}
                 onFlowAction={handleFlowAction}
                 isBusy={confirmDeliveryMutation.isPending || reopenProposalMutation.isPending}
@@ -483,6 +510,8 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                 </Pressable>
               ) : null}
 
+              <ProductIssuesCard projectId={projectId} orderId={primaryOrder?.orderId ?? null} />
+
               <View style={styles.completionCard}>
                 <View style={styles.completionIconWrap}>
                   <AppIcon definition={calendarIconDefinition} size={20} color="#C9A86A" />
@@ -538,29 +567,49 @@ function MetricCard({ value, label }: { value: string; label: string }): React.J
 
 function CustomerActionsCard({
   flowDecision,
+  canPayStartFee,
   canPayDeposit,
   canPayRemaining,
+  canConfirmDelivery,
   canReopen,
   onFlowAction,
   isBusy,
-}: {
+}: Readonly<{
   flowDecision: ReturnType<typeof resolveCustomerFlowDecision> | null;
+  canPayStartFee: boolean;
   canPayDeposit: boolean;
   canPayRemaining: boolean;
+  canConfirmDelivery: boolean;
   canReopen: boolean;
   onFlowAction: (action: CustomerFlowAction) => void;
   isBusy: boolean;
-}): React.JSX.Element | null {
+}>): React.JSX.Element | null {
   if (!flowDecision) {
     return null;
   }
 
-  const actions = flowDecision.actions.filter((action) => {
-    if (action.id === "pay_deposit" && !canPayDeposit) return false;
-    if (action.id === "pay_remaining" && !canPayRemaining) return false;
-    if (action.id === "reopen_proposal" && !canReopen) return false;
-    return true;
-  });
+  const actions = flowDecision.actions
+    .filter((action) => {
+      if (action.id === "pay_start_fee" && !canPayStartFee) return false;
+      if (action.id === "pay_deposit" && !canPayDeposit) return false;
+      if (action.id === "pay_remaining" && !canPayRemaining) return false;
+      if (action.id === "confirm_delivery" && !canConfirmDelivery) return false;
+      if (action.id === "reopen_proposal" && !canReopen) return false;
+      return true;
+    })
+    .slice();
+
+  if (
+    canPayStartFee &&
+    !actions.some((action) => action.id === "pay_start_fee")
+  ) {
+    actions.unshift({
+      id: "pay_start_fee",
+      label: "Pay Start Fee",
+      screen: "payment_start_fee",
+      primary: true,
+    });
+  }
 
   if (actions.length === 0) {
     return null;

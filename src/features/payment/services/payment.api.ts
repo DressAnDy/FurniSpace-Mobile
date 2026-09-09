@@ -38,17 +38,33 @@ export async function getPaymentDetailApi(paymentId: string): Promise<PaymentDet
 }
 
 export async function getPaymentsApi(query: PaymentListQuery = {}): Promise<PaymentListResponseDto> {
-  const response = await httpClient.get<ApiResponse<PaymentListResponseDto>>(endpoints.payments.list, {
+  const response = await httpClient.get<
+    ApiResponse<{
+      items?: PaymentDetailDto[];
+      page?: number;
+      pageSize?: number;
+      totalItems?: number;
+      totalPages?: number;
+      limit?: number;
+      total?: number;
+    }>
+  >(endpoints.payments.list, {
     params: {
       ...(query.projectId ? { projectId: query.projectId } : {}),
       ...(query.orderId ? { orderId: query.orderId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.paymentType ? { paymentType: query.paymentType } : {}),
       page: query.page ?? 1,
-      limit: query.limit ?? 20,
+      pageSize: query.limit ?? 20,
     },
   });
-  return response.data.data;
+  const data = response.data.data;
+  return {
+    items: data.items ?? [],
+    page: data.page ?? query.page ?? 1,
+    limit: data.pageSize ?? data.limit ?? query.limit ?? 20,
+    total: data.totalItems ?? data.total ?? data.items?.length ?? 0,
+  };
 }
 
 export async function getPaymentSummaryApi(): Promise<PaymentSummaryDto> {
@@ -100,10 +116,14 @@ export async function createSePayTransactionApi(paymentId: string): Promise<Paym
   return createPaymentTransactionApi(paymentId, payload);
 }
 
-export async function createPayOsTransactionApi(paymentId: string): Promise<PaymentTransactionDto> {
+export async function createPayOsTransactionApi(
+  paymentId: string,
+  urls: Pick<CreatePayOsTransactionRequestDto, "returnUrl" | "cancelUrl"> = {},
+): Promise<PaymentTransactionDto> {
   const payload: CreatePayOsTransactionRequestDto = {
     paymentProvider: "PAYOS",
     paymentMethod: "PAYMENT_LINK",
+    ...urls,
   };
   return createPaymentTransactionApi(paymentId, payload);
 }

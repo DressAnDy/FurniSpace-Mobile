@@ -42,7 +42,7 @@ export const PROJECT_WORKFLOW_STAGE_CATALOG: ReadonlyArray<{
   {
     id: "DELIVERY",
     label: "Delivery & Completion",
-    statuses: ["DELIVERING", "DELIVERED", "COMPLETED"],
+    statuses: ["DELIVERING", "AWAITING_CUSTOMER_CONFIRMATION", "DELIVERED", "COMPLETED"],
   },
 ] as const;
 

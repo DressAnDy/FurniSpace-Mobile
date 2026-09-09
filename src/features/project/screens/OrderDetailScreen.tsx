@@ -29,12 +29,13 @@ export function OrderDetailScreen(): React.JSX.Element {
   const { orderId, projectId, projectName } = route.params;
 
   const orderQuery = useOrderDetailQuery(orderId);
+  const order = orderQuery.data;
+  const resolvedProjectId = projectId ?? order?.projectId ?? null;
   const paymentsQuery = usePaymentsQuery({ orderId, limit: 20 });
-  const projectQuery = useProjectDetailQuery(projectId);
-  const confirmDeliveryMutation = useConfirmOrderDeliveryMutation(projectId);
+  const projectQuery = useProjectDetailQuery(resolvedProjectId);
+  const confirmDeliveryMutation = useConfirmOrderDeliveryMutation(resolvedProjectId);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const order = orderQuery.data;
   const payments = paymentsQuery.data?.items ?? [];
   const pendingDepositPayment = useMemo(() => findPendingPayment(payments, "DEPOSIT"), [payments]);
   const pendingRemainingPayment = useMemo(() => findPendingPayment(payments, "REMAINING_PAYMENT"), [payments]);
@@ -43,7 +44,17 @@ export function OrderDetailScreen(): React.JSX.Element {
 
   const canPayDeposit = canCustomerPayDeposit(payments, order?.status, projectQuery.data?.status);
   const canPayRemaining = canCustomerPayRemaining(payments, order?.status, projectQuery.data?.status);
-  const canConfirmDelivery = projectQuery.data?.status === "DELIVERING";
+  const deliverableItems = order?.items.filter(
+    (item) => item.status !== "CANCELLED" && item.status !== "UNAVAILABLE",
+  ) ?? [];
+  const allItemsDelivered =
+    deliverableItems.length > 0 &&
+    deliverableItems.every(
+      (item) => item.status === "DELIVERED" || item.deliveredQuantity >= item.quantity,
+    );
+  const canConfirmDelivery =
+    order?.status === "AWAITING_CUSTOMER_CONFIRMATION" ||
+    (order?.status === "DELIVERING" && allItemsDelivered);
   const actionsReady = !paymentsQuery.isPending && !projectQuery.isPending;
 
   const orderStatusNote = useMemo(() => {
@@ -61,7 +72,7 @@ export function OrderDetailScreen(): React.JSX.Element {
   const handlePayDeposit = () => {
     navigation.navigate("PaymentMethod", {
       orderId,
-      projectId,
+      projectId: resolvedProjectId ?? undefined,
       paymentId: pendingDepositPayment?.paymentId,
       paymentType: "DEPOSIT",
     });
@@ -70,7 +81,7 @@ export function OrderDetailScreen(): React.JSX.Element {
   const handlePayRemaining = () => {
     navigation.navigate("PaymentMethod", {
       orderId,
-      projectId,
+      projectId: resolvedProjectId ?? undefined,
       paymentId: pendingRemainingPayment?.paymentId,
       paymentType: "REMAINING_PAYMENT",
     });
@@ -115,10 +126,12 @@ export function OrderDetailScreen(): React.JSX.Element {
             </Pressable>
             <View style={styles.heroText}>
               <Text style={styles.brand}>FURNISPACE</Text>
-              <Text style={styles.title}>{order?.orderCode ?? "Order details"}</Text>
+              <Text style={styles.title} numberOfLines={2}>
+                {projectName ?? "Order details"}
+              </Text>
             </View>
           </View>
-          {projectName ? <Text style={styles.projectName}>{projectName}</Text> : null}
+          {order?.orderCode ? <Text style={styles.projectName}>{order.orderCode}</Text> : null}
         </View>
 
         <View style={styles.content}>

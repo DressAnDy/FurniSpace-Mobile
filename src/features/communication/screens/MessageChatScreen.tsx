@@ -19,13 +19,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
-import { paperclipIconDefinition } from "../../../icons/file/definitions";
+import { fileTextIconDefinition, paperclipIconDefinition } from "../../../icons/file/definitions";
 import { sendIconDefinition } from "../../../icons/communication/definitions";
 import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { useChatActions, useVisibleChatMessages } from "../hooks/useChatMessages";
 import { useProjectChatRealtime } from "../hooks/useProjectChatRealtime";
-import { ChatMessageListItem } from "../models/chat.model";
+import { ChatAttachmentDto, ChatMessageListItem } from "../models/chat.model";
 import { mapChatMessageToListItem, getInitials } from "../utils/chat.mapper";
 import { styles } from "./MessageChatScreen.styles";
 
@@ -337,13 +337,75 @@ export function MessageChatScreen(): React.JSX.Element {
   );
 }
 
+function formatAttachmentSize(bytes: number): string {
+  if (!bytes || bytes < 0) return "FILE";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.ceil(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getAttachmentTypeLabel(fileName: string, mimeType: string): string {
+  const extension = fileName.includes(".") ? fileName.split(".").pop()?.toUpperCase() : null;
+  if (extension && extension.length <= 5) return extension;
+  if (mimeType.includes("pdf")) return "PDF";
+  if (mimeType.startsWith("image/")) return "IMAGE";
+  return "FILE";
+}
+
+function AttachmentCard({
+  attachment,
+  isMine,
+  hasContent,
+}: Readonly<{
+  attachment: ChatAttachmentDto;
+  isMine: boolean;
+  hasContent: boolean;
+}>): React.JSX.Element {
+  const openAttachment = async () => {
+    if (!attachment.fileUrl) {
+      Alert.alert("File unavailable", "This attachment does not have a valid download URL.");
+      return;
+    }
+    try {
+      const supported = await Linking.canOpenURL(attachment.fileUrl);
+      if (!supported) throw new Error("Unsupported URL");
+      await Linking.openURL(attachment.fileUrl);
+    } catch {
+      Alert.alert("Unable to open file", "Please try again later.");
+    }
+  };
+
+  return (
+    <Pressable
+      style={[styles.filePreview, hasContent ? styles.filePreviewWithContent : null]}
+      onPress={() => void openAttachment()}
+    >
+      <View style={[styles.fileIconWrap, isMine ? styles.fileIconWrapOutgoing : null]}>
+        <AppIcon definition={fileTextIconDefinition} size={20} color="#B58E49" strokeWidth={1.7} />
+      </View>
+      <View style={styles.fileDetails}>
+        <Text style={styles.fileName} numberOfLines={2}>
+          {attachment.originalFileName || "Attached file"}
+        </Text>
+        <View style={styles.fileMetaRow}>
+          <Text style={styles.fileMeta}>
+            {getAttachmentTypeLabel(attachment.originalFileName, attachment.mimeType)}
+            {" · "}
+            {formatAttachmentSize(attachment.fileSizeBytes)}
+          </Text>
+          <Text style={styles.fileOpenLabel}>OPEN</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 function MessageBubble({
   item,
   showSender,
-}: {
+}: Readonly<{
   item: ChatMessageListItem;
   showSender: boolean;
-}): React.JSX.Element {
+}>): React.JSX.Element {
   if (item.isDeleted) {
     return (
       <View style={styles.deletedWrap}>
@@ -360,12 +422,6 @@ function MessageBubble({
     );
   }
 
-  const openAttachment = () => {
-    if (item.attachment?.fileUrl) {
-      void Linking.openURL(item.attachment.fileUrl);
-    }
-  };
-
   return (
     <View style={item.isMine ? styles.outgoingWrap : styles.messageBlock}>
       {!item.isMine && showSender ? <Text style={styles.senderLabel}>{item.senderName}</Text> : null}
@@ -374,14 +430,7 @@ function MessageBubble({
         {item.isMine ? <View style={styles.outgoingAccent} /> : null}
 
         {item.messageType === "FILE" && item.attachment ? (
-          <Pressable style={styles.filePreview} onPress={openAttachment}>
-            <View style={styles.fileIconWrap}>
-              <AppIcon definition={paperclipIconDefinition} size={13} color="#C9A86A" />
-            </View>
-            <Text style={styles.fileName} numberOfLines={2}>
-              {item.attachment.originalFileName}
-            </Text>
-          </Pressable>
+          <AttachmentCard attachment={item.attachment} isMine={item.isMine} hasContent={Boolean(item.content)} />
         ) : null}
 
         {item.content ? (

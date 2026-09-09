@@ -141,7 +141,29 @@ export type CreateProjectRequestDto = {
   targetCompletionDate?: string;
 };
 
-export type UpdateProjectBasicInfoRequestDto = CreateProjectRequestDto;
+export type UploadProjectFileInput = {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  fileType: "FLOOR_PLAN" | "REFERENCE_IMAGE" | "PDF_DRAWING" | "MODEL_3D" | "OTHER";
+  visibility?: "CUSTOMER_VISIBLE" | "PRIVATE";
+  isPrimary?: boolean;
+  displayOrder?: number;
+  note?: string;
+};
+
+export type UpdateProjectBasicInfoRequestDto = {
+  projectName: string;
+  businessType: string;
+  furnitureRequirement: string;
+  projectAddress?: string | null;
+  businessPurpose?: string | null;
+  description?: string | null;
+  totalAreaSqm?: number | null;
+  numberOfFloors?: number | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+};
 
 export type UpdateProjectStatusRequestDto = {
   status: ProjectStatus;
@@ -169,7 +191,13 @@ export type RejectProjectResponseDto = {
 };
 
 export type UpdateTargetCompletionDateRequestDto = {
-  targetCompletionDate: string;
+  targetCompletionDate: string | null;
+};
+
+export type UpdateTargetCompletionDateResponseDto = {
+  projectId: string;
+  targetCompletionDate: string | null;
+  updatedAt: string;
 };
 
 export type ProjectSummaryItem = {

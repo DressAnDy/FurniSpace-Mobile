@@ -23,6 +23,11 @@ import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { ProjectSwitcherModal } from "../../project/components/ProjectSwitcherModal";
+import { usePaymentsQuery } from "../../payment/hooks/usePayments";
+import {
+  canCustomerPayStartFee,
+  findPendingPayment,
+} from "../../payment/utils/payment.helpers";
 import { useActiveProjectSummary } from "../../project/hooks/useProjects";
 import { useHomeProjectRealtime } from "../../project/hooks/useHomeProjectRealtime";
 import { useProjectSwitcherPrefetch } from "../../project/hooks/useProjectSwitcherPrefetch";
@@ -71,12 +76,24 @@ export function HomeScreen(): React.JSX.Element {
   const { activeProject, activeProjectId, projectsQuery } = useActiveProjectSummary();
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const paymentsQuery = usePaymentsQuery(
+    { projectId: activeProjectId ?? undefined, limit: 20 },
+    { enabled: Boolean(activeProjectId) },
+  );
 
   const projects = projectsQuery.data?.items ?? [];
   const hasMultipleProjects = projects.length > 1;
   const { prefetchProject, prefetchAllProjects } = useProjectSwitcherPrefetch(projects);
+  const payments = paymentsQuery.data?.items ?? [];
+  const pendingStartFeePayment = useMemo(
+    () => findPendingPayment(payments, "PROJECT_START_FEE"),
+    [payments],
+  );
+  const canPayStartFee = canCustomerPayStartFee(payments);
 
-  const refetchProjects = useCallback(() => projectsQuery.refetch(), [projectsQuery]);
+  const refetchProjects = useCallback(async () => {
+    await Promise.all([projectsQuery.refetch(), paymentsQuery.refetch()]);
+  }, [paymentsQuery, projectsQuery]);
 
   useEffect(() => {
     if (user?.role === "SALES") {
@@ -107,8 +124,26 @@ export function HomeScreen(): React.JSX.Element {
     }
 
     const decision = resolveCustomerFlowDecision(activeProject.status);
-    return decision.actions.find((action) => action.primary) ?? decision.actions[0] ?? null;
-  }, [activeProject]);
+    const actions = decision.actions.filter((action) => {
+      if (action.id === "pay_start_fee" && !canPayStartFee) {
+        return false;
+      }
+      return true;
+    });
+
+    if (canPayStartFee) {
+      return (
+        actions.find((action) => action.id === "pay_start_fee") ?? {
+          id: "pay_start_fee" as const,
+          label: "Pay Start Fee",
+          screen: "payment_start_fee" as const,
+          primary: true,
+        }
+      );
+    }
+
+    return actions.find((action) => action.primary) ?? actions[0] ?? null;
+  }, [activeProject, canPayStartFee]);
 
   const handleFlowAction = () => {
     if (!activeProject || !primaryFlowAction) {
@@ -136,12 +171,26 @@ export function HomeScreen(): React.JSX.Element {
       case "confirm_schedule":
         navigation.navigate("ProjectSchedules", { projectId, projectName });
         break;
+      case "pay_start_fee":
+        if (pendingStartFeePayment) {
+          navigation.navigate("PaymentMethod", {
+            paymentId: pendingStartFeePayment.paymentId,
+            projectId,
+            paymentType: "PROJECT_START_FEE",
+          });
+          break;
+        }
+        navigation.navigate("Tracking", { projectId });
+        break;
       case "pay_deposit":
       case "pay_remaining":
         navigation.navigate("Tracking", { projectId });
         break;
       case "confirm_delivery":
         navigation.navigate("Tracking", { projectId });
+        break;
+      case "open_chat":
+        navigation.navigate("Messages", { projectId });
         break;
       default:
         navigation.navigate("Tracking", { projectId });

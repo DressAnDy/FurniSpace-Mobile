@@ -1,4 +1,5 @@
 import {
+  ChatAttachmentDto,
   ChatListItem,
   ChatMessageDto,
   ChatMessageListItem,
@@ -17,6 +18,30 @@ const CHAT_TYPE_LABELS: Record<ProjectChatType, string> = {
 };
 
 const AVATAR_COLORS = ["#3A3330", "#C9A86A", "#7A6F68", "#16A34A", "#2563EB"];
+
+function readString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function normalizeChatAttachment(value: unknown): ChatAttachmentDto | null {
+  if (!value || typeof value !== "object") return null;
+  const attachment = value as Record<string, unknown>;
+  const fileUrl =
+    readString(attachment.fileUrl) ||
+    readString(attachment.publicUrl) ||
+    readString(attachment.url);
+  const rawFileSize = attachment.fileSizeBytes ?? attachment.fileSize;
+  return {
+    fileId: readString(attachment.fileId),
+    originalFileName:
+      readString(attachment.originalFileName) ||
+      readString(attachment.fileName) ||
+      "Attached file",
+    mimeType: readString(attachment.mimeType, "application/octet-stream"),
+    fileSizeBytes: typeof rawFileSize === "number" ? rawFileSize : 0,
+    fileUrl,
+  };
+}
 
 function hashString(value: string): number {
   let hash = 0;
@@ -128,7 +153,7 @@ export function mapChatMessageToListItem(dto: ChatMessageDto, currentUserId: str
     isMine: Boolean(myId && senderId && senderId === myId),
     messageType: dto.messageType,
     content: isDeleted ? null : dto.content,
-    attachment: isDeleted ? null : dto.attachment,
+    attachment: isDeleted ? null : normalizeChatAttachment(dto.attachment),
     timeLabel: formatMessageTime(dto.createdAt),
     createdAt: dto.createdAt,
     isDeleted,

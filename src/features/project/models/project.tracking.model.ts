@@ -144,6 +144,7 @@ export type OrderDto = {
   deliveryAddress?: string | null;
   receiverName?: string | null;
   receiverPhone?: string | null;
+  deliveryNote?: string | null;
   customerConfirmedDeliveryAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -160,6 +161,7 @@ export type UpdateOrderDeliveryDetailsRequestDto = {
   deliveryAddress: string;
   receiverName: string;
   receiverPhone: string;
+  deliveryNote?: string | null;
 };
 
 export type ConfirmOrderDeliveryResponseDto = {

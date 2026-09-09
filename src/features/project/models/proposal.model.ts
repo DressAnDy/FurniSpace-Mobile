@@ -99,7 +99,7 @@ export type SelectFinalProposalRequestDto = {
 export type SelectFinalProposalResponseDto = {
   proposalId: string;
   projectId: string;
-  quotationId: string;
+  quotationId?: string;
   proposalStatus: "SELECTED";
   projectStatus: "PROPOSAL_SELECTED";
   selectedAt: string;

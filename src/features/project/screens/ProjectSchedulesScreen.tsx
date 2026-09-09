@@ -257,7 +257,7 @@ export function ProjectSchedulesScreen(): React.JSX.Element {
             </View>
           </View>
           <Text style={styles.heroEyebrow}>FURNISPACE</Text>
-          <Text style={styles.heroTitle}>Delivery Schedule</Text>
+          <Text style={styles.heroTitle}>Schedule</Text>
           {projectName ? <Text style={styles.heroProject}>{projectName}</Text> : null}
         </View>
 

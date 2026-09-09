@@ -71,5 +71,5 @@ export const overviewMetrics = [
   ["11", "Completed / Mo.", "#059669", "+3"],
 ] as const;
 
-export const projectTabs = ["Overview", "Member", "Files", "Chat", "Schedules"] as const;
+export const projectTabs = ["Overview", "Member", "Files", "Chat", "Schedules", "Issues"] as const;
 export type ProjectDetailTab = (typeof projectTabs)[number];

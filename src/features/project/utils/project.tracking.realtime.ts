@@ -45,11 +45,23 @@ export function resolveTrackingProjectId(payload: RealtimeNotificationPayloadDto
   }
 
   const metadata = payload.metadata;
-  return (
+  const fromMetadata =
     readMetadataString(metadata, "projectId") ??
     readMetadataString(metadata, "ProjectId") ??
-    null
-  );
+    readMetadataString(metadata, "projectID") ??
+    readMetadataString(metadata, "ProjectID") ??
+    readMetadataString(metadata, "project_id") ??
+    readMetadataString(metadata, "project-id");
+  if (fromMetadata) {
+    return fromMetadata;
+  }
+
+  // Some notifications only carry project id in reference fields.
+  if (payload.referenceType === "PROJECT" && payload.referenceId?.trim()) {
+    return payload.referenceId.trim();
+  }
+
+  return null;
 }
 
 export function isProjectTrackingRefreshEvent(notificationType: string): boolean {

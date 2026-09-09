@@ -118,6 +118,17 @@ export const endpoints = {
     deliveryTracking: (orderId: string) => `/orders/${orderId}/delivery-tracking`,
     completeDelivery: (orderId: string, deliveryId: string) =>
       `/orders/${orderId}/deliveries/${deliveryId}/complete`,
+    productIssues: (orderId: string) => `/orders/${orderId}/product-issues`,
+  },
+  productIssues: {
+    byProject: (projectId: string) => `/projects/${projectId}/product-issues`,
+    detail: (issueId: string) => `/product-issues/${issueId}`,
+  },
+  delayReports: {
+    byProject: (projectId: string) => `/projects/${projectId}/delay-reports`,
+    production: (projectId: string) => `/projects/${projectId}/delay-reports/production`,
+    delivery: (projectId: string) => `/projects/${projectId}/delay-reports/delivery`,
+    detail: (reportId: string) => `/delay-reports/${reportId}`,
   },
   productionRequests: {
     list: "/production-requests",
