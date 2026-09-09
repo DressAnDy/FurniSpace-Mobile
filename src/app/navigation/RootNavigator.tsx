@@ -66,12 +66,12 @@ export type RootStackParamList = {
   Tracking: { projectId?: string } | undefined;
   CreateProjectRequest: undefined;
   ProjectProposals: { projectId: string; projectName?: string };
-  ProposalDetail: { proposalId: string; projectId: string; projectName?: string };
+  ProposalDetail: { proposalId: string; projectId?: string; projectName?: string };
   ProjectQuotations: { projectId: string; projectName?: string };
-  QuotationDetail: { quotationId: string; projectId: string; projectName?: string };
+  QuotationDetail: { quotationId: string; projectId?: string; projectName?: string };
   UpdateProjectBasicInfo: { projectId: string };
   ProjectOrders: { projectId: string; projectName?: string };
-  OrderDetail: { orderId: string; projectId: string; projectName?: string };
+  OrderDetail: { orderId: string; projectId?: string; projectName?: string };
   ProjectSchedules: { projectId: string; projectName?: string };
   VerifyEmail: { email?: string } | undefined;
   SaleDashboard: undefined;

@@ -24,13 +24,14 @@ export function ProposalDetailScreen(): React.JSX.Element {
   const { proposalId, projectId, projectName } = route.params;
 
   const proposalQuery = useProposalDetailQuery(proposalId);
-  const selectFinalMutation = useSelectFinalProposalMutation(projectId);
-  const requestRevisionMutation = useRequestProposalRevisionMutation(projectId);
+  const proposal = proposalQuery.data;
+  const resolvedProjectId = projectId ?? proposal?.projectId ?? null;
+  const selectFinalMutation = useSelectFinalProposalMutation(resolvedProjectId);
+  const requestRevisionMutation = useRequestProposalRevisionMutation(resolvedProjectId);
 
   const [revisionNote, setRevisionNote] = useState("");
   const [showRevisionInput, setShowRevisionInput] = useState(false);
 
-  const proposal = proposalQuery.data;
   const canSelect = proposal ? canSelectProposal(proposal.status) : false;
   const canRevise = proposal ? canRequestProposalRevision(proposal.status) : false;
   const isBusy = selectFinalMutation.isPending || requestRevisionMutation.isPending;
@@ -53,7 +54,12 @@ export function ProposalDetailScreen(): React.JSX.Element {
               {
                 onSuccess: () => {
                   Alert.alert("Proposal Selected", "Sales is preparing your quotation.", [
-                    { text: "OK", onPress: () => navigation.navigate("Tracking", { projectId }) },
+                    {
+                      text: "OK",
+                      onPress: () => {
+                        if (resolvedProjectId) navigation.navigate("Tracking", { projectId: resolvedProjectId });
+                      },
+                    },
                   ]);
                 },
                 onError: (error) => Alert.alert("Unable to select", getCustomerFlowErrorMessage(error)),

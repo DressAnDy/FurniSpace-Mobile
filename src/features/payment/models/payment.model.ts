@@ -23,6 +23,8 @@ export type CreateSePayTransactionRequestDto = {
 export type CreatePayOsTransactionRequestDto = {
   paymentProvider: "PAYOS";
   paymentMethod: "PAYMENT_LINK";
+  returnUrl?: string;
+  cancelUrl?: string;
 };
 
 export type CreatePayOsPaymentLinkRequestDto = {
@@ -35,6 +37,7 @@ export type SePayVietQrDto = {
   paymentCode: string;
   amount: number;
   currency: string;
+  vietQrUrl?: string | null;
   qrUrl?: string | null;
   qrContent?: string | null;
   bankCode?: string | null;

@@ -9,7 +9,7 @@ type PaymentQrCodeProps = {
 };
 
 function isImageUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value);
+  return /^(https?:\/\/|data:image\/)/i.test(value);
 }
 
 export function PaymentQrCode({ value, size = 220, caption }: PaymentQrCodeProps): React.JSX.Element {

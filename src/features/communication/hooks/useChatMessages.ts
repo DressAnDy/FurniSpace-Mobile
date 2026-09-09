@@ -16,47 +16,91 @@ type ChatMessagesPage = {
   total: number;
 };
 
-function mergeMessageLists(current: ChatMessageListItem[], incoming: ChatMessageListItem[]): ChatMessageListItem[] {
-  const byId = new Map<string, ChatMessageListItem>();
-  const byClientKey = new Map<string, ChatMessageListItem>();
+function isTempMessageKey(value: string): boolean {
+  return value.startsWith("temp-");
+}
 
-  for (const message of current) {
-    byId.set(message.id, message);
-    byClientKey.set(message.clientKey, message);
+function findTempMatch(
+  messages: Iterable<ChatMessageListItem>,
+  message: ChatMessageListItem,
+): ChatMessageListItem | undefined {
+  if (!message.isMine || !message.content) {
+    return undefined;
   }
 
-  for (const message of incoming) {
+  for (const item of messages) {
+    if (isTempMessageKey(item.id) && item.isMine && item.content === message.content) {
+      return item;
+    }
+  }
+
+  return undefined;
+}
+
+function mergeMessageLists(current: ChatMessageListItem[], incoming: ChatMessageListItem[]): ChatMessageListItem[] {
+  const byId = new Map<string, ChatMessageListItem>();
+
+  const upsert = (message: ChatMessageListItem) => {
     const existingById = byId.get(message.id);
-    const existingByClientKey = byClientKey.get(message.clientKey);
-
-    // Prefer confirming a temp row in-place instead of creating a duplicate bubble.
-    const tempMatch =
-      message.isMine && message.content
-        ? current.find((item) => item.id.startsWith("temp-") && item.content === message.content)
-        : undefined;
-
+    const existingByClientKey = [...byId.values()].find((item) => item.clientKey === message.clientKey);
+    const tempMatch = findTempMatch(byId.values(), message);
     const target = tempMatch ?? existingById ?? existingByClientKey;
-    if (target) {
-      const merged: ChatMessageListItem = {
-        ...message,
-        clientKey: target.clientKey.startsWith("temp-") ? target.clientKey : message.clientKey,
-        createdAt: target.id.startsWith("temp-") ? target.createdAt : message.createdAt,
-        timeLabel: target.id.startsWith("temp-") ? target.timeLabel : message.timeLabel,
-        isMine: target.isMine || message.isMine,
-      };
 
-      byId.delete(target.id);
-      byClientKey.delete(target.clientKey);
-      byId.set(merged.id, merged);
-      byClientKey.set(merged.clientKey, merged);
+    if (!target) {
+      byId.set(message.id, message);
+      return;
+    }
+
+    const merged: ChatMessageListItem = {
+      ...message,
+      clientKey: isTempMessageKey(target.clientKey) ? target.clientKey : message.clientKey,
+      createdAt: isTempMessageKey(target.id) ? target.createdAt : message.createdAt,
+      timeLabel: isTempMessageKey(target.id) ? target.timeLabel : message.timeLabel,
+      isMine: target.isMine || message.isMine,
+    };
+
+    // Drop every identity that could collide on FlatList keyExtractor(clientKey).
+    byId.delete(target.id);
+    byId.delete(message.id);
+    for (const [id, item] of [...byId.entries()]) {
+      if (item.clientKey === merged.clientKey || item.clientKey === target.clientKey) {
+        byId.delete(id);
+      }
+      if (
+        merged.isMine &&
+        merged.content &&
+        isTempMessageKey(item.id) &&
+        item.isMine &&
+        item.content === merged.content
+      ) {
+        byId.delete(id);
+      }
+    }
+
+    byId.set(merged.id, merged);
+  };
+
+  for (const message of current) {
+    upsert(message);
+  }
+  for (const message of incoming) {
+    upsert(message);
+  }
+
+  // Final guard: FlatList keys use clientKey, so keep one row per clientKey.
+  const byClientKey = new Map<string, ChatMessageListItem>();
+  for (const message of byId.values()) {
+    const existing = byClientKey.get(message.clientKey);
+    if (!existing) {
+      byClientKey.set(message.clientKey, message);
       continue;
     }
 
-    byId.set(message.id, message);
-    byClientKey.set(message.clientKey, message);
+    const preferIncoming = isTempMessageKey(existing.id) && !isTempMessageKey(message.id);
+    byClientKey.set(message.clientKey, preferIncoming ? message : existing);
   }
 
-  return sortMessagesAscending([...byId.values()]);
+  return sortMessagesAscending([...byClientKey.values()]);
 }
 
 function toInfiniteData(messages: ChatMessageListItem[], total = messages.length): InfiniteData<ChatMessagesPage> {
@@ -241,8 +285,22 @@ export function useChatActions(
           return mergeMessageLists(current, [confirmed]);
         }
 
-        const withoutDup = current.filter((item) => item.id !== confirmed.id || item.clientKey === context.tempId);
-        const replaced = withoutDup.map((item) =>
+        const withoutStale = current.filter((item) => {
+          if (item.id === context.tempId || item.clientKey === context.tempId) {
+            return true;
+          }
+          if (item.id === confirmed.id) {
+            return false;
+          }
+          return !(
+            isTempMessageKey(item.id) &&
+            item.isMine &&
+            confirmed.content &&
+            item.content === confirmed.content
+          );
+        });
+
+        const replaced = withoutStale.map((item) =>
           item.id === context.tempId || item.clientKey === context.tempId
             ? {
                 ...confirmed,
@@ -255,7 +313,7 @@ export function useChatActions(
         );
 
         if (replaced.some((item) => item.clientKey === context.tempId || item.id === confirmed.id)) {
-          return sortMessagesAscending(replaced);
+          return mergeMessageLists(replaced, []);
         }
 
         return mergeMessageLists(current, [confirmed]);

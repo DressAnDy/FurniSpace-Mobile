@@ -320,7 +320,6 @@ export function getGroupedItemValidationError(group: GroupedQuotationItemDraft):
   const unitPrice = readDraftAmount(group.unitPrice);
   const discountAmount = readDraftAmount(group.discountAmount);
   const gross = quantity * unitPrice;
-  const lineTotal = computeQuotationItemDraftTotal(group);
 
   if (quantity <= 0) {
     return "Số lượng phải lớn hơn 0.";
@@ -330,9 +329,6 @@ export function getGroupedItemValidationError(group: GroupedQuotationItemDraft):
   }
   if (discountAmount > gross) {
     return "Giảm giá không được vượt thành tiền dòng.";
-  }
-  if (lineTotal <= 0) {
-    return "Thành tiền dòng phải lớn hơn 0.";
   }
   if (group.sourceItemIds.length > 1 && quantity < group.sourceItemIds.length) {
     return `Đang gộp ${group.sourceItemIds.length} dòng — số lượng tối thiểu là ${group.sourceItemIds.length}.`;

@@ -22,14 +22,17 @@ import { calendarIconDefinition } from "../../../icons/project/definitions";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useUpdateProjectBasicInfoMutation } from "../hooks/useCustomerFlow";
 import { useProjectDetailQuery } from "../hooks/useProjects";
-import { CreateProjectRequestDto } from "../models/project.model";
+import { UpdateProjectBasicInfoRequestDto } from "../models/project.model";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { styles } from "./CreateProjectRequestScreen.styles";
 
 type Route = RouteProp<RootStackParamList, "UpdateProjectBasicInfo">;
-type FormErrors = Partial<Record<keyof CreateProjectRequestDto, string>>;
+type UpdateProjectFormValues = UpdateProjectBasicInfoRequestDto & {
+  targetCompletionDate: string | null;
+};
+type FormErrors = Partial<Record<keyof UpdateProjectFormValues, string>>;
 
-function validateForm(values: CreateProjectRequestDto): FormErrors {
+function validateForm(values: UpdateProjectFormValues): FormErrors {
   const errors: FormErrors = {};
   if (!values.projectName.trim()) errors.projectName = "Project name is required.";
   if (!values.businessType.trim()) errors.businessType = "Business type is required.";
@@ -79,14 +82,14 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     setInitialized(true);
   }, [project, initialized]);
 
-  const formValues = useMemo<CreateProjectRequestDto>(
+  const formValues = useMemo<UpdateProjectFormValues>(
     () => ({
       projectName: projectName.trim(),
       businessType: businessType.trim(),
       furnitureRequirement: furnitureRequirement.trim(),
-      ...(projectAddress.trim() ? { projectAddress: projectAddress.trim() } : {}),
-      ...(description.trim() ? { description: description.trim() } : {}),
-      ...(targetCompletionDate ? { targetCompletionDate: formatApiDate(targetCompletionDate) } : {}),
+      projectAddress: projectAddress.trim() || null,
+      description: description.trim() || null,
+      targetCompletionDate: targetCompletionDate ? formatApiDate(targetCompletionDate) : null,
     }),
     [businessType, description, furnitureRequirement, projectAddress, projectName, targetCompletionDate],
   );
@@ -103,7 +106,11 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
-    updateMutation.mutate(formValues, {
+    const originalTargetDate = project?.targetCompletionDate?.slice(0, 10) ?? null;
+    updateMutation.mutate({
+      ...formValues,
+      shouldUpdateTargetCompletionDate: formValues.targetCompletionDate !== originalTargetDate,
+    }, {
       onSuccess: () => {
         Alert.alert("Information Updated", "Your project details have been saved.", [
           { text: "OK", onPress: () => navigation.goBack() },
@@ -113,7 +120,7 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     });
   };
 
-  const showError = (field: keyof CreateProjectRequestDto) => (hasSubmitted ? errors[field] : undefined);
+  const showError = (field: keyof UpdateProjectFormValues) => (hasSubmitted ? errors[field] : undefined);
 
   if (isLoading && !initialized) {
     return (
@@ -152,12 +159,19 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
             <FormField label="Project Address" value={projectAddress} onChangeText={setProjectAddress} />
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Target Completion Date</Text>
-              <Pressable style={styles.dateField} onPress={() => setShowDatePicker(true)}>
-                <AppIcon definition={calendarIconDefinition} size={16} color="#7A6F68" />
-                <Text style={[styles.dateFieldText, !targetCompletionDate && styles.dateFieldPlaceholder]}>
-                  {targetCompletionDate ? formatTrackingDate(formatApiDate(targetCompletionDate)) : "Select date"}
-                </Text>
-              </Pressable>
+              <View style={styles.dateField}>
+                <Pressable style={styles.dateFieldMain} onPress={() => setShowDatePicker(true)}>
+                  <AppIcon definition={calendarIconDefinition} size={16} color="#7A6F68" />
+                  <Text style={[styles.dateFieldText, !targetCompletionDate && styles.dateFieldPlaceholder]}>
+                    {targetCompletionDate ? formatTrackingDate(formatApiDate(targetCompletionDate)) : "Select date"}
+                  </Text>
+                </Pressable>
+                {targetCompletionDate ? (
+                  <Pressable hitSlop={8} onPress={() => setTargetCompletionDate(null)}>
+                    <Text style={styles.dateClearText}>Clear</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
             {showDatePicker ? (
               <DateTimePicker value={targetCompletionDate ?? new Date()} mode="date" display={Platform.OS === "ios" ? "spinner" : "default"} onChange={handleTargetDateChange} />
@@ -181,14 +195,14 @@ function FormField({
   onChangeText,
   multiline,
   error,
-}: {
+}: Readonly<{
   label: string;
   required?: boolean;
   value: string;
   onChangeText: (value: string) => void;
   multiline?: boolean;
   error?: string;
-}): React.JSX.Element {
+}>): React.JSX.Element {
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>

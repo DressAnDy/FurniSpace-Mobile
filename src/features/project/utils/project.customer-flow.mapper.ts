@@ -9,6 +9,7 @@ export type CustomerFlowScreen =
   | "quotation_detail"
   | "orders"
   | "order_detail"
+  | "payment_start_fee"
   | "payment_deposit"
   | "payment_remaining"
   | "tracking"
@@ -20,6 +21,7 @@ export type CustomerFlowActionId =
   | "view_proposals"
   | "view_quotations"
   | "view_orders"
+  | "pay_start_fee"
   | "pay_deposit"
   | "pay_remaining"
   | "confirm_schedule"
@@ -72,11 +74,12 @@ export function resolveCustomerFlowDecision(status: ProjectStatus): CustomerFlow
       return {
         stage: "project",
         headline: "In consultation",
-        description: "Discuss scope and requirements with your sales team.",
+        description: "Pay the project start fee when issued, then continue with your sales team.",
         actions: [
-          { id: "open_chat", label: "Open chat", screen: "chat", primary: true },
+          { id: "pay_start_fee", label: "Pay Start Fee", screen: "payment_start_fee", primary: true },
+          { id: "open_chat", label: "Open chat", screen: "chat" },
         ],
-        fetchKeys: [...BASE_FETCH],
+        fetchKeys: [...BASE_FETCH, "payments"],
       };
 
     case "NEED_BASIC_INFORMATION":
@@ -91,8 +94,9 @@ export function resolveCustomerFlowDecision(status: ProjectStatus): CustomerFlow
             screen: "update_basic_info",
             primary: true,
           },
+          { id: "pay_start_fee", label: "Pay Start Fee", screen: "payment_start_fee" },
         ],
-        fetchKeys: [...BASE_FETCH],
+        fetchKeys: [...BASE_FETCH, "payments"],
       };
 
     case "WAITING_FOR_DESIGNER_ASSIGNMENT":
@@ -104,8 +108,9 @@ export function resolveCustomerFlowDecision(status: ProjectStatus): CustomerFlow
         description: "Your team is preparing site measurement and design kickoff.",
         actions: [
           { id: "confirm_schedule", label: "Confirm schedule", screen: "schedules", primary: true },
+          { id: "pay_start_fee", label: "Pay Start Fee", screen: "payment_start_fee" },
         ],
-        fetchKeys: [...BASE_FETCH],
+        fetchKeys: [...BASE_FETCH, "payments"],
       };
 
     case "PROPOSAL_CONSULTING":
@@ -179,6 +184,7 @@ export function resolveCustomerFlowDecision(status: ProjectStatus): CustomerFlow
       };
 
     case "DELIVERING":
+    case "AWAITING_CUSTOMER_CONFIRMATION":
       return {
         stage: "production",
         headline: "Delivering",

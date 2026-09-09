@@ -311,6 +311,12 @@ export const styles = StyleSheet.create({
   statusPillTextProcessing: {
     color: "#8A6D3B",
   },
+  statusPillPending: {
+    backgroundColor: "rgba(201,168,106,0.16)",
+  },
+  statusPillTextPending: {
+    color: "#8A6D3B",
+  },
   successCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
@@ -378,7 +384,144 @@ export const styles = StyleSheet.create({
   formErrorText: {
     color: "#DC2626",
     fontSize: 12,
-    marginTop: 10,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  deliveryCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(58,51,48,0.08)",
+    borderRadius: 22,
+    borderWidth: 1,
+    marginBottom: 18,
+    overflow: "hidden",
+    shadowColor: "#1C1612",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+  },
+  deliveryCardAccent: {
+    backgroundColor: GOLD,
+    height: 3,
+    width: "100%",
+  },
+  deliveryCardBody: {
+    gap: 14,
+    padding: 18,
+  },
+  deliveryHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 2,
+  },
+  deliveryIconBadge: {
+    alignItems: "center",
+    backgroundColor: "rgba(201,168,106,0.14)",
+    borderRadius: 14,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
+  },
+  deliveryHeaderCopy: {
+    flex: 1,
+  },
+  deliveryEyebrow: {
+    color: GOLD,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.1,
+  },
+  deliveryHeaderTitle: {
+    color: "#2C2420",
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  deliveryFieldBlock: {
+    gap: 7,
+  },
+  deliveryFieldHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  deliverySplitRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  deliveryLabelRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  deliveryFieldLabel: {
+    color: "#7A6F68",
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  optionalPill: {
+    backgroundColor: "rgba(201,168,106,0.12)",
+    borderRadius: 999,
+    marginLeft: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  optionalPillText: {
+    color: "#8A6D3B",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
+  deliveryInput: {
+    backgroundColor: "#F7F3EE",
+    borderColor: "rgba(58,51,48,0.1)",
+    borderRadius: 14,
+    borderWidth: 1,
+    color: "#2C2420",
+    fontSize: 14,
+    minHeight: 46,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+  },
+  deliveryInputMultiline: {
+    minHeight: 78,
+    paddingTop: 12,
+  },
+  deliveryInputNote: {
+    minHeight: 62,
+    paddingTop: 12,
+  },
+  deliveryContinueButton: {
+    backgroundColor: "#3A3330",
+    borderRadius: 16,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  deliveryContinueButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
+  },
+  deliveryContinueContent: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  deliveryContinueText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  deliveryContinueIcon: {
+    alignItems: "center",
+    backgroundColor: GOLD,
+    borderRadius: 11,
+    height: 28,
+    justifyContent: "center",
+    width: 28,
   },
   noticeCard: {
     backgroundColor: "#FFFFFF",

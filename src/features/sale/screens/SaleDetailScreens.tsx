@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +10,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -17,6 +19,7 @@ import {
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { plusIconDefinition } from "../../../icons/action/definitions";
 import { calendarIconDefinition, clockIconDefinition } from "../../../icons/project/definitions";
 import {
@@ -46,7 +49,7 @@ import {
   useAvailableDesignersQuery,
 } from "../hooks/useSaleDashboard";
 import type { SpaceDataStatus } from "../services/sale.api";
-import { useSaleProposalsQuery, useSaleQuotationsQuery, useCreateQuotationMutation } from "../hooks/useSaleCommercial";
+import { useSaleProposalsQuery, useSaleQuotationsQuery, useCreateQuotationMutation, refetchSaleProjectOverviewQueries } from "../hooks/useSaleCommercial";
 import { useSaleProjectOverviewRealtime } from "../hooks/useSaleProjectOverviewRealtime";
 import { useSaleOrdersQuery, useCompleteProjectMutation, useSaleProductionRequestsQuery } from "../hooks/useSaleFulfillment";
 import {
@@ -69,6 +72,7 @@ import {
 } from "../utils/sale.order.actions";
 import { getQuotationStatusPillColors } from "../utils/sale.quotation.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
+import { SaleIssuesTab } from "../components/SaleIssuesTab";
 import { SaleProjectChatTab } from "./SaleProjectChatTab";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
@@ -232,17 +236,19 @@ function shouldShowStartFeeSection(
 
 export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
   const projectId = route.params?.projectId ?? null;
   const [scheduleModal, setScheduleModal] = useState(route.params?.openScheduleModal ?? false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const projectQuery = useProjectDetailQuery(projectId);
   const project = projectQuery.data ?? null;
   const startFeeStatusQuery = useProjectStartFeeStatusQuery(projectId);
   const startFeeStatus = startFeeStatusQuery.data;
   useSaleProjectOverviewRealtime({
     projectId,
-    enabled: activeTab === "Overview",
+    enabled: Boolean(projectId),
   });
   const needsDesigner =
     Boolean(project) &&
@@ -251,6 +257,30 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
     (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" || Boolean(startFeeStatus?.isEligibleForDesignerAssignment));
   const showFixedActions = activeTab !== "Chat" && Boolean(needsDesigner);
   const bottomPad = showFixedActions ? 88 + Math.max(insets.bottom, 12) : 24;
+
+  const handleRefresh = useCallback(async () => {
+    if (!projectId) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchSaleProjectOverviewQueries(queryClient, projectId),
+        queryClient.refetchQueries({ queryKey: queryKeys.payment.projectStartFeeStatus(projectId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.sale.areas(projectId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.sale.files(projectId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.project.schedules(projectId) }),
+        queryClient.refetchQueries({ queryKey: ["sale", "production-requests"] }),
+        queryClient.refetchQueries({ queryKey: queryKeys.productIssue.byProject(projectId) }),
+        queryClient.refetchQueries({ queryKey: queryKeys.delayReport.byProject(projectId, "PRODUCTION") }),
+        queryClient.refetchQueries({ queryKey: queryKeys.delayReport.byProject(projectId, "DELIVERY") }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [projectId, queryClient]);
 
   return (
     <SaleFrame>
@@ -267,6 +297,14 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={SALE.gold}
+              colors={[SALE.gold]}
+            />
+          }
           contentContainerStyle={[s.content, s.contentGap, { paddingTop: 16, paddingBottom: bottomPad }]}
         >
           {activeTab === "Overview" ? (
@@ -295,6 +333,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
           {activeTab === "Schedules" ? (
             <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
           ) : null}
+          {activeTab === "Issues" ? <SaleIssuesTab projectId={projectId} /> : null}
         </ScrollView>
       )}
       {showFixedActions ? (

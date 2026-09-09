@@ -15,6 +15,7 @@ function normalizeOrderItem(raw: unknown, index = 0): OrderItemDto | null {
     orderItemId: readString(record.orderItemId) ?? readString(record.OrderItemId) ?? `item-${index}`,
     itemName: readString(record.itemName) ?? readString(record.ItemName) ?? `Item ${index + 1}`,
     quantity: pickAmount(record, "quantity", "Quantity") ?? 0,
+    deliveredQuantity: pickAmount(record, "deliveredQuantity", "DeliveredQuantity") ?? 0,
     unitPrice: pickAmount(record, "unitPrice", "UnitPrice") ?? 0,
     subtotalAmount: pickAmount(record, "subtotalAmount", "SubtotalAmount", "totalAmount", "TotalAmount") ?? 0,
     status: (readString(record.status) ?? readString(record.Status) ?? "PENDING") as OrderItemDto["status"],

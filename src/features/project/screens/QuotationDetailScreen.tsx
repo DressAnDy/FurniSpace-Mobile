@@ -49,22 +49,31 @@ function getStatusStyles(status: QuotationStatus) {
   }
 }
 
+function isPastValidUntil(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const expiresAt = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]) + 1).getTime()
+    : new Date(value).getTime();
+  return !Number.isNaN(expiresAt) && expiresAt <= Date.now();
+}
+
 export function QuotationDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Route>();
   const { quotationId, projectId, projectName } = route.params;
 
   const quotationQuery = useQuotationDetailQuery(quotationId);
-  const acceptMutation = useAcceptQuotationMutation(projectId);
-  const revisionMutation = useRequestQuotationRevisionMutation(projectId);
-  const rejectMutation = useRejectQuotationMutation(projectId);
+  const quotation = quotationQuery.data;
+  const resolvedProjectId = projectId ?? quotation?.projectId ?? null;
+  const acceptMutation = useAcceptQuotationMutation(resolvedProjectId);
+  const revisionMutation = useRequestQuotationRevisionMutation(resolvedProjectId);
+  const rejectMutation = useRejectQuotationMutation(resolvedProjectId);
 
   const [actionMode, setActionMode] = useState<ActionMode>("none");
   const [reasonText, setReasonText] = useState("");
 
-  const quotation = quotationQuery.data;
-  const isExpired =
-    quotation?.validUntil != null && new Date(quotation.validUntil).getTime() < Date.now() - 24 * 60 * 60 * 1000;
+  const isExpired = isPastValidUntil(quotation?.validUntil);
 
   const canAccept = quotation ? canAcceptQuotation(quotation.status) && !isExpired : false;
   const canRevise = quotation ? canRequestQuotationRevision(quotation.status) && !isExpired : false;
@@ -88,7 +97,9 @@ export function QuotationDetailScreen(): React.JSX.Element {
                 Alert.alert("Quotation Accepted", "Your order has been created. Proceed to pay the deposit.", [
                   {
                     text: "Pay Deposit",
-                    onPress: () => navigation.navigate("Tracking", { projectId }),
+                    onPress: () => {
+                      if (resolvedProjectId) navigation.navigate("Tracking", { projectId: resolvedProjectId });
+                    },
                   },
                 ]);
               },
@@ -131,7 +142,12 @@ export function QuotationDetailScreen(): React.JSX.Element {
         {
           onSuccess: () => {
             Alert.alert("Quotation Rejected", "Sales has been notified.", [
-              { text: "OK", onPress: () => navigation.navigate("Tracking", { projectId }) },
+              {
+                text: "OK",
+                onPress: () => {
+                  if (resolvedProjectId) navigation.navigate("Tracking", { projectId: resolvedProjectId });
+                },
+              },
             ]);
           },
           onError: (error) => Alert.alert("Unable to reject", getCustomerFlowErrorMessage(error)),

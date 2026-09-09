@@ -46,7 +46,34 @@ export const styles = StyleSheet.create({
     marginTop: 12,
   },
   content: {
-    padding: 19,
+    padding: 14,
+  },
+  sectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(60,51,48,0.08)",
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 14,
+    padding: 14,
+    shadowColor: "#3A3330",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  sectionTitle: {
+    color: "#3A3330",
+    fontSize: 15,
+    fontWeight: "600",
+    marginBottom: 14,
+  },
+  fieldRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  fieldColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   fieldGroup: {
     marginBottom: 14,
@@ -61,7 +88,7 @@ export const styles = StyleSheet.create({
     color: "#C9A86A",
   },
   input: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8F5F1",
     borderColor: "rgba(60,51,48,0.08)",
     borderRadius: 12,
     borderWidth: 1,
@@ -71,12 +98,134 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  inputSuffixWrap: {
+    position: "relative",
+  },
+  inputWithSuffix: {
+    paddingRight: 48,
+  },
+  inputSuffix: {
+    color: "#7A6F68",
+    fontSize: 10,
+    fontWeight: "600",
+    position: "absolute",
+    right: 12,
+    top: 17,
+  },
   inputMultiline: {
     minHeight: 96,
     textAlignVertical: "top",
   },
   inputError: {
     borderColor: "#E24B4A",
+  },
+  selectField: {
+    alignItems: "center",
+    backgroundColor: "#F8F5F1",
+    borderColor: "rgba(60,51,48,0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  selectFieldOpen: {
+    borderColor: "#C9A86A",
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  selectValue: {
+    color: "#2C2420",
+    flex: 1,
+    fontSize: 14,
+  },
+  selectPlaceholder: {
+    color: "#B8ADA4",
+  },
+  selectChevronOpen: {
+    transform: [{ rotate: "180deg" }],
+  },
+  selectOptions: {
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    borderColor: "#C9A86A",
+    borderTopWidth: 0,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  uploadArea: {
+    alignItems: "center",
+    borderColor: "rgba(60,51,48,0.18)",
+    borderRadius: 12,
+    borderStyle: "dashed",
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 126,
+    padding: 18,
+  },
+  uploadIcon: {
+    alignItems: "center",
+    backgroundColor: "#F1ECE5",
+    borderRadius: 20,
+    height: 40,
+    justifyContent: "center",
+    marginBottom: 9,
+    width: 40,
+  },
+  uploadTitle: {
+    color: "#3A3330",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  uploadHint: {
+    color: "#9B8F86",
+    fontSize: 10,
+    marginTop: 4,
+  },
+  fileRow: {
+    alignItems: "center",
+    backgroundColor: "#F8F5F1",
+    borderRadius: 10,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+    padding: 10,
+  },
+  fileInfo: {
+    flex: 1,
+  },
+  fileName: {
+    color: "#3A3330",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  fileSize: {
+    color: "#9B8F86",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  selectOption: {
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: 14,
+  },
+  selectOptionDivider: {
+    borderBottomColor: "rgba(60,51,48,0.08)",
+    borderBottomWidth: 1,
+  },
+  selectOptionSelected: {
+    backgroundColor: "#F1ECE5",
+  },
+  selectOptionText: {
+    color: "#2C2420",
+    fontSize: 14,
+  },
+  selectOptionTextSelected: {
+    color: "#A77D35",
+    fontWeight: "600",
   },
   errorText: {
     color: "#E24B4A",
@@ -106,7 +255,7 @@ export const styles = StyleSheet.create({
   },
   dateField: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8F5F1",
     borderColor: "rgba(60,51,48,0.08)",
     borderRadius: 12,
     borderWidth: 1,

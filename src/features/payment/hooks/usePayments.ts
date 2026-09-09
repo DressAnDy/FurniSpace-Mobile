@@ -13,7 +13,6 @@ import type { CreateProjectStartFeeRequestDto } from "../models/payment.model";
 import {
   createOrderDepositPaymentApi,
   createPayOsPaymentLinkApi,
-  createPayOsTransactionApi,
   createProjectStartFeeApi,
   createSePayTransactionApi,
   createSePayVietQrApi,
@@ -27,9 +26,6 @@ import {
 import { buildTransferDetails } from "../utils/payment.mapper";
 import { usesPaymentHelperCheckout } from "../utils/payment.helpers";
 import { buildPayOsCheckoutState, mapPayOsPaymentLinkToAttempt, mapPayOsTransactionToAttempt } from "../utils/payos.mapper";
-
-const PAYOS_RETURN_URL = "furnispace://payos-payment";
-const PAYOS_CANCEL_URL = "furnispace://payment";
 
 export function isDeliveryDetailsRequiredError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -46,12 +42,12 @@ export function usePaymentDetailQuery(paymentId: string | null) {
   });
 }
 
-export function usePaymentsQuery(query: PaymentListQuery) {
+export function usePaymentsQuery(query: PaymentListQuery, options?: { enabled?: boolean }) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
 
   return useQuery({
     queryKey: queryKeys.payment.list(query),
-    enabled: isLoggedIn,
+    enabled: isLoggedIn && (options?.enabled ?? true),
     queryFn: () => getPaymentsApi(query),
   });
 }
@@ -171,6 +167,10 @@ export async function ensurePayment(input: {
   }
 
   const paymentType = input.paymentType ?? "DEPOSIT";
+  if (paymentType === "PROJECT_START_FEE") {
+    throw new Error("Project start fee payment is missing. Open the payment from your notification or project actions.");
+  }
+
   const existingPayment = await findExistingPaymentForOrder(input.orderId, paymentType);
   if (existingPayment) {
     return existingPayment;
@@ -245,7 +245,7 @@ async function prepareStaffSePayCheckout(paymentId: string) {
     transferDetails: buildTransferDetails(
       payment.paymentCode,
       payment.amount,
-      vietQr.qrUrl ?? vietQr.qrContent,
+      vietQr.vietQrUrl ?? vietQr.qrUrl ?? vietQr.qrContent,
       vietQr.transferContent ?? payment.paymentCode,
     ),
   };
@@ -301,28 +301,6 @@ function isPayOsPendingAttempt(transaction: Awaited<ReturnType<typeof getActiveP
 }
 
 export async function preparePayOsCheckout(paymentId: string): Promise<PayOsCheckoutState> {
-  const role = useAuthStore.getState().user?.role;
-  if (usesPaymentHelperCheckout(role)) {
-    return prepareStaffPayOsCheckout(paymentId);
-  }
-  return prepareCustomerPayOsCheckout(paymentId);
-}
-
-async function prepareStaffPayOsCheckout(paymentId: string): Promise<PayOsCheckoutState> {
-  const payment = await getPaymentDetailApi(paymentId);
-
-  if (payment.status === "PAID") {
-    return buildPayOsCheckoutState(payment, null);
-  }
-
-  const link = await createPayOsPaymentLinkApi(paymentId, {
-    returnUrl: PAYOS_RETURN_URL,
-    cancelUrl: PAYOS_CANCEL_URL,
-  });
-  return buildPayOsCheckoutState(payment, mapPayOsPaymentLinkToAttempt(link));
-}
-
-async function prepareCustomerPayOsCheckout(paymentId: string): Promise<PayOsCheckoutState> {
   const payment = await getPaymentDetailApi(paymentId);
 
   if (payment.status === "PAID") {
@@ -334,8 +312,10 @@ async function prepareCustomerPayOsCheckout(paymentId: string): Promise<PayOsChe
     return buildPayOsCheckoutState(payment, mapPayOsTransactionToAttempt(activeTransaction!));
   }
 
-  const transaction = await createPayOsTransactionApi(paymentId);
-  return buildPayOsCheckoutState(payment, mapPayOsTransactionToAttempt(transaction));
+  // Match website PaymentCollectionModal: POST payment-link without return/cancel URLs.
+  // BE falls back to configured HTTPS PayOS redirect URLs.
+  const link = await createPayOsPaymentLinkApi(paymentId, {});
+  return buildPayOsCheckoutState(payment, mapPayOsPaymentLinkToAttempt(link));
 }
 
 export async function bootstrapSePayCheckout(input: { orderId?: string; paymentId?: string }) {

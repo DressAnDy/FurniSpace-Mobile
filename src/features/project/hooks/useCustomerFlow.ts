@@ -18,7 +18,10 @@ import { pickRicherProposalItems } from "../utils/proposal.mapper";
 import { enrichQuotationDeposit, resolveQuotationDisplayDeposit } from "../utils/quotation.mapper";
 import { resolveOrderDisplayTotal } from "../utils/order.mapper";
 import { getPaymentsApi } from "../../payment/services/payment.api";
-import { updateProjectBasicInfoApi } from "../services/project.api";
+import {
+  updateProjectBasicInfoApi,
+  updateProjectTargetCompletionDateApi,
+} from "../services/project.api";
 import {
   acceptQuotationApi,
   getProjectQuotationsApi,
@@ -209,6 +212,8 @@ function invalidateCustomerFlow(queryClient: ReturnType<typeof useQueryClient>, 
   void refetchProjectTrackingQueries(queryClient, projectId);
   void queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] });
   void queryClient.invalidateQueries({ queryKey: ["project", "quotations", projectId] });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.project.orders(projectId) });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.project.trackingOrders(projectId) });
   void queryClient.invalidateQueries({ queryKey: ["proposal", "detail"] });
   void queryClient.invalidateQueries({ queryKey: ["quotation", "detail"] });
   void queryClient.invalidateQueries({ queryKey: ["order", "detail"] });
@@ -287,8 +292,20 @@ export function useUpdateProjectBasicInfoMutation(projectId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: Parameters<typeof updateProjectBasicInfoApi>[1]) =>
-      updateProjectBasicInfoApi(projectId!, payload),
+    mutationFn: async (
+      payload: Parameters<typeof updateProjectBasicInfoApi>[1] & {
+        targetCompletionDate: string | null;
+        shouldUpdateTargetCompletionDate: boolean;
+      },
+    ) => {
+      const { targetCompletionDate, shouldUpdateTargetCompletionDate, ...basicInfo } = payload;
+      const project = await updateProjectBasicInfoApi(projectId!, basicInfo);
+      if (!shouldUpdateTargetCompletionDate) {
+        return project;
+      }
+      const targetDate = await updateProjectTargetCompletionDateApi(projectId!, { targetCompletionDate });
+      return { ...project, targetCompletionDate: targetDate.targetCompletionDate };
+    },
     onSuccess: () => {
       if (projectId) {
         invalidateCustomerFlow(queryClient, projectId);

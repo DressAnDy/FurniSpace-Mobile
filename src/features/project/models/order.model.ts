@@ -5,6 +5,7 @@ export type OrderStatus =
   | "IN_PRODUCTION"
   | "READY_FOR_DELIVERY"
   | "DELIVERING"
+  | "AWAITING_CUSTOMER_CONFIRMATION"
   | "FINAL_PAYMENT_PENDING"
   | "COMPLETED"
   | "CANCELLED";
@@ -28,6 +29,7 @@ export type OrderItemDto = {
   orderItemId: string;
   itemName: string;
   quantity: number;
+  deliveredQuantity: number;
   unitPrice: number;
   subtotalAmount: number;
   status: OrderItemStatus;

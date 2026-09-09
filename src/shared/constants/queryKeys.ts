@@ -36,6 +36,15 @@ export const queryKeys = {
   order: {
     detail: (orderId: string) => ["order", "detail", orderId] as const,
   },
+  productIssue: {
+    byProject: (projectId: string) => ["product-issue", "project", projectId] as const,
+    byOrder: (orderId: string) => ["product-issue", "order", orderId] as const,
+    detail: (issueId: string) => ["product-issue", "detail", issueId] as const,
+  },
+  delayReport: {
+    byProject: (projectId: string, phase: string) => ["delay-report", "project", projectId, phase] as const,
+    detail: (reportId: string) => ["delay-report", "detail", reportId] as const,
+  },
   sale: {
     kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,
     actionQueue: (query: SaleActionQueueQueryKey) => ["sale", "action-queue", query] as const,

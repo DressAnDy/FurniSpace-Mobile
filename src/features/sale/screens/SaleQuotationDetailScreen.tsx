@@ -666,9 +666,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                               placeholderTextColor="rgba(122,111,104,.45)"
                               style={[
                                 s.quotationFieldInput,
-                                itemError?.includes("Giảm giá") || itemError?.includes("Thành tiền")
-                                  ? s.quotationFieldInputError
-                                  : null,
+                                itemError?.includes("Giảm giá") ? s.quotationFieldInputError : null,
                               ]}
                             />
                           </QuotationField>
