@@ -13,8 +13,16 @@ function isSalesRole(role: NavigateFromNotificationOptions["role"]): boolean {
   return role === "SALES";
 }
 
+function isDesignerRole(role: NavigateFromNotificationOptions["role"]): boolean {
+  return role === "DESIGNER";
+}
+
 function navigateSalesHome(navigation: NativeStackNavigationProp<RootStackParamList>): void {
   navigation.navigate("SaleDashboard");
+}
+
+function navigateDesignerHome(navigation: NativeStackNavigationProp<RootStackParamList>): void {
+  navigation.navigate("DesignerDashboard");
 }
 
 function navigateProjectFlow(
@@ -26,6 +34,10 @@ function navigateProjectFlow(
   options?.setActiveProjectId?.(projectId);
   if (isSalesRole(options?.role)) {
     navigation.navigate("SaleProjectDetail", { projectId, tab: "Overview" });
+    return;
+  }
+  if (isDesignerRole(options?.role)) {
+    navigation.navigate("DesignerProjectDetail", { projectId, tab: "Overview" });
     return;
   }
   navigation.navigate("Tracking", { projectId });
@@ -44,6 +56,7 @@ export async function navigateFromNotification(
   options?: NavigateFromNotificationOptions,
 ): Promise<void> {
   const sales = isSalesRole(options?.role);
+  const designer = isDesignerRole(options?.role);
   const type = normalizeType(item.notificationType);
   const referenceType = (item.referenceType ?? "").toUpperCase();
 
@@ -54,6 +67,17 @@ export async function navigateFromNotification(
       options?.setActiveProjectId?.(target.projectId);
       if (sales) {
         navigation.navigate("SaleChat", {
+          chatId: target.chatId,
+          projectId: target.projectId,
+          title: target.title,
+          staffName: target.staffName,
+          chatType: target.chatType,
+          status: target.status,
+        });
+        return;
+      }
+      if (designer) {
+        navigation.navigate("DesignerChat", {
           chatId: target.chatId,
           projectId: target.projectId,
           title: target.title,
@@ -80,12 +104,20 @@ export async function navigateFromNotification(
         navigation.navigate("SaleProjectDetail", { projectId: item.projectId, tab: "Chat" });
         return;
       }
+      if (designer) {
+        navigation.navigate("DesignerProjectDetail", { projectId: item.projectId, tab: "Chat" });
+        return;
+      }
       navigation.navigate("Messages", { projectId: item.projectId });
       return;
     }
 
     if (sales) {
       navigation.navigate("SaleMessages");
+      return;
+    }
+    if (designer) {
+      navigation.navigate("DesignerMessages");
       return;
     }
 
@@ -137,6 +169,16 @@ export async function navigateFromNotification(
         return;
       }
       navigateSalesHome(navigation);
+      return;
+    }
+
+    if (designer) {
+      if (projectId) {
+        options?.setActiveProjectId?.(projectId);
+        navigation.navigate("DesignerProjectDetail", { projectId, tab: "Overview" });
+        return;
+      }
+      navigateDesignerHome(navigation);
       return;
     }
 
@@ -219,6 +261,8 @@ export async function navigateFromNotification(
       options?.setActiveProjectId?.(projectId);
       if (sales) {
         navigation.navigate("SaleProjectDetail", { projectId, tab: "Schedules" });
+      } else if (designer) {
+        navigation.navigate("DesignerSchedules");
       } else {
         navigation.navigate("ProjectSchedules", { projectId, projectName });
       }
@@ -257,6 +301,11 @@ export async function navigateFromNotification(
 
   if (sales) {
     navigateSalesHome(navigation);
+    return;
+  }
+
+  if (designer) {
+    navigateDesignerHome(navigation);
     return;
   }
 

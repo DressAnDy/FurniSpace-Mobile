@@ -19,6 +19,7 @@ import {
 } from "../utils/sale.notification.mapper";
 
 export const NOTIFICATIONS_PAGE_SIZE = 20;
+export const DESIGNER_NOTIFICATIONS_PAGE_SIZE = 5;
 const FILTERED_FETCH_LIMIT = 100;
 const NOTIFICATIONS_STALE_TIME_MS = 60_000;
 
@@ -63,11 +64,15 @@ async function fetchNotificationsPage(filter: NotificationFilter, page: number) 
   };
 }
 
-async function fetchSaleNotificationsPage(filter: SaleNotificationFilter, page: number) {
+async function fetchSaleNotificationsPage(
+  filter: SaleNotificationFilter,
+  page: number,
+  pageSize: number = NOTIFICATIONS_PAGE_SIZE,
+) {
   if (filter === "all") {
     const response = await getNotificationsApi({
       page,
-      limit: NOTIFICATIONS_PAGE_SIZE,
+      limit: pageSize,
     });
 
     return {
@@ -82,7 +87,7 @@ async function fetchSaleNotificationsPage(filter: SaleNotificationFilter, page: 
     const response = await getNotificationsApi({
       isUnread: true,
       page,
-      limit: NOTIFICATIONS_PAGE_SIZE,
+      limit: pageSize,
     });
 
     return {
@@ -104,9 +109,9 @@ async function fetchSaleNotificationsPage(filter: SaleNotificationFilter, page: 
   );
 
   return {
-    items: paginateItems(filteredItems, page, NOTIFICATIONS_PAGE_SIZE),
+    items: paginateItems(filteredItems, page, pageSize),
     page,
-    limit: NOTIFICATIONS_PAGE_SIZE,
+    limit: pageSize,
     total: filteredItems.length,
   };
 }
@@ -137,15 +142,19 @@ export function useNotificationsQuery(filter: NotificationFilter, page: number) 
   });
 }
 
-export function useSaleNotificationsQuery(filter: SaleNotificationFilter, page: number) {
+export function useSaleNotificationsQuery(
+  filter: SaleNotificationFilter,
+  page: number,
+  pageSize: number = NOTIFICATIONS_PAGE_SIZE,
+) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
 
   return useQuery({
-    queryKey: [...queryKeys.notification.list(`sale:${filter}`), page],
+    queryKey: [...queryKeys.notification.list(`sale:${filter}`), page, pageSize],
     enabled: isLoggedIn,
     staleTime: NOTIFICATIONS_STALE_TIME_MS,
     placeholderData: keepPreviousData,
-    queryFn: () => fetchSaleNotificationsPage(filter, page),
+    queryFn: () => fetchSaleNotificationsPage(filter, page, pageSize),
   });
 }
 

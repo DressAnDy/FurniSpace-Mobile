@@ -27,6 +27,7 @@ export function AppBottomNav({ activeTab, chatBadge, variant = "fixed" }: AppBot
   const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const role = useAuthStore((state) => state.user?.role ?? null);
   const isSales = role === "SALES";
+  const isDesigner = role === "DESIGNER";
   const bottomInset = Math.max(insets.bottom, 8);
   const containerStyle: ViewStyle[] = [
     styles.bottomNav,
@@ -34,36 +35,46 @@ export function AppBottomNav({ activeTab, chatBadge, variant = "fixed" }: AppBot
     variant === "fixed" ? styles.bottomNavFixed : null,
   ].filter(Boolean) as ViewStyle[];
 
+  const homeRoute = isSales ? "SaleDashboard" : isDesigner ? "DesignerDashboard" : "Home";
+  const projectsRoute = isSales ? "SaleProjects" : isDesigner ? "DesignerProjects" : "Tracking";
+  const moreRoute = isSales ? "SaleMore" : isDesigner ? "DesignerMore" : "Profile";
+
   return (
     <View style={containerStyle}>
       <BottomNavItem
         active={activeTab === "home"}
         iconDefinition={homeIconDefinition}
-        label={isSales ? "Dashboard" : "Home"}
-        onPress={() => navigation.navigate(isSales ? "SaleDashboard" : "Home")}
+        label={isSales || isDesigner ? "Dashboard" : "Home"}
+        onPress={() => navigation.navigate(homeRoute)}
       />
       <BottomNavItem
         active={activeTab === "tracking"}
         iconDefinition={dashboardIconDefinition}
-        label={isSales ? "Projects" : "Tracking"}
-        onPress={() => navigation.navigate(isSales ? "SaleProjects" : "Tracking")}
+        label={isSales || isDesigner ? "Projects" : "Tracking"}
+        onPress={() => navigation.navigate(projectsRoute)}
       />
       <BottomNavItem
         active={activeTab === "chat"}
         badge={chatBadge}
         iconDefinition={chatIconDefinition}
         label="Chat"
-        onPress={() =>
-          isSales
-            ? navigation.navigate("SaleMessages")
-            : navigation.navigate("Messages", activeProjectId ? { projectId: activeProjectId } : undefined)
-        }
+        onPress={() => {
+          if (isSales) {
+            navigation.navigate("SaleMessages");
+            return;
+          }
+          if (isDesigner) {
+            navigation.navigate("DesignerMessages");
+            return;
+          }
+          navigation.navigate("Messages", activeProjectId ? { projectId: activeProjectId } : undefined);
+        }}
       />
       <BottomNavItem
         active={activeTab === "profile"}
         iconDefinition={userIconDefinition}
-        label={isSales ? "More" : "Profile"}
-        onPress={() => navigation.navigate(isSales ? "SaleMore" : "Profile")}
+        label={isSales || isDesigner ? "More" : "Profile"}
+        onPress={() => navigation.navigate(moreRoute)}
       />
     </View>
   );

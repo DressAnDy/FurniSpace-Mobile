@@ -60,6 +60,9 @@ export type ProjectDetailDto = {
   assignedDesignerId: string | null;
   assignedSales?: ProjectAssigneeDto | null;
   assignedDesigner?: ProjectAssigneeDto | null;
+  /** Some list/detail payloads expose flat sales name instead of nested assignee. */
+  salesName?: string | null;
+  assignedSalesName?: string | null;
   projectCode: string;
   projectName: string;
   businessType: string;

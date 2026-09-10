@@ -29,7 +29,7 @@ import { ChatAttachmentDto, ChatMessageListItem } from "../models/chat.model";
 import { mapChatMessageToListItem, getInitials } from "../utils/chat.mapper";
 import { styles } from "./MessageChatScreen.styles";
 
-type MessageChatRoute = RouteProp<RootStackParamList, "MessageChat" | "SaleChat">;
+type MessageChatRoute = RouteProp<RootStackParamList, "MessageChat" | "SaleChat" | "DesignerChat">;
 
 function resolveAndroidKeyboardOffset(
   event: { endCoordinates: { height: number; screenY: number } },
@@ -54,6 +54,7 @@ export function MessageChatScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const { chatId, projectId, title, staffName, status } = route.params;
   const isSaleShell = route.name === "SaleChat";
+  const isDesignerShell = route.name === "DesignerChat";
   const [draft, setDraft] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -288,6 +289,10 @@ export function MessageChatScreen(): React.JSX.Element {
           onPress={() => {
             if (isSaleShell) {
               navigation.navigate("SaleMessages");
+              return;
+            }
+            if (isDesignerShell) {
+              navigation.navigate("DesignerMessages");
               return;
             }
             navigation.navigate("Messages", { projectId });

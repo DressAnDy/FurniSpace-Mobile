@@ -7,7 +7,14 @@ export type UpsertPhaseDeadlinesRequestDto = {
 
 export type ProjectAreaType = "STORE" | "FLOOR" | "ROOM" | "ZONE" | "OUTDOOR_AREA" | "OTHER" | string;
 
-export type ProjectAreaStatus = "DRAFT" | "ACTIVE" | "CANCELLED" | string;
+export type ProjectAreaStatus =
+  | "DRAFT"
+  | "NEED_MEASUREMENT"
+  | "MEASURED"
+  | "VERIFIED"
+  | "CANCELLED"
+  | "ACTIVE"
+  | string;
 
 export type ProjectAreaDto = {
   projectAreaId: string;
@@ -23,6 +30,7 @@ export type ProjectAreaDto = {
   height?: number | null;
   currentCondition?: string | null;
   requirementNote?: string | null;
+  isSpecialLayout?: boolean;
   status: ProjectAreaStatus;
   createdAt?: string;
   updatedAt?: string;
@@ -41,6 +49,7 @@ export type UpsertProjectAreaRequestDto = {
   height?: number | null;
   currentCondition?: string | null;
   requirementNote?: string | null;
+  isSpecialLayout?: boolean;
   status?: ProjectAreaStatus;
 };
 

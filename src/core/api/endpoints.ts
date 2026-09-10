@@ -63,6 +63,18 @@ export const endpoints = {
     actionQueue: "/api/dashboard/sales/action-queue",
     phaseDeadlines: "/api/dashboard/project-phase-deadlines",
   },
+  designerDashboard: {
+    kpis: "/api/dashboard/designer/kpis",
+    workQueue: "/api/dashboard/designer/work-queue",
+    phaseDeadlines: "/api/dashboard/project-phase-deadlines",
+  },
+  designerCatalog: {
+    products: (projectId: string) => `/projects/${projectId}/catalog/products`,
+    product: (projectId: string, productId: string) =>
+      `/projects/${projectId}/catalog/products/${productId}`,
+    productVersion: (projectId: string, productVersionId: string) =>
+      `/projects/${projectId}/catalog/product-versions/${productVersionId}`,
+  },
   accounts: {
     availableDesigners: "/accounts/designers/available",
   },

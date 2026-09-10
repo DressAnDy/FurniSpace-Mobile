@@ -10,12 +10,18 @@
     ],
     "scheme": "furnispace",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow FurniSpace to capture measurement photos for assigned projects.",
+        "NSPhotoLibraryUsageDescription": "Allow FurniSpace to upload measurement photos from your library."
+      }
     },
     "android": {
       "package": "com.anonymous.furnispacemobile",
       "permissions": [
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "softwareKeyboardLayoutMode": "resize"
     },
@@ -24,6 +30,13 @@
         "expo-notifications",
         {
           "color": "#C9A86A"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow FurniSpace to capture measurement photos for assigned projects.",
+          "photosPermission": "Allow FurniSpace to upload measurement photos from your library."
         }
       ],
       "expo-web-browser",

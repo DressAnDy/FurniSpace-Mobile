@@ -39,6 +39,16 @@ import { SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailS
 import { SaleQuotationDetailScreen } from "../../features/sale/screens/SaleQuotationDetailScreen";
 import { SaleOrderDetailScreen } from "../../features/sale/screens/SaleOrderDetailScreen";
 import type { ProjectDetailTab } from "../../features/sale/data/sale.mock";
+import {
+  DesignerDashboardScreen,
+  DesignerMessagesScreen,
+  DesignerMoreScreen,
+  DesignerProjectsScreen,
+} from "../../features/designer/screens/DesignerMainScreens";
+import { DesignerProjectDetailScreen } from "../../features/designer/screens/DesignerDetailScreens";
+import { DesignerSchedulesScreen } from "../../features/designer/screens/DesignerSchedulesScreen";
+import type { DesignerProjectTab } from "../../features/designer/data/designer.mock";
+import { DesignerNotificationsScreen } from "../../features/notification/screens/DesignerNotificationsScreen";
 import { linking } from "./linking";
 
 export type RootStackParamList = {
@@ -90,6 +100,21 @@ export type RootStackParamList = {
   SaleProjectDetail: { projectId?: string; tab?: ProjectDetailTab; openScheduleModal?: boolean } | undefined;
   SaleQuotationDetail: { quotationId: string; projectId: string; projectName?: string };
   SaleOrderDetail: { orderId: string; projectId: string; projectName?: string };
+  DesignerDashboard: undefined;
+  DesignerProjects: undefined;
+  DesignerSchedules: undefined;
+  DesignerMessages: undefined;
+  DesignerMore: undefined;
+  DesignerNotifications: undefined;
+  DesignerChat: {
+    chatId: string;
+    projectId: string;
+    title: string;
+    staffName: string;
+    chatType: ProjectChatType;
+    status: ProjectChatStatus;
+  };
+  DesignerProjectDetail: { projectId?: string; tab?: DesignerProjectTab } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -132,6 +157,14 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="SaleProjectDetail" component={SaleProjectDetailScreen} />
         <Stack.Screen name="SaleQuotationDetail" component={SaleQuotationDetailScreen} />
         <Stack.Screen name="SaleOrderDetail" component={SaleOrderDetailScreen} />
+        <Stack.Screen name="DesignerDashboard" component={DesignerDashboardScreen} />
+        <Stack.Screen name="DesignerProjects" component={DesignerProjectsScreen} />
+        <Stack.Screen name="DesignerSchedules" component={DesignerSchedulesScreen} />
+        <Stack.Screen name="DesignerMessages" component={DesignerMessagesScreen} />
+        <Stack.Screen name="DesignerMore" component={DesignerMoreScreen} />
+        <Stack.Screen name="DesignerNotifications" component={DesignerNotificationsScreen} />
+        <Stack.Screen name="DesignerChat" component={MessageChatScreen} />
+        <Stack.Screen name="DesignerProjectDetail" component={DesignerProjectDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
