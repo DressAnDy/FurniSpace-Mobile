@@ -98,6 +98,8 @@ export function HomeScreen(): React.JSX.Element {
   useEffect(() => {
     if (user?.role === "SALES") {
       navigation.reset({ index: 0, routes: [{ name: "SaleDashboard" }] });
+    } else if (user?.role === "DESIGNER") {
+      navigation.reset({ index: 0, routes: [{ name: "DesignerDashboard" }] });
     }
   }, [navigation, user?.role]);
 
@@ -198,7 +200,7 @@ export function HomeScreen(): React.JSX.Element {
     }
   };
 
-  if (user?.role === "SALES") {
+  if (user?.role === "SALES" || user?.role === "DESIGNER") {
     return <View style={styles.screen} />;
   }
 

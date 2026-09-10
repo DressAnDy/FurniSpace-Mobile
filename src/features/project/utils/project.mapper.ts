@@ -106,15 +106,55 @@ export function pickDefaultActiveProject(projects: ProjectSummaryItem[]): Projec
 }
 
 export function normalizeProjectDetailDto(dto: ProjectDetailDto): ProjectDetailDto {
-  const assignedDesignerId = dto.assignedDesignerId ?? dto.assignedDesigner?.accountId ?? null;
-  const assignedSalesId = dto.assignedSalesId ?? dto.assignedSales?.accountId ?? null;
+  const assignedDesigner = normalizeProjectAssignee(dto.assignedDesigner);
+  const assignedSales = normalizeProjectAssignee(
+    dto.assignedSales ??
+      (dto.salesName || dto.assignedSalesName
+        ? {
+            accountId: dto.assignedSalesId ?? "",
+            fullName: dto.salesName ?? dto.assignedSalesName ?? "",
+          }
+        : null),
+  );
+  const assignedDesignerId = dto.assignedDesignerId ?? assignedDesigner?.accountId ?? null;
+  const assignedSalesId = dto.assignedSalesId ?? assignedSales?.accountId ?? null;
 
   return {
     ...dto,
     assignedDesignerId,
     assignedSalesId,
-    assignedDesigner: dto.assignedDesigner?.fullName?.trim() ? dto.assignedDesigner : null,
-    assignedSales: dto.assignedSales?.fullName?.trim() ? dto.assignedSales : null,
+    assignedDesigner,
+    assignedSales,
+  };
+}
+
+function normalizeProjectAssignee(
+  assignee: ProjectAssigneeDto | null | undefined | Record<string, unknown>,
+): ProjectAssigneeDto | null {
+  if (!assignee || typeof assignee !== "object") {
+    return null;
+  }
+
+  const record = assignee as Record<string, unknown>;
+  const accountId =
+    (typeof record.accountId === "string" && record.accountId) ||
+    (typeof record.userId === "string" && record.userId) ||
+    (typeof record.id === "string" && record.id) ||
+    "";
+  const fullName =
+    (typeof record.fullName === "string" && record.fullName.trim()) ||
+    (typeof record.name === "string" && record.name.trim()) ||
+    (typeof record.salesName === "string" && record.salesName.trim()) ||
+    (typeof record.displayName === "string" && record.displayName.trim()) ||
+    "";
+
+  if (!fullName && !accountId) {
+    return null;
+  }
+
+  return {
+    accountId,
+    fullName: fullName || "Assigned",
   };
 }
 

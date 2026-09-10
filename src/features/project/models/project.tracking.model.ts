@@ -69,6 +69,7 @@ export type ProjectScheduleType =
 export type ProjectScheduleStatus =
   | "PENDING_CONFIRMATION"
   | "CONFIRMED"
+  | "MEASUREMENT_CONFIRMED"
   | "COMPLETED"
   | "CANCELLED"
   | string;

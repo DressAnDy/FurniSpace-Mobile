@@ -23,7 +23,16 @@ export function LoginScreen(): React.JSX.Element {
             onSuccess: (user) =>
               navigation.reset({
                 index: 0,
-                routes: [{ name: user.role === "SALES" ? "SaleDashboard" : "Home" }],
+                routes: [
+                  {
+                    name:
+                      user.role === "SALES"
+                        ? "SaleDashboard"
+                        : user.role === "DESIGNER"
+                          ? "DesignerDashboard"
+                          : "Home",
+                  },
+                ],
               }),
             onError: (error) => {
               Alert.alert("Login failed", getErrorMessage(error, "Unable to login. Please try again."));

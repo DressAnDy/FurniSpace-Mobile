@@ -125,12 +125,25 @@ export async function getMyAssignedSchedulesApi(query: {
   status?: string;
   page?: number;
   limit?: number;
-} = {}): Promise<ProjectScheduleDto[]> {
-  const response = await httpClient.get<ApiResponse<ProjectScheduleListResponseDto>>(
+} = {}): Promise<ProjectScheduleListResponseDto> {
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
+  const response = await httpClient.get<ApiResponse<ProjectScheduleListResponseDto | ProjectScheduleDto[]>>(
     endpoints.projectSchedules.myAssigned,
     { params: query },
   );
-  return unwrapList(response.data.data).map(normalizeSchedule);
+  const data = response.data.data;
+  if (Array.isArray(data)) {
+    const items = data.map(normalizeSchedule);
+    return { items, page, limit, total: items.length };
+  }
+  const items = unwrapList(data).map(normalizeSchedule);
+  return {
+    items,
+    page: data?.page ?? page,
+    limit: data?.limit ?? limit,
+    total: data?.total ?? items.length,
+  };
 }
 
 export async function getProjectFilesApi(
