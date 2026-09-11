@@ -23,6 +23,10 @@ import {
 } from "../models/designer.model";
 import { ProposalDetailDto, ProposalDto, ProposalSceneDto } from "../../project/models/proposal.model";
 import { normalizeProposalItems } from "../../project/utils/proposal.mapper";
+import {
+  MEASUREMENT_UPLOAD_TIMEOUT_MS,
+  prepareMeasurementImageForUpload,
+} from "../utils/measurementImages";
 
 let measurementUploadSequence = 0;
 
@@ -47,6 +51,12 @@ function sanitizeUploadFileName(name: string, mimeType: string): string {
     return `${safe}.webp`;
   }
   return `${safe}.jpg`;
+}
+
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 export async function getDesignerKpisApi(query: DesignerKpisQuery = {}): Promise<DesignerKpisDto> {
   const response = await httpClient.get<ApiResponse<DesignerKpisDto>>(endpoints.designerDashboard.kpis, {
@@ -190,11 +200,17 @@ export async function getProposalDetailForDesignerApi(proposalId: string): Promi
 export async function uploadScheduleMeasurementImageApi(
   input: UploadMeasurementImageInput,
 ): Promise<MeasurementImageUploadResponseDto> {
-  const mimeType = input.mimeType?.trim() || "image/jpeg";
-  const fileName = sanitizeUploadFileName(input.name, mimeType);
+  // Compress/resize on device first so multipart payloads stay ~200–500KB instead of multi‑MB.
+  const prepared = await prepareMeasurementImageForUpload({
+    uri: input.uri,
+    name: input.name,
+    mimeType: input.mimeType,
+  });
+  const mimeType = prepared.mimeType;
+  const fileName = sanitizeUploadFileName(prepared.name, mimeType);
   const formData = new FormData();
   formData.append("file", {
-    uri: input.uri,
+    uri: prepared.uri,
     name: fileName,
     type: mimeType,
   } as unknown as Blob);
@@ -212,15 +228,27 @@ export async function uploadScheduleMeasurementImageApi(
   const url = resolveApiUrl(endpoints.projectSchedules.measurementImages(input.scheduleId));
 
   // Use fetch (not axios) so RN can set multipart boundary correctly — same pattern as customer file upload.
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "X-Correlation-ID": correlationId,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          "X-Correlation-ID": correlationId,
+        },
+        body: formData,
+      },
+      MEASUREMENT_UPLOAD_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Upload timed out. Try again on a stronger connection or with fewer photos.");
+    }
+    throw error;
+  }
 
   const payload = (await response.json().catch(() => null)) as
     | ApiResponse<MeasurementImageUploadResponseDto>

@@ -4,6 +4,7 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { compareProjectsByStatusFlow, getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { getProjectsApi } from "../../project/services/project.api";
 import type { ProjectStatus } from "../../project/models/project.model";
+import { formatSaleDate } from "../../sale/utils/sale.mapper";
 import {
   CreateProposalRequestDto,
   CreateProposalSceneRequestDto,
@@ -97,17 +98,20 @@ export function useDesignerAssignedProjectsQuery(
       const start = (page - 1) * limit;
 
       return {
-        items: sorted.slice(start, start + limit).map((item) => ({
-          projectId: item.projectId,
-          projectCode: item.projectCode,
-          name: item.projectName,
-          customer: "Customer",
-          type: item.businessType ?? "—",
-          status: getProjectStatusLabel(item.status),
-          statusCode: item.status,
-          target: "—",
-          color: "#2F5D50",
-        })),
+        items: sorted.slice(start, start + limit).map((item) => {
+          const targetLabel = formatSaleDate(item.targetCompletionDate);
+          return {
+            projectId: item.projectId,
+            projectCode: item.projectCode,
+            name: item.projectName,
+            customer: "Customer",
+            type: item.businessType ?? "—",
+            status: getProjectStatusLabel(item.status),
+            statusCode: item.status,
+            target: targetLabel !== "—" ? targetLabel : null,
+            color: "#2F5D50",
+          };
+        }),
         page,
         limit,
         total: sorted.length,
@@ -289,19 +293,26 @@ export function useScheduleMeasurementImagesQuery(scheduleId: string | null) {
   });
 }
 
-export function useUploadMeasurementImageMutation(projectId: string | null) {
-  const queryClient = useQueryClient();
+export function useUploadMeasurementImageMutation(_projectId: string | null) {
   return useMutation({
     mutationFn: (input: UploadMeasurementImageInput) => uploadScheduleMeasurementImageApi(input),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.designer.scheduleMeasurementImages(variables.scheduleId),
-      });
-      if (projectId) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.sale.measurementImages(projectId) });
-      }
-    },
   });
+}
+
+/** Call after a multi-file measurement upload batch finishes. */
+export function invalidateMeasurementImageQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: string | null,
+  scheduleId?: string | null,
+) {
+  if (scheduleId) {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.designer.scheduleMeasurementImages(scheduleId),
+    });
+  }
+  if (projectId) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.sale.measurementImages(projectId) });
+  }
 }
 
 export function useDesignerMySchedulesQuery(

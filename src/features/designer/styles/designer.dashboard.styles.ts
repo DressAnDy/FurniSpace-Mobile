@@ -175,18 +175,18 @@ export const dashboardStyles = StyleSheet.create({
   },
   quickRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   quickCard: {
     backgroundColor: DESIGNER.white,
     borderColor: DESIGNER.border,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
-    minHeight: 92,
+    minHeight: 76,
     overflow: "hidden",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   quickCardPrimary: {
     backgroundColor: DESIGNER.accent,
@@ -195,18 +195,18 @@ export const dashboardStyles = StyleSheet.create({
   quickIconWrap: {
     alignItems: "center",
     backgroundColor: "rgba(47,93,80,0.1)",
-    borderRadius: 10,
-    height: 28,
+    borderRadius: 8,
+    height: 24,
     justifyContent: "center",
-    marginBottom: 10,
-    width: 28,
+    marginBottom: 8,
+    width: 24,
   },
   quickIconWrapPrimary: {
     backgroundColor: "rgba(255,255,255,0.14)",
   },
   quickLabel: {
     color: DESIGNER.ink,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   quickLabelPrimary: {
@@ -214,9 +214,9 @@ export const dashboardStyles = StyleSheet.create({
   },
   quickMeta: {
     color: DESIGNER.muted,
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
   },
   quickMetaPrimary: {
     color: "rgba(255,255,255,0.68)",

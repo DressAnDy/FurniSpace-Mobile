@@ -33,6 +33,7 @@ import {
   DesignerProjectTabs,
 } from "../components/DesignerShared";
 import {
+  invalidateMeasurementImageQueries,
   useDesignerAreasQuery,
   useDesignerCatalogProductsQuery,
   useDesignerMeasurementImagesQuery,
@@ -50,6 +51,8 @@ import {
   getMeasurementImageErrorMessage,
   isAllowedMeasurementMimeType,
   isEligibleMeasurementScheduleStatus,
+  mapWithConcurrency,
+  MEASUREMENT_UPLOAD_CONCURRENCY,
   normalizeMeasurementMimeType,
 } from "../utils/measurementImages";
 
@@ -364,6 +367,7 @@ function formatPhaseDeadlineStatus(status: string): string {
 }
 
 function MeasurementTab({ projectId }: { projectId: string | null }): React.JSX.Element {
+  const queryClient = useQueryClient();
   const schedulesQuery = useDesignerSchedulesQuery(projectId);
   const areasQuery = useDesignerAreasQuery(projectId);
   const uploadMutation = useUploadMeasurementImageMutation(projectId);
@@ -440,9 +444,10 @@ function MeasurementTab({ projectId }: { projectId: string | null }): React.JSX.
     const failures: string[] = [];
     setUploadProgress({ done: 0, total: validFiles.length });
 
-    for (let index = 0; index < validFiles.length; index += 1) {
-      const file = validFiles[index];
-      try {
+    const results = await mapWithConcurrency(
+      validFiles,
+      MEASUREMENT_UPLOAD_CONCURRENCY,
+      async (file) => {
         await uploadMutation.mutateAsync({
           scheduleId: selectedSchedule.scheduleId,
           uri: file.uri,
@@ -452,14 +457,20 @@ function MeasurementTab({ projectId }: { projectId: string | null }): React.JSX.
           note: note.trim() || undefined,
           visibility: "STAFF_ONLY",
         });
+      },
+      (done, total) => setUploadProgress({ done, total }),
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
         successCount += 1;
-      } catch (error) {
+      } else {
         failCount += 1;
-        failures.push(getMeasurementImageErrorMessage(error));
+        failures.push(getMeasurementImageErrorMessage(result.reason));
       }
-      setUploadProgress({ done: index + 1, total: validFiles.length });
     }
 
+    invalidateMeasurementImageQueries(queryClient, projectId, selectedSchedule.scheduleId);
     setUploadProgress(null);
     if (failCount === 0) {
       Alert.alert(
@@ -493,8 +504,9 @@ function MeasurementTab({ projectId }: { projectId: string | null }): React.JSX.
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ["images"],
-        quality: 0.85,
+        quality: 0.55,
         allowsEditing: false,
+        exif: false,
       });
       if (result.canceled || !result.assets?.[0]) {
         return;
@@ -527,9 +539,10 @@ function MeasurementTab({ projectId }: { projectId: string | null }): React.JSX.
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
-        quality: 0.85,
+        quality: 0.55,
         allowsMultipleSelection: true,
         selectionLimit: 12,
+        exif: false,
       });
       if (result.canceled || !result.assets?.length) {
         return;

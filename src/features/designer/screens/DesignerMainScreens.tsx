@@ -29,7 +29,7 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { useChatSearchQuery, useProjectChatsQuery } from "../../communication/hooks/useProjectChats";
 import { formatChatTime } from "../../communication/utils/chat.mapper";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
-import { getInitials, getSaleProjectStatusColors } from "../../sale/utils/sale.mapper";
+import { getInitials, getSaleProjectStatusColors, formatSaleDate } from "../../sale/utils/sale.mapper";
 import {
   DesignerProjectListFilter,
   getPriorityColor,
@@ -185,7 +185,7 @@ export function DesignerDashboardScreen(): React.JSX.Element {
                 onPress={() => navigation.navigate("DesignerProjects")}
               >
                 <View style={[d.quickIconWrap, d.quickIconWrapPrimary]}>
-                  <AppIcon definition={projectIconDefinition} size={14} color={DESIGNER.white} />
+                  <AppIcon definition={projectIconDefinition} size={12} color={DESIGNER.white} />
                 </View>
                 <Text style={[d.quickLabel, d.quickLabelPrimary]}>Projects</Text>
                 <Text style={[d.quickMeta, d.quickMetaPrimary]}>
@@ -196,7 +196,7 @@ export function DesignerDashboardScreen(): React.JSX.Element {
               </Pressable>
               <Pressable style={d.quickCard} onPress={() => navigation.navigate("DesignerSchedules")}>
                 <View style={d.quickIconWrap}>
-                  <AppIcon definition={calendarIconDefinition} size={14} color={DESIGNER.accent} />
+                  <AppIcon definition={calendarIconDefinition} size={12} color={DESIGNER.accent} />
                 </View>
                 <Text style={d.quickLabel}>Schedules</Text>
                 <Text style={d.quickMeta}>Visits & measurements</Text>
@@ -472,9 +472,11 @@ export function DesignerProjectsScreen(): React.JSX.Element {
                     >
                       <Text style={[d.statusPillText, { color: tone.color }]}>{item.status}</Text>
                     </View>
-                    <Text style={d.projectTarget} numberOfLines={1}>
-                      Target {item.target}
-                    </Text>
+                    {item.target ? (
+                      <Text style={d.projectTarget} numberOfLines={1}>
+                        Target {item.target}
+                      </Text>
+                    ) : null}
                   </View>
                 </Pressable>
               );
