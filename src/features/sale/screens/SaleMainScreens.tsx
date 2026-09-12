@@ -16,8 +16,10 @@ import { logoutIconDefinition, lockIconDefinition, shieldIconDefinition } from "
 import { bellIconDefinition } from "../../../icons/communication/definitions";
 import { helpIconDefinition } from "../../../icons/common/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
+import { paymentIconDefinition } from "../../../icons/commerce/definitions";
 import { chevronDownIconDefinition, chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
-import { projectIconDefinition } from "../../../icons/project/definitions";
+import { clipboardIconDefinition, clockIconDefinition, projectIconDefinition } from "../../../icons/project/definitions";
+import { warningIconDefinition } from "../../../icons/status/definitions";
 import { filterIconDefinition } from "../../../icons/action/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import type { IconDefinition } from "../../../icons/types";
@@ -36,7 +38,7 @@ import {
   useSalesActionQueueQuery,
   useSalesKpisQuery,
 } from "../hooks/useSaleDashboard";
-import type { SaleActionGroup, SalesActionQueueItemDto } from "../models/sale.model";
+import type { SaleActionGroup, SaleMetricCard, SaleMetricKey, SalesActionQueueItemDto } from "../models/sale.model";
 import {
   ACTION_GROUP_ORDER,
   getInitials,
@@ -47,6 +49,14 @@ import { Avatar, FilterChips, SaleBottomNav, SaleFrame, SaleHeader, SectionTitle
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { PROJECT_STATUS_FLOW_ORDER, getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
+
+const WEEK_METRIC_ICONS: Record<SaleMetricKey, IconDefinition> = {
+  newRequests: clipboardIconDefinition,
+  activeProjects: projectIconDefinition,
+  waitingCustomer: clockIconDefinition,
+  paymentFollowUp: paymentIconDefinition,
+  overdueTasks: warningIconDefinition,
+};
 
 const PROJECT_STATUS_FILTER_OPTIONS: Array<{ value: SaleProjectListFilter; label: string }> = [
   { value: "All", label: "All statuses" },
@@ -93,8 +103,8 @@ export function SaleDashboardScreen(): React.JSX.Element {
     limit: queuePageSize,
   });
 
-  const metrics = useMemo(
-    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data) : []),
+  const week = useMemo(
+    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data) : null),
     [kpisQuery.data],
   );
   const queueItems = queueQuery.data?.items ?? [];
@@ -125,7 +135,7 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const canNext = queuePage < totalPages;
   const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
 
-  const handleGroupSelect = (value: string) => {
+  const handleGroupSelect = useCallback((value: string) => {
     const label = value.split("  ")[0];
     if (label === "All") {
       setSelectedGroup("All");
@@ -134,7 +144,35 @@ export function SaleDashboardScreen(): React.JSX.Element {
       setSelectedGroup(matched);
     }
     setQueuePage(1);
-  };
+  }, []);
+
+  const refreshDashboard = useCallback(() => {
+    void kpisQuery.refetch();
+    void queueQuery.refetch();
+  }, [kpisQuery.refetch, queueQuery.refetch]);
+
+  const openWeekMetric = useCallback(
+    (key: SaleMetricKey) => {
+      if (key === "newRequests") {
+        navigation.navigate("SaleRequests");
+        return;
+      }
+      if (key === "paymentFollowUp") {
+        setSelectedGroup("Order and Payment");
+        setQueuePage(1);
+        return;
+      }
+      navigation.navigate("SaleProjects");
+    },
+    [navigation],
+  );
+
+  const openQueueItem = useCallback(
+    (projectId: string) => {
+      navigation.navigate("SaleProjectDetail", { projectId, tab: "Overview" });
+    },
+    [navigation],
+  );
 
   return (
     <SaleFrame>
@@ -143,10 +181,7 @@ export function SaleDashboardScreen(): React.JSX.Element {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              void kpisQuery.refetch();
-              void queueQuery.refetch();
-            }}
+            onRefresh={refreshDashboard}
             tintColor={SALE.gold}
           />
         }
@@ -189,28 +224,12 @@ export function SaleDashboardScreen(): React.JSX.Element {
             </View>
           </View>
 
-          <View style={s.dashboardSection}>
-            <SectionTitle title="This week" />
-            {kpisQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} />
-            ) : kpisQuery.isError ? (
-              <View style={s.emptyState}>
-                <Text style={s.emptyStateText}>{getErrorMessage(kpisQuery.error, "Unable to load KPIs.")}</Text>
-              </View>
-            ) : (
-              <View style={s.metricStrip}>
-                {metrics.map((metric, index) => (
-                  <View
-                    key={metric.label}
-                    style={[s.metricTile, index >= 3 ? s.metricTileWide : null]}
-                  >
-                    <Text style={[s.metricTileValue, { color: metric.color }]}>{metric.value}</Text>
-                    <Text style={s.metricTileLabel}>{metric.label}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+          <WeekMetricsSection
+            week={week}
+            isLoading={kpisQuery.isLoading}
+            errorMessage={kpisQuery.isError ? getErrorMessage(kpisQuery.error, "Unable to load KPIs.") : null}
+            onPressMetric={openWeekMetric}
+          />
 
           <View style={s.dashboardSection}>
             <SectionTitle
@@ -237,18 +256,9 @@ export function SaleDashboardScreen(): React.JSX.Element {
               </View>
             ) : (
               <>
-                <View style={s.queueList}>
+                <View style={[s.queueList, queueQuery.isFetching && queueQuery.isPlaceholderData ? s.queueListPending : null]}>
                   {queueItems.map((item) => (
-                    <ActionQueueCard
-                      key={item.id}
-                      item={item}
-                      onOpen={() =>
-                        navigation.navigate("SaleProjectDetail", {
-                          projectId: item.projectId,
-                          tab: "Overview",
-                        })
-                      }
-                    />
+                    <ActionQueueCard key={item.id} item={item} onOpen={openQueueItem} />
                   ))}
                 </View>
                 {totalActions > 0 ? (
@@ -283,16 +293,114 @@ export function SaleDashboardScreen(): React.JSX.Element {
   );
 }
 
-function ActionQueueCard({
+function weekStatusLabel(attentionCount: number): string {
+  return attentionCount > 0 ? `${attentionCount} to review` : "On track";
+}
+
+const WeekMetricsSection = React.memo(function WeekMetricsSection({
+  week,
+  isLoading,
+  errorMessage,
+  onPressMetric,
+}: {
+  week: ReturnType<typeof mapSalesKpisToMetrics> | null;
+  isLoading: boolean;
+  errorMessage: string | null;
+  onPressMetric: (key: SaleMetricKey) => void;
+}): React.JSX.Element {
+  let body: React.JSX.Element | null = null;
+  if (isLoading) {
+    body = <ActivityIndicator color={SALE.gold} />;
+  } else if (errorMessage) {
+    body = (
+      <View style={s.emptyState}>
+        <Text style={s.emptyStateText}>{errorMessage}</Text>
+      </View>
+    );
+  } else if (week) {
+    body = (
+      <View style={s.metricBoard}>
+        <View style={s.metricGrid}>
+          {week.tiles.map((metric) => (
+            <WeekMetricTile key={metric.key} metric={metric} onPress={onPressMetric} />
+          ))}
+        </View>
+        <WeekAlertRow metric={week.alert} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.dashboardSection}>
+      <SectionTitle title="This week" action={week ? weekStatusLabel(week.attentionCount) : undefined} />
+      {body}
+    </View>
+  );
+});
+
+const WeekMetricTile = React.memo(function WeekMetricTile({
+  metric,
+  onPress,
+}: {
+  metric: SaleMetricCard;
+  onPress: (key: SaleMetricKey) => void;
+}): React.JSX.Element {
+  const handlePress = useCallback(() => onPress(metric.key), [metric.key, onPress]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${metric.label}, ${metric.value}`}
+      style={({ pressed }) => [s.metricTile, pressed && s.metricTilePressed]}
+      onPress={handlePress}
+    >
+      <View style={[s.metricAccent, { backgroundColor: metric.color }]} />
+      <View style={s.metricTop}>
+        <View style={[s.metricIcon, { backgroundColor: `${metric.color}18` }]}>
+          <AppIcon definition={WEEK_METRIC_ICONS[metric.key]} size={11} color={metric.color} />
+        </View>
+        <Text style={[s.metricTileValue, { color: metric.color }]}>{metric.value}</Text>
+      </View>
+      <Text style={s.metricTileLabel} numberOfLines={1}>
+        {metric.label}
+      </Text>
+      <Text style={s.metricTileHint} numberOfLines={1}>
+        {metric.hint}
+      </Text>
+    </Pressable>
+  );
+});
+
+const WeekAlertRow = React.memo(function WeekAlertRow({ metric }: { metric: SaleMetricCard }): React.JSX.Element {
+  const hot = metric.count > 0;
+  return (
+    <View
+      accessibilityLabel={`${metric.label}, ${metric.value}`}
+      style={[s.metricAlert, hot && s.metricAlertHot]}
+    >
+      <View style={[s.metricAccent, s.metricAlertAccent, { backgroundColor: metric.color }]} />
+      <View style={[s.metricIcon, { backgroundColor: `${metric.color}18` }]}>
+        <AppIcon definition={WEEK_METRIC_ICONS[metric.key]} size={12} color={metric.color} />
+      </View>
+      <View style={s.metricAlertCopy}>
+        <Text style={s.metricTileLabel}>{metric.label}</Text>
+        <Text style={s.metricTileHint}>{metric.hint}</Text>
+      </View>
+      <Text style={[s.metricAlertValue, { color: metric.color }]}>{metric.value}</Text>
+    </View>
+  );
+});
+
+const ActionQueueCard = React.memo(function ActionQueueCard({
   item,
   onOpen,
 }: {
   item: SalesActionQueueItemDto;
-  onOpen: () => void;
+  onOpen: (projectId: string) => void;
 }): React.JSX.Element {
   const color = getPriorityColor(item.priority);
+  const handleOpen = useCallback(() => onOpen(item.projectId), [item.projectId, onOpen]);
   return (
-    <Pressable style={s.queueCard} onPress={onOpen}>
+    <Pressable style={s.queueCard} onPress={handleOpen}>
       <View style={s.queueCardTop}>
         <View style={s.queueCardCopy}>
           <Text style={s.cardTitle} numberOfLines={1}>
@@ -317,7 +425,7 @@ function ActionQueueCard({
       </View>
     </Pressable>
   );
-}
+});
 
 export function SaleRequestsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");

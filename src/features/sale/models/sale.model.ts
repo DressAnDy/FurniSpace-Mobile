@@ -92,10 +92,27 @@ export type RequestProjectInformationResponseDto = {
   requestedAt: string;
 };
 
+export type SaleMetricKey =
+  | "newRequests"
+  | "activeProjects"
+  | "waitingCustomer"
+  | "paymentFollowUp"
+  | "overdueTasks";
+
 export type SaleMetricCard = {
+  key: SaleMetricKey;
   value: string;
+  count: number;
   label: string;
+  hint: string;
   color: string;
+  attention: boolean;
+};
+
+export type SaleWeekSnapshot = {
+  tiles: SaleMetricCard[];
+  alert: SaleMetricCard;
+  attentionCount: number;
 };
 
 export type SaleAlertCard = {

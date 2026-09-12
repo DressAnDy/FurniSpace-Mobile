@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { AppError } from "../../../core/errors/AppError";
 import { mapAxiosError } from "../../../core/errors/errorMapper";
@@ -27,12 +27,15 @@ import { mapProjectToSaleProjectCard, mapProjectToSaleRequestCard } from "../uti
 import { removeProjectFromSaleInboxCaches } from "../utils/sale.lead.realtime";
 import { compareProjectsByStatusFlow } from "../../project/utils/project.mapper";
 
+const DASHBOARD_STALE_MS = 60_000;
+
 export function useSalesKpisQuery(query: SalesKpisQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
 
   return useQuery({
     queryKey: queryKeys.sale.kpis(query),
     enabled: isLoggedIn,
+    staleTime: DASHBOARD_STALE_MS,
     queryFn: () => getSalesKpisApi(query),
   });
 }
@@ -43,6 +46,8 @@ export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
   return useQuery({
     queryKey: queryKeys.sale.actionQueue(query),
     enabled: isLoggedIn,
+    staleTime: DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousData,
     queryFn: () => getSalesActionQueueApi(query),
   });
 }
