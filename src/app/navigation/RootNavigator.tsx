@@ -35,6 +35,7 @@ import {
   SaleProjectsScreen,
   SaleRequestsScreen,
 } from "../../features/sale/screens/SaleMainScreens";
+import { SaleKpiListScreen } from "../../features/sale/screens/SaleKpiListScreen";
 import { SaleProjectDetailScreen } from "../../features/sale/screens/SaleDetailScreens";
 import { SaleQuotationDetailScreen } from "../../features/sale/screens/SaleQuotationDetailScreen";
 import { SaleOrderDetailScreen } from "../../features/sale/screens/SaleOrderDetailScreen";
@@ -45,6 +46,7 @@ import {
   DesignerMoreScreen,
   DesignerProjectsScreen,
 } from "../../features/designer/screens/DesignerMainScreens";
+import { DesignerKpiListScreen } from "../../features/designer/screens/DesignerKpiListScreen";
 import { DesignerProjectDetailScreen } from "../../features/designer/screens/DesignerDetailScreens";
 import { DesignerSchedulesScreen } from "../../features/designer/screens/DesignerSchedulesScreen";
 import type { DesignerProjectTab } from "../../features/designer/data/designer.mock";
@@ -85,6 +87,7 @@ export type RootStackParamList = {
   ProjectSchedules: { projectId: string; projectName?: string };
   VerifyEmail: { email?: string } | undefined;
   SaleDashboard: undefined;
+  SaleKpiList: { kind: "unpaid-remaining" | "overdue-tasks" };
   SaleRequests: undefined;
   SaleProjects: undefined;
   SaleMessages: undefined;
@@ -101,6 +104,10 @@ export type RootStackParamList = {
   SaleQuotationDetail: { quotationId: string; projectId: string; projectName?: string };
   SaleOrderDetail: { orderId: string; projectId: string; projectName?: string };
   DesignerDashboard: undefined;
+  DesignerKpiList: {
+    kind: "confirmed-measurements" | "proposal-consulting" | "revision-requested" | "assigned-projects";
+    dateRange?: "today" | "thisWeek" | "thisMonth";
+  };
   DesignerProjects: undefined;
   DesignerSchedules: undefined;
   DesignerMessages: undefined;
@@ -149,6 +156,7 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="ProjectSchedules" component={ProjectSchedulesScreen} />
         <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
         <Stack.Screen name="SaleDashboard" component={SaleDashboardScreen} />
+        <Stack.Screen name="SaleKpiList" component={SaleKpiListScreen} />
         <Stack.Screen name="SaleRequests" component={SaleRequestsScreen} />
         <Stack.Screen name="SaleProjects" component={SaleProjectsScreen} />
         <Stack.Screen name="SaleMessages" component={SaleMessagesScreen} />
@@ -158,6 +166,7 @@ export function RootNavigator(): React.JSX.Element {
         <Stack.Screen name="SaleQuotationDetail" component={SaleQuotationDetailScreen} />
         <Stack.Screen name="SaleOrderDetail" component={SaleOrderDetailScreen} />
         <Stack.Screen name="DesignerDashboard" component={DesignerDashboardScreen} />
+        <Stack.Screen name="DesignerKpiList" component={DesignerKpiListScreen} />
         <Stack.Screen name="DesignerProjects" component={DesignerProjectsScreen} />
         <Stack.Screen name="DesignerSchedules" component={DesignerSchedulesScreen} />
         <Stack.Screen name="DesignerMessages" component={DesignerMessagesScreen} />

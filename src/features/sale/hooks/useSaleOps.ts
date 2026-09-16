@@ -276,6 +276,7 @@ export async function pickAndUploadProjectFile(
     uri: asset.uri,
     name: asset.name || "upload.bin",
     type: asset.mimeType || "application/octet-stream",
+    size: asset.size,
     fileType: "OTHER",
     visibility: "STAFF_ONLY",
   });

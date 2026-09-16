@@ -54,6 +54,7 @@ export type ProductIssueEvidenceLocalFile = {
   uri: string;
   name: string;
   mimeType?: string | null;
+  size?: number | null;
 };
 
 export type CreateProductIssueInput = {

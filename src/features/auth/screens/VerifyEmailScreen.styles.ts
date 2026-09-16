@@ -16,10 +16,10 @@ export const styles = StyleSheet.create({
   },
   heroBackground: {
     backgroundColor: "#3A3330",
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(44,36,32,0.68)",
   },
   heroContent: {

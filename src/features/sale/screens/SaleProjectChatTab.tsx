@@ -207,6 +207,7 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
             uri: asset.uri,
             name: asset.name ?? "attachment",
             type: asset.mimeType ?? "application/octet-stream",
+            size: asset.size,
           },
           content: draft.trim() || undefined,
         },

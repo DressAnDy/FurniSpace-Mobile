@@ -1,5 +1,6 @@
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
+import { directUploadFile } from "../../../core/upload/directUpload";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   ChatMessageDto,
@@ -87,6 +88,7 @@ export async function sendChatFileMessageApi(
     uri: string;
     name: string;
     type: string;
+    size?: number | null;
   },
   content?: string,
   options?: {
@@ -94,27 +96,23 @@ export async function sendChatFileMessageApi(
     visibility?: ChatFileVisibility;
   },
 ): Promise<ChatMessageDto> {
-  const formData = new FormData();
-  formData.append("file", {
-    uri: file.uri,
-    name: file.name,
-    type: file.type,
-  } as unknown as Blob);
-
-  if (content?.trim()) {
-    formData.append("content", content.trim());
-  }
-
-  formData.append("fileType", options?.fileType ?? resolveChatUploadFileType(file.type, file.name));
-  formData.append("visibility", options?.visibility ?? "CUSTOMER_VISIBLE");
-
-  const response = await httpClient.post<ApiResponse<ChatMessageDto>>(endpoints.chat.sendFile(chatId), formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
+  return directUploadFile<ChatMessageDto>({
+    preparePath: endpoints.chat.fileUploadUrl(chatId),
+    completePath: endpoints.chat.fileComplete(chatId),
+    file: {
+      uri: file.uri,
+      name: file.name,
+      mimeType: file.type,
+      size: file.size,
+    },
+    prepareBody: {
+      fileType: options?.fileType ?? resolveChatUploadFileType(file.type, file.name),
+      visibility: options?.visibility ?? "CUSTOMER_VISIBLE",
+    },
+    completeBody: {
+      content: content?.trim(),
     },
   });
-
-  return response.data.data;
 }
 
 export async function updateProjectChatStatusApi(

@@ -338,7 +338,10 @@ export function useChatActions(
   });
 
   const sendFileMutation = useMutation({
-    mutationFn: async (payload: { file: { uri: string; name: string; type: string }; content?: string }) => {
+    mutationFn: async (payload: {
+      file: { uri: string; name: string; type: string; size?: number | null };
+      content?: string;
+    }) => {
       const message = await sendChatFileMessageApi(chatId!, payload.file, payload.content);
       const normalized = normalizeChatMessageDto(message);
       if (!normalized) {

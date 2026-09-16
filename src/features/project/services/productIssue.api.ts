@@ -1,21 +1,13 @@
+import axios from "axios";
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
-import { env } from "../../../core/config/env";
-import { getAccessToken } from "../../../core/storage/secureStorage";
+import { directUploadFile } from "../../../core/upload/directUpload";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   CreateProductIssueInput,
   ProductIssueReportDto,
   ProductIssueReportListDto,
 } from "../models/productIssue.model";
-
-function trimApiUrl(value: string): string {
-  let apiUrl = value;
-  while (apiUrl.endsWith("/")) {
-    apiUrl = apiUrl.slice(0, -1);
-  }
-  return apiUrl;
-}
 
 export async function getProjectProductIssuesApi(projectId: string): Promise<ProductIssueReportListDto> {
   const response = await httpClient.get<ApiResponse<ProductIssueReportListDto>>(
@@ -43,61 +35,52 @@ export async function getProductIssueApi(issueId: string): Promise<ProductIssueR
 }
 
 export async function createProductIssueApi(input: CreateProductIssueInput): Promise<ProductIssueReportDto> {
-  const formData = new FormData();
-  formData.append("orderItemId", input.orderItemId);
-  formData.append("issueType", input.issueType);
-  formData.append("description", input.description.trim());
-
-  if (input.deliveryItemId) {
-    formData.append("deliveryItemId", input.deliveryItemId);
-  }
-  if (input.affectedQuantity != null) {
-    formData.append("affectedQuantity", String(input.affectedQuantity));
-  }
-
+  const evidenceFileIds: string[] = [];
   for (const file of input.files ?? []) {
-    formData.append("files", {
-      uri: file.uri,
-      name: file.name,
-      type: file.mimeType ?? "application/octet-stream",
-    } as unknown as Blob);
-  }
-
-  const token = await getAccessToken();
-  const url = `${trimApiUrl(env.apiUrl)}${endpoints.orders.productIssues(input.orderId)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "X-Correlation-ID": `mobile-product-issue-${Date.now()}`,
-    },
-    body: formData,
-  });
-
-  const payload = (await response.json().catch(() => null)) as
-    | ApiResponse<ProductIssueReportDto>
-    | { message?: string; errorCode?: string; errors?: string[] }
-    | null;
-
-  if (!response.ok) {
-    const message =
-      (payload && "message" in payload && payload.message) ||
-      (payload && "errors" in payload && Array.isArray(payload.errors) ? payload.errors[0] : null) ||
-      "Unable to submit the product issue.";
-    const error = new Error(String(message)) as Error & { errorCode?: string; status?: number };
-    error.status = response.status;
-    if (payload && "errorCode" in payload && payload.errorCode) {
-      error.errorCode = payload.errorCode;
+    const uploaded = await directUploadFile<{ fileId: string }>({
+      preparePath: endpoints.orders.productIssueEvidenceUploadUrl(input.orderId),
+      completePath: endpoints.orders.productIssueEvidenceComplete(input.orderId),
+      file: {
+        uri: file.uri,
+        name: file.name,
+        mimeType: file.mimeType,
+        size: file.size,
+      },
+    });
+    const uploadedRecord = uploaded as { fileId?: string; FileId?: string } | null;
+    const fileId = uploadedRecord?.fileId ?? uploadedRecord?.FileId;
+    if (!fileId) {
+      throw new Error("Evidence upload did not return a file id.");
     }
-    throw error;
+    evidenceFileIds.push(fileId);
   }
 
-  if (payload && "data" in payload && payload.data) {
-    return payload.data;
+  try {
+    const response = await httpClient.post<ApiResponse<ProductIssueReportDto>>(
+      endpoints.orders.productIssues(input.orderId),
+      {
+        orderItemId: input.orderItemId,
+        issueType: input.issueType,
+        description: input.description.trim(),
+        ...(input.deliveryItemId ? { deliveryItemId: input.deliveryItemId } : {}),
+        ...(input.affectedQuantity != null ? { affectedQuantity: input.affectedQuantity } : {}),
+        ...(evidenceFileIds.length > 0 ? { evidenceFileIds } : {}),
+      },
+    );
+    return response.data.data;
+  } catch (error) {
+    if (!axios.isAxiosError(error)) {
+      throw error;
+    }
+    const payload = error.response?.data as { message?: string; errorCode?: string | null } | undefined;
+    const mapped = new Error(payload?.message?.trim() || "Unable to submit the product issue.") as Error & {
+      errorCode?: string;
+      status?: number;
+    };
+    mapped.status = error.response?.status;
+    mapped.errorCode = payload?.errorCode ?? undefined;
+    throw mapped;
   }
-
-  throw new Error("Invalid product issue response.");
 }
 
 export function getProductIssueErrorMessage(error: unknown, fallback = "Unable to load product issues."): string {
@@ -124,6 +107,7 @@ export function getProductIssueErrorMessage(error: unknown, fallback = "Unable t
     PRODUCT_ISSUE_INVALID_AFFECTED_QUANTITY: "Affected quantity must be within the delivered quantity.",
     PRODUCT_ISSUE_DELIVERY_ITEM_ORDER_ITEM_MISMATCH: "The selected delivery item does not match this order item.",
     PRODUCT_ISSUE_FORBIDDEN: "You do not have permission to report an issue for this order.",
+    PRODUCT_ISSUE_EVIDENCE_FILE_INVALID: "One or more evidence photos are not ready. Upload them again, then submit.",
   };
 
   if (coded.errorCode && messages[coded.errorCode]) {

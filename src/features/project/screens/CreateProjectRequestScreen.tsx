@@ -206,6 +206,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
               uri: file.uri,
               name: file.name,
               mimeType: file.mimeType,
+              size: file.size,
               fileType: resolveProjectFileType(file),
               isPrimary: index === 0,
               displayOrder: index,

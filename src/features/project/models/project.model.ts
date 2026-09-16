@@ -148,6 +148,7 @@ export type UploadProjectFileInput = {
   uri: string;
   name: string;
   mimeType?: string | null;
+  size?: number | null;
   fileType: "FLOOR_PLAN" | "REFERENCE_IMAGE" | "PDF_DRAWING" | "MODEL_3D" | "OTHER";
   visibility?: "CUSTOMER_VISIBLE" | "PRIVATE";
   isPrimary?: boolean;

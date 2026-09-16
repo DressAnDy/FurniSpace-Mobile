@@ -4,10 +4,14 @@ export type DesignerDueBucket = "OVERDUE" | "TODAY" | "THIS_WEEK" | "LATER" | st
 export type DesignerPriority = "URGENT" | "HIGH" | "MEDIUM" | "LOW" | string;
 
 export type DesignerKpisDto = {
-  measurementDue: number;
-  proposalsInProgress: number;
-  revisionRequested: number;
-  overdueTasks: number;
+  confirmedMeasurements?: number;
+  measurementDue?: number;
+  proposalConsultingProjects?: number;
+  proposalsInProgress?: number;
+  proposalRevisionsRequested?: number;
+  revisionRequested?: number;
+  assignedProjects?: number;
+  overdueTasks?: number;
 };
 
 export type DesignerKpisQuery = {
@@ -15,6 +19,76 @@ export type DesignerKpisQuery = {
   dateRange?: DesignerDateRange;
   search?: string;
 };
+
+export type DesignerKpiListQuery = {
+  scope?: DesignerDashboardScope;
+  dateRange?: DesignerDateRange;
+  page?: number;
+  limit?: number;
+};
+
+export type DesignerConfirmedMeasurementItemDto = {
+  scheduleId: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  title?: string | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  location?: string | null;
+  status?: string | null;
+  assignedStaffId?: string | null;
+  assignedStaffName?: string | null;
+};
+
+export type DesignerProposalConsultingItemDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  assignedDesignerId?: string | null;
+  assignedDesignerName?: string | null;
+  status?: string | null;
+  designerAssignedAt?: string | null;
+  updatedAt?: string | null;
+  submittedAt?: string | null;
+};
+
+export type DesignerRevisionRequestedItemDto = {
+  proposalId: string;
+  proposalName?: string | null;
+  status?: string | null;
+  revisionNote?: string | null;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  assignedDesignerId?: string | null;
+  assignedDesignerName?: string | null;
+  revisionRequestedAt?: string | null;
+};
+
+export type DesignerCustomizationStatus = "SUBMITTED" | "REVIEWING" | "ACCEPTED" | "CANCELLED" | string;
+
+export type DesignerAssignedProjectItemDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  status?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  designerAssignedAt?: string | null;
+  updatedAt?: string | null;
+  hasCustomerCustomizationRequest?: boolean | null;
+  openCustomizationRequestCount?: number | null;
+  latestCustomizationStatus?: DesignerCustomizationStatus | null;
+};
+
+export type DesignerMetricKey =
+  | "confirmedMeasurements"
+  | "proposalConsulting"
+  | "revisionRequests"
+  | "assignedProjects";
 
 export type DesignerWorkQueueItemDto = {
   id: string;

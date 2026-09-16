@@ -1,7 +1,6 @@
 import { endpoints } from "../../../core/api/endpoints";
-import { getAccessToken } from "../../../core/storage/secureStorage";
-import { env } from "../../../core/config/env";
 import { httpClient } from "../../../core/api/httpClient";
+import { directUploadFile } from "../../../core/upload/directUpload";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   CreateProjectRequestDto,
@@ -21,8 +20,6 @@ import {
 } from "../models/project.model";
 import { ReopenProjectProposalResponseDto } from "../models/project.tracking.model";
 import { normalizeProjectDetailDto } from "../utils/project.mapper";
-
-let uploadCorrelationSequence = 0;
 
 function mapByUserItemToListItem(item: ProjectByUserListResponseDto["items"][number]): ProjectListItemDto {
   return {
@@ -86,52 +83,23 @@ export async function uploadCustomerProjectFileApi(
   projectId: string,
   input: UploadProjectFileInput,
 ): Promise<void> {
-  const formData = new FormData();
-  formData.append("file", {
-    uri: input.uri,
-    name: input.name,
-    type: input.mimeType ?? "application/octet-stream",
-  } as unknown as Blob);
-  formData.append("fileType", input.fileType);
-  formData.append("visibility", input.visibility ?? "CUSTOMER_VISIBLE");
-  formData.append("isPrimary", String(input.isPrimary ?? false));
-  formData.append("displayOrder", String(input.displayOrder ?? 0));
-  if (input.note?.trim()) {
-    formData.append("note", input.note.trim());
-  }
-
-  uploadCorrelationSequence += 1;
-  const correlationId = `mobile-upload-${Date.now()}-${uploadCorrelationSequence}`;
-  const token = await getAccessToken();
-  let apiUrl = env.apiUrl;
-  while (apiUrl.endsWith("/")) {
-    apiUrl = apiUrl.slice(0, -1);
-  }
-  const url = `${apiUrl}${endpoints.projects.files(projectId)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "X-Correlation-ID": correlationId,
+  await directUploadFile({
+    preparePath: endpoints.projects.fileUploadUrl(projectId),
+    completePath: endpoints.projects.fileComplete(projectId),
+    file: {
+      uri: input.uri,
+      name: input.name,
+      mimeType: input.mimeType,
+      size: input.size,
     },
-    body: formData,
+    prepareBody: {
+      fileType: input.fileType,
+      visibility: input.visibility ?? "CUSTOMER_VISIBLE",
+      isPrimary: input.isPrimary ?? false,
+      displayOrder: input.displayOrder ?? 0,
+      note: input.note?.trim(),
+    },
   });
-
-  if (response.ok) {
-    return;
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | { message?: string; errors?: string[] | Record<string, string[]> }
-    | null;
-  let details = "";
-  if (Array.isArray(payload?.errors)) {
-    details = payload.errors.join("\n");
-  } else if (payload?.errors && typeof payload.errors === "object") {
-    details = Object.values(payload.errors).flat().join("\n");
-  }
-  throw new Error(details || payload?.message || `Upload failed with status ${response.status}.`);
 }
 
 export async function updateProjectBasicInfoApi(

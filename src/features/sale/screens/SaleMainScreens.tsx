@@ -16,8 +16,10 @@ import { logoutIconDefinition, lockIconDefinition, shieldIconDefinition } from "
 import { bellIconDefinition } from "../../../icons/communication/definitions";
 import { helpIconDefinition } from "../../../icons/common/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
+import { paymentIconDefinition } from "../../../icons/commerce/definitions";
 import { chevronDownIconDefinition, chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
-import { projectIconDefinition } from "../../../icons/project/definitions";
+import { clipboardIconDefinition, projectIconDefinition } from "../../../icons/project/definitions";
+import { warningIconDefinition } from "../../../icons/status/definitions";
 import { filterIconDefinition } from "../../../icons/action/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import type { IconDefinition } from "../../../icons/types";
@@ -36,7 +38,7 @@ import {
   useSalesActionQueueQuery,
   useSalesKpisQuery,
 } from "../hooks/useSaleDashboard";
-import type { SaleActionGroup, SalesActionQueueItemDto } from "../models/sale.model";
+import type { SaleActionGroup, SaleMetricCard, SaleMetricKey, SalesActionQueueItemDto } from "../models/sale.model";
 import {
   ACTION_GROUP_ORDER,
   getInitials,
@@ -47,6 +49,13 @@ import { Avatar, FilterChips, SaleBottomNav, SaleFrame, SaleHeader, SectionTitle
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
 import { PROJECT_STATUS_FLOW_ORDER, getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
+
+const WEEK_METRIC_ICONS: Record<SaleMetricKey, IconDefinition> = {
+  newRequests: clipboardIconDefinition,
+  acceptedProjects: projectIconDefinition,
+  unpaidRemaining: paymentIconDefinition,
+  overdueTasks: warningIconDefinition,
+};
 
 const PROJECT_STATUS_FILTER_OPTIONS: Array<{ value: SaleProjectListFilter; label: string }> = [
   { value: "All", label: "All statuses" },
@@ -84,7 +93,8 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const [queuePage, setQueuePage] = useState(1);
   const queuePageSize = 5;
 
-  const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
+  const kpisQuery = useSalesKpisQuery({ scope: "mine" });
+  const inboxCountQuery = useSaleInboxProjectsQuery({ filter: "New", page: 1, limit: 1 });
   const queueQuery = useSalesActionQueueQuery({
     scope: "mine",
     dateRange: "thisWeek",
@@ -93,9 +103,10 @@ export function SaleDashboardScreen(): React.JSX.Element {
     limit: queuePageSize,
   });
 
-  const metrics = useMemo(
-    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data) : []),
-    [kpisQuery.data],
+  const inboxCount = inboxCountQuery.data?.total ?? 0;
+  const week = useMemo(
+    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data, inboxCount) : null),
+    [inboxCount, kpisQuery.data],
   );
   const queueItems = queueQuery.data?.items ?? [];
   const countsByGroup = queueQuery.data?.countsByGroup ?? {};
@@ -123,9 +134,9 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const totalPages = Math.max(1, Math.ceil(totalActions / queuePageSize));
   const canPrev = queuePage > 1;
   const canNext = queuePage < totalPages;
-  const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
+  const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching || inboxCountQuery.isRefetching;
 
-  const handleGroupSelect = (value: string) => {
+  const handleGroupSelect = useCallback((value: string) => {
     const label = value.split("  ")[0];
     if (label === "All") {
       setSelectedGroup("All");
@@ -134,7 +145,45 @@ export function SaleDashboardScreen(): React.JSX.Element {
       setSelectedGroup(matched);
     }
     setQueuePage(1);
-  };
+  }, []);
+
+  const refreshDashboard = useCallback(() => {
+    void kpisQuery.refetch();
+    void queueQuery.refetch();
+    void inboxCountQuery.refetch();
+  }, [inboxCountQuery.refetch, kpisQuery.refetch, queueQuery.refetch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshDashboard();
+    }, [refreshDashboard]),
+  );
+
+  const openWeekMetric = useCallback(
+    (key: SaleMetricKey) => {
+      if (key === "newRequests") {
+        navigation.navigate("SaleRequests");
+        return;
+      }
+      if (key === "acceptedProjects") {
+        navigation.navigate("SaleProjects");
+        return;
+      }
+      if (key === "unpaidRemaining") {
+        navigation.navigate("SaleKpiList", { kind: "unpaid-remaining" });
+        return;
+      }
+      navigation.navigate("SaleKpiList", { kind: "overdue-tasks" });
+    },
+    [navigation],
+  );
+
+  const openQueueItem = useCallback(
+    (projectId: string) => {
+      navigation.navigate("SaleProjectDetail", { projectId, tab: "Overview" });
+    },
+    [navigation],
+  );
 
   return (
     <SaleFrame>
@@ -143,10 +192,7 @@ export function SaleDashboardScreen(): React.JSX.Element {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              void kpisQuery.refetch();
-              void queueQuery.refetch();
-            }}
+            onRefresh={refreshDashboard}
             tintColor={SALE.gold}
           />
         }
@@ -177,40 +223,26 @@ export function SaleDashboardScreen(): React.JSX.Element {
               <Pressable style={[s.quickAction, s.quickActionPrimary]} onPress={() => navigation.navigate("SaleRequests")}>
                 <Text style={[s.quickActionLabel, s.quickActionLabelPrimary]}>Requests</Text>
                 <Text style={[s.quickActionMeta, s.quickActionMetaPrimary]}>
-                  {kpisQuery.data ? `${kpisQuery.data.newRequests} new` : "Open inbox"}
+                  {inboxCountQuery.data ? `${inboxCount} new` : "Open inbox"}
                 </Text>
               </Pressable>
               <Pressable style={s.quickAction} onPress={() => navigation.navigate("SaleProjects")}>
                 <Text style={s.quickActionLabel}>Projects</Text>
                 <Text style={s.quickActionMeta}>
-                  {kpisQuery.data ? `${kpisQuery.data.activeProjects} active` : "Assigned work"}
+                  {kpisQuery.data
+                    ? `${kpisQuery.data.acceptedProjects ?? kpisQuery.data.activeProjects ?? 0} accepted`
+                    : "Assigned work"}
                 </Text>
               </Pressable>
             </View>
           </View>
 
-          <View style={s.dashboardSection}>
-            <SectionTitle title="This week" />
-            {kpisQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} />
-            ) : kpisQuery.isError ? (
-              <View style={s.emptyState}>
-                <Text style={s.emptyStateText}>{getErrorMessage(kpisQuery.error, "Unable to load KPIs.")}</Text>
-              </View>
-            ) : (
-              <View style={s.metricStrip}>
-                {metrics.map((metric, index) => (
-                  <View
-                    key={metric.label}
-                    style={[s.metricTile, index >= 3 ? s.metricTileWide : null]}
-                  >
-                    <Text style={[s.metricTileValue, { color: metric.color }]}>{metric.value}</Text>
-                    <Text style={s.metricTileLabel}>{metric.label}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+          <WeekMetricsSection
+            week={week}
+            isLoading={kpisQuery.isLoading}
+            errorMessage={kpisQuery.isError ? getErrorMessage(kpisQuery.error, "Unable to load KPIs.") : null}
+            onPressMetric={openWeekMetric}
+          />
 
           <View style={s.dashboardSection}>
             <SectionTitle
@@ -237,18 +269,9 @@ export function SaleDashboardScreen(): React.JSX.Element {
               </View>
             ) : (
               <>
-                <View style={s.queueList}>
+                <View style={[s.queueList, queueQuery.isFetching && queueQuery.isPlaceholderData ? s.queueListPending : null]}>
                   {queueItems.map((item) => (
-                    <ActionQueueCard
-                      key={item.id}
-                      item={item}
-                      onOpen={() =>
-                        navigation.navigate("SaleProjectDetail", {
-                          projectId: item.projectId,
-                          tab: "Overview",
-                        })
-                      }
-                    />
+                    <ActionQueueCard key={item.id} item={item} onOpen={openQueueItem} />
                   ))}
                 </View>
                 {totalActions > 0 ? (
@@ -283,16 +306,93 @@ export function SaleDashboardScreen(): React.JSX.Element {
   );
 }
 
-function ActionQueueCard({
+function weekStatusLabel(attentionCount: number): string {
+  return attentionCount > 0 ? `${attentionCount} to review` : "On track";
+}
+
+const WeekMetricsSection = React.memo(function WeekMetricsSection({
+  week,
+  isLoading,
+  errorMessage,
+  onPressMetric,
+}: {
+  week: ReturnType<typeof mapSalesKpisToMetrics> | null;
+  isLoading: boolean;
+  errorMessage: string | null;
+  onPressMetric: (key: SaleMetricKey) => void;
+}): React.JSX.Element {
+  let body: React.JSX.Element | null = null;
+  if (isLoading) {
+    body = <ActivityIndicator color={SALE.gold} />;
+  } else if (errorMessage) {
+    body = (
+      <View style={s.emptyState}>
+        <Text style={s.emptyStateText}>{errorMessage}</Text>
+      </View>
+    );
+  } else if (week) {
+    body = (
+      <View style={s.metricBoard}>
+        <View style={s.metricGrid}>
+          {week.tiles.map((metric) => (
+            <WeekMetricTile key={metric.key} metric={metric} onPress={onPressMetric} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.dashboardSection}>
+      <SectionTitle title="Overview" action={week ? weekStatusLabel(week.attentionCount) : undefined} />
+      {body}
+    </View>
+  );
+});
+
+const WeekMetricTile = React.memo(function WeekMetricTile({
+  metric,
+  onPress,
+}: {
+  metric: SaleMetricCard;
+  onPress: (key: SaleMetricKey) => void;
+}): React.JSX.Element {
+  const handlePress = useCallback(() => onPress(metric.key), [metric.key, onPress]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${metric.label}, ${metric.value}`}
+      style={({ pressed }) => [s.metricTile, pressed && s.metricTilePressed]}
+      onPress={handlePress}
+    >
+      <View style={[s.metricAccent, { backgroundColor: metric.color }]} />
+      <View style={s.metricTop}>
+        <View style={[s.metricIcon, { backgroundColor: `${metric.color}18` }]}>
+          <AppIcon definition={WEEK_METRIC_ICONS[metric.key]} size={11} color={metric.color} />
+        </View>
+        <Text style={[s.metricTileValue, { color: metric.color }]}>{metric.value}</Text>
+      </View>
+      <Text style={s.metricTileLabel} numberOfLines={1}>
+        {metric.label}
+      </Text>
+      <Text style={s.metricTileHint} numberOfLines={1}>
+        {metric.hint}
+      </Text>
+    </Pressable>
+  );
+});
+
+const ActionQueueCard = React.memo(function ActionQueueCard({
   item,
   onOpen,
 }: {
   item: SalesActionQueueItemDto;
-  onOpen: () => void;
+  onOpen: (projectId: string) => void;
 }): React.JSX.Element {
   const color = getPriorityColor(item.priority);
+  const handleOpen = useCallback(() => onOpen(item.projectId), [item.projectId, onOpen]);
   return (
-    <Pressable style={s.queueCard} onPress={onOpen}>
+    <Pressable style={s.queueCard} onPress={handleOpen}>
       <View style={s.queueCardTop}>
         <View style={s.queueCardCopy}>
           <Text style={s.cardTitle} numberOfLines={1}>
@@ -317,7 +417,7 @@ function ActionQueueCard({
       </View>
     </Pressable>
   );
-}
+});
 
 export function SaleRequestsScreen(): React.JSX.Element {
   const [query, setQuery] = useState("");
@@ -1009,7 +1109,7 @@ export function SaleMoreScreen(): React.JSX.Element {
   const currentUser = useAuthStore((state) => state.user);
   const logout = useLogoutAction();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
+  const kpisQuery = useSalesKpisQuery({ scope: "mine" });
   const menu: { icon: IconDefinition; title: string; subtitle: string; action?: () => void }[] = [
     {
       icon: bellIconDefinition,
@@ -1062,10 +1162,13 @@ export function SaleMoreScreen(): React.JSX.Element {
           <View style={s.card}>
             <SectionTitle title="Sales Workspace" />
             <View style={s.infoGrid}>
-              <InfoCell label="Active projects" value={String(kpisQuery.data?.activeProjects ?? "—")} />
+              <InfoCell
+                label="Accepted projects"
+                value={String(kpisQuery.data?.acceptedProjects ?? kpisQuery.data?.activeProjects ?? "—")}
+              />
+              <InfoCell label="Unpaid remaining" value={String(kpisQuery.data?.unpaidRemaining ?? "—")} />
+              <InfoCell label="Overdue tasks" value={String(kpisQuery.data?.overdueTasks ?? "—")} />
               <InfoCell label="Open requests" value={String(kpisQuery.data?.newRequests ?? "—")} />
-              <InfoCell label="Waiting customer" value={String(kpisQuery.data?.waitingCustomer ?? "—")} />
-              <InfoCell label="Payment follow-up" value={String(kpisQuery.data?.paymentFollowUp ?? "—")} />
             </View>
           </View>
           <Pressable

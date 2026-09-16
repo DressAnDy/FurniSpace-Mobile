@@ -175,18 +175,18 @@ export const dashboardStyles = StyleSheet.create({
   },
   quickRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 8,
   },
   quickCard: {
     backgroundColor: DESIGNER.white,
     borderColor: DESIGNER.border,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     flex: 1,
-    minHeight: 92,
+    minHeight: 76,
     overflow: "hidden",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   quickCardPrimary: {
     backgroundColor: DESIGNER.accent,
@@ -195,18 +195,18 @@ export const dashboardStyles = StyleSheet.create({
   quickIconWrap: {
     alignItems: "center",
     backgroundColor: "rgba(47,93,80,0.1)",
-    borderRadius: 10,
-    height: 28,
+    borderRadius: 8,
+    height: 24,
     justifyContent: "center",
-    marginBottom: 10,
-    width: 28,
+    marginBottom: 8,
+    width: 24,
   },
   quickIconWrapPrimary: {
     backgroundColor: "rgba(255,255,255,0.14)",
   },
   quickLabel: {
     color: DESIGNER.ink,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
   },
   quickLabelPrimary: {
@@ -214,9 +214,9 @@ export const dashboardStyles = StyleSheet.create({
   },
   quickMeta: {
     color: DESIGNER.muted,
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 14,
+    marginTop: 3,
   },
   quickMetaPrimary: {
     color: "rgba(255,255,255,0.68)",
@@ -231,7 +231,7 @@ export const dashboardStyles = StyleSheet.create({
     borderColor: DESIGNER.border,
     borderRadius: 16,
     borderWidth: 1,
-    minHeight: 92,
+    minHeight: 108,
     overflow: "hidden",
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -269,6 +269,15 @@ export const dashboardStyles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     marginTop: 4,
+  },
+  metricHint: {
+    color: DESIGNER.muted,
+    fontSize: 10,
+    lineHeight: 13,
+    marginTop: 2,
+  },
+  metricCardPressed: {
+    opacity: 0.84,
   },
   queueList: {
     gap: 10,
@@ -693,5 +702,68 @@ export const dashboardStyles = StyleSheet.create({
     color: DESIGNER.muted,
     fontSize: 10,
     fontWeight: "600",
+  },
+
+  kpiBody: {
+    gap: 12,
+    paddingBottom: 36,
+    paddingHorizontal: 19,
+    paddingTop: 16,
+  },
+  kpiMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 8,
+  },
+  kpiMetaIcon: {
+    alignItems: "center",
+    backgroundColor: "rgba(47,93,80,0.1)",
+    borderRadius: 7,
+    height: 18,
+    justifyContent: "center",
+    width: 18,
+  },
+  kpiMetaText: {
+    color: DESIGNER.muted,
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  kpiNote: {
+    backgroundColor: DESIGNER.pale,
+    borderRadius: 10,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  kpiNoteText: {
+    color: DESIGNER.ink,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  kpiFlag: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  kpiFlagYes: {
+    backgroundColor: "rgba(47,93,80,0.1)",
+    borderColor: "rgba(47,93,80,0.18)",
+  },
+  kpiFlagNo: {
+    backgroundColor: DESIGNER.pale,
+    borderColor: DESIGNER.border,
+  },
+  kpiFlagText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  kpiFlagTextYes: {
+    color: DESIGNER.accent,
+  },
+  kpiFlagTextNo: {
+    color: DESIGNER.muted,
   },
 });

@@ -4,6 +4,7 @@ import type {
   SaleActionPriority,
   SaleAlertCard,
   SaleMetricCard,
+  SaleWeekSnapshot,
   SalesActionQueueItemDto,
   SalesKpisDto,
 } from "../models/sale.model";
@@ -51,14 +52,54 @@ export function getSaleProjectStatusColors(status: ProjectStatus | string): Sale
   }
 }
 
-export function mapSalesKpisToMetrics(kpis: SalesKpisDto): SaleMetricCard[] {
-  return [
-    { value: String(kpis.newRequests), label: "New requests", color: "#C9A86A" },
-    { value: String(kpis.activeProjects), label: "Active", color: "#3A3330" },
-    { value: String(kpis.waitingCustomer), label: "Waiting", color: "#7A6F68" },
-    { value: String(kpis.paymentFollowUp), label: "Payments", color: "#DC2626" },
-    { value: String(kpis.overdueTasks), label: "Overdue", color: "#DC2626" },
-  ];
+const QUIET_METRIC = "#A39890";
+
+function metricColor(count: number, active: string): string {
+  return count > 0 ? active : QUIET_METRIC;
+}
+
+function toMetric(
+  key: SaleMetricCard["key"],
+  count: number,
+  label: string,
+  hint: string,
+  activeColor: string,
+  attention: boolean,
+): SaleMetricCard {
+  const safeCount = Number.isFinite(count) ? count : 0;
+  return {
+    key,
+    value: String(safeCount),
+    count: safeCount,
+    label,
+    hint,
+    color: metricColor(safeCount, activeColor),
+    attention,
+  };
+}
+
+export function mapSalesKpisToMetrics(kpis: SalesKpisDto, inboxCount: number): SaleWeekSnapshot {
+  const newRequests = inboxCount;
+  const acceptedProjects = kpis.acceptedProjects ?? kpis.activeProjects ?? 0;
+  const unpaidRemaining = kpis.unpaidRemaining ?? 0;
+  const overdueTasks = kpis.overdueTasks ?? 0;
+
+  return {
+    tiles: [
+      toMetric("newRequests", newRequests, "New requests", "Request queue", "#C9A86A", false),
+      toMetric("acceptedProjects", acceptedProjects, "Accepted", "Assigned to you", "#3A3330", false),
+      toMetric("unpaidRemaining", unpaidRemaining, "Unpaid", "Balance remaining", "#DC2626", true),
+      toMetric(
+        "overdueTasks",
+        overdueTasks,
+        "Overdue",
+        overdueTasks > 0 ? "Past target date" : "Nothing past due",
+        "#DC2626",
+        true,
+      ),
+    ],
+    attentionCount: newRequests + unpaidRemaining + overdueTasks,
+  };
 }
 
 export function getPriorityColor(priority: SaleActionPriority | string): string {

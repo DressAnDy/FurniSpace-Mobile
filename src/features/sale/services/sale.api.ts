@@ -1,6 +1,7 @@
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
 import { ApiResponse } from "../../../shared/types/api";
+import { unwrapPagedList, type PagedList } from "../../../shared/utils/pagedList";
 import {
   ClaimSalesAssignmentRequestDto,
   ClaimSalesAssignmentResponseDto,
@@ -10,19 +11,47 @@ import {
   RequestProjectInformationResponseDto,
   SalesActionQueueQuery,
   SalesActionQueueResponseDto,
+  SalesKpiListQuery,
   SalesKpisDto,
   SalesKpisQuery,
+  SalesOverdueTaskItemDto,
+  SalesUnpaidRemainingItemDto,
 } from "../models/sale.model";
 
 export async function getSalesKpisApi(query: SalesKpisQuery = {}): Promise<SalesKpisDto> {
   const response = await httpClient.get<ApiResponse<SalesKpisDto>>(endpoints.saleDashboard.kpis, {
     params: {
       scope: query.scope ?? "mine",
-      dateRange: query.dateRange ?? "thisWeek",
       ...(query.search ? { search: query.search } : {}),
     },
   });
-  return response.data.data;
+  return response.data.data ?? {};
+}
+
+export async function getSalesUnpaidRemainingApi(
+  query: SalesKpiListQuery = {},
+): Promise<PagedList<SalesUnpaidRemainingItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.saleDashboard.unpaidRemaining, {
+    params: {
+      scope: query.scope ?? "mine",
+      page: query.page ?? 1,
+      limit: query.limit ?? 5,
+    },
+  });
+  return unwrapPagedList<SalesUnpaidRemainingItemDto>(response.data.data);
+}
+
+export async function getSalesOverdueTasksApi(
+  query: SalesKpiListQuery = {},
+): Promise<PagedList<SalesOverdueTaskItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.saleDashboard.overdueTasks, {
+    params: {
+      scope: query.scope ?? "mine",
+      page: query.page ?? 1,
+      limit: query.limit ?? 5,
+    },
+  });
+  return unwrapPagedList<SalesOverdueTaskItemDto>(response.data.data);
 }
 
 export async function getSalesActionQueueApi(
