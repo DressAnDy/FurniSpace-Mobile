@@ -47,6 +47,8 @@ export const queryKeys = {
   },
   sale: {
     kpis: (query: SaleDashboardQueryKey) => ["sale", "kpis", query] as const,
+    kpiList: (kind: SaleKpiListKind, query: SaleKpiListQueryKey) =>
+      ["sale", "kpi-list", kind, query] as const,
     actionQueue: (query: SaleActionQueueQueryKey) => ["sale", "action-queue", query] as const,
     dashboardPhaseDeadlines: (query: DashboardPhaseDeadlinesQueryKey) =>
       ["sale", "dashboard-phase-deadlines", query] as const,
@@ -63,6 +65,8 @@ export const queryKeys = {
   },
   designer: {
     kpis: (query: DesignerDashboardQueryKey) => ["designer", "kpis", query] as const,
+    kpiList: (kind: DesignerKpiListKind, query: DesignerKpiListQueryKey) =>
+      ["designer", "kpi-list", kind, query] as const,
     workQueue: (query: DesignerWorkQueueQueryKey) => ["designer", "work-queue", query] as const,
     catalogProducts: (projectId: string, query: Record<string, unknown> = {}) =>
       ["designer", "catalog", projectId, query] as const,
@@ -104,12 +108,23 @@ type ProjectListQueryKey = {
 };
 
 type SaleDashboardQueryKey = {
+  accountId?: string;
   scope?: string;
   dateRange?: string;
   search?: string;
 };
 
+type SaleKpiListKind = "unpaid-remaining" | "overdue-tasks";
+
+type SaleKpiListQueryKey = {
+  accountId?: string;
+  scope?: string;
+  page?: number;
+  limit?: number;
+};
+
 type SaleActionQueueQueryKey = {
+  accountId?: string;
   scope?: string;
   group?: string;
   dateRange?: string;
@@ -120,12 +135,28 @@ type SaleActionQueueQueryKey = {
 };
 
 type DesignerDashboardQueryKey = {
+  accountId?: string;
   scope?: string;
   dateRange?: string;
   search?: string;
 };
 
+type DesignerKpiListKind =
+  | "confirmed-measurements"
+  | "proposal-consulting"
+  | "revision-requested"
+  | "assigned-projects";
+
+type DesignerKpiListQueryKey = {
+  accountId?: string;
+  scope?: string;
+  dateRange?: string;
+  page?: number;
+  limit?: number;
+};
+
 type DesignerWorkQueueQueryKey = {
+  accountId?: string;
   scope?: string;
   group?: string;
   dateRange?: string;

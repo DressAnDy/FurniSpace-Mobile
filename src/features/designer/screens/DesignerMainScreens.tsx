@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
@@ -29,15 +29,18 @@ import { useAuthStore } from "../../auth/store/auth.store";
 import { useChatSearchQuery, useProjectChatsQuery } from "../../communication/hooks/useProjectChats";
 import { formatChatTime } from "../../communication/utils/chat.mapper";
 import { useNotificationBadgeLabel } from "../../notification/hooks/useNotifications";
-import { getInitials, getSaleProjectStatusColors, formatSaleDate } from "../../sale/utils/sale.mapper";
+import { getProjectStatusLabel } from "../../project/utils/project.mapper";
+import { formatSaleDate, getInitials, getSaleProjectStatusColors } from "../../sale/utils/sale.mapper";
 import {
   DesignerProjectListFilter,
-  getPriorityColor,
+  formatDesignerDateRangeLabel,
   mapDesignerKpisToMetrics,
+  resolveDesignerKpiCounts,
+  useDesignerAssignedProjectsKpiQuery,
   useDesignerAssignedProjectsQuery,
   useDesignerKpisQuery,
-  useDesignerWorkQueueQuery,
 } from "../hooks/useDesignerDashboard";
+import type { DesignerAssignedProjectItemDto, DesignerDateRange, DesignerMetricKey } from "../models/designer.model";
 import {
   DesignerBottomNav,
   DesignerFrame,
@@ -67,61 +70,87 @@ function getGreetingLabel(): string {
   return "Good evening";
 }
 
-const KPI_ICONS: IconDefinition[] = [
-  rulerIconDefinition,
-  clipboardIconDefinition,
-  calendarIconDefinition,
-  projectIconDefinition,
+const KPI_ICONS: Record<DesignerMetricKey, IconDefinition> = {
+  confirmedMeasurements: rulerIconDefinition,
+  proposalConsulting: clipboardIconDefinition,
+  revisionRequests: calendarIconDefinition,
+  assignedProjects: projectIconDefinition,
+};
+
+const DATE_RANGE_OPTIONS: Array<{ value: DesignerDateRange; label: string }> = [
+  { value: "today", label: "Today" },
+  { value: "thisWeek", label: "This week" },
+  { value: "thisMonth", label: "This month" },
 ];
+
+const LATEST_PROJECTS_LIMIT = 3;
+
+function latestProjectTimestamp(item: DesignerAssignedProjectItemDto): number {
+  const raw = item.updatedAt ?? item.designerAssignedAt;
+  const value = raw ? Date.parse(raw) : Number.NaN;
+  return Number.isFinite(value) ? value : 0;
+}
 
 export function DesignerDashboardScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const currentUser = useAuthStore((state) => state.user);
   const alertsBadge = useNotificationBadgeLabel();
-  const [selectedGroup, setSelectedGroup] = useState<string>("All");
-  const [queuePage, setQueuePage] = useState(1);
-  const queuePageSize = 5;
+  const [dateRange, setDateRange] = useState<DesignerDateRange>("thisWeek");
 
-  const kpisQuery = useDesignerKpisQuery({ scope: "mine", dateRange: "thisWeek" });
-  const queueQuery = useDesignerWorkQueueQuery({
+  const kpisQuery = useDesignerKpisQuery({ scope: "mine", dateRange });
+  const latestProjectsQuery = useDesignerAssignedProjectsKpiQuery({
     scope: "mine",
-    dateRange: "thisWeek",
-    ...(selectedGroup !== "All" ? { group: selectedGroup } : {}),
-    page: queuePage,
-    limit: queuePageSize,
+    page: 1,
+    limit: 20,
   });
 
   const metrics = useMemo(
-    () => (kpisQuery.data ? mapDesignerKpisToMetrics(kpisQuery.data) : []),
-    [kpisQuery.data],
+    () => (kpisQuery.data ? mapDesignerKpisToMetrics(kpisQuery.data, dateRange) : []),
+    [dateRange, kpisQuery.data],
   );
-  const queueItems = queueQuery.data?.items ?? [];
-  const countsByGroup = queueQuery.data?.countsByGroup ?? {};
-  const totalActions = queueQuery.data?.total ?? 0;
-  const groupNames = useMemo(() => {
-    const fromApi = Object.keys(countsByGroup);
-    return fromApi.length > 0 ? fromApi : ["Design"];
-  }, [countsByGroup]);
-
-  const allCount = useMemo(() => {
-    const fromGroups = groupNames.reduce((sum, group) => sum + (countsByGroup[group] ?? 0), 0);
-    return fromGroups > 0 ? fromGroups : totalActions;
-  }, [countsByGroup, groupNames, totalActions]);
-
-  const groupChips = useMemo(
-    () => [`All  ${allCount}`, ...groupNames.map((group) => `${group}  ${countsByGroup[group] ?? 0}`)],
-    [allCount, countsByGroup, groupNames],
-  );
-
-  const selectedChip =
-    selectedGroup === "All"
-      ? groupChips[0]
-      : groupChips.find((chip) => chip.startsWith(selectedGroup)) ?? groupChips[0];
-
-  const totalPages = Math.max(1, Math.ceil(totalActions / queuePageSize));
-  const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
+  const kpiCounts = kpisQuery.data ? resolveDesignerKpiCounts(kpisQuery.data) : null;
+  const latestProjects = useMemo(() => {
+    return [...(latestProjectsQuery.data?.items ?? [])]
+      .sort((left, right) => latestProjectTimestamp(right) - latestProjectTimestamp(left))
+      .slice(0, LATEST_PROJECTS_LIMIT);
+  }, [latestProjectsQuery.data?.items]);
+  const assignedTotal = latestProjectsQuery.data?.total ?? latestProjects.length;
+  const refreshing = kpisQuery.isRefetching || latestProjectsQuery.isRefetching;
   const firstName = currentUser?.fullName?.trim().split(/\s+/)[0] || "Designer";
+  const dateRangeChips = DATE_RANGE_OPTIONS.map((option) => option.label);
+  const selectedDateChip =
+    DATE_RANGE_OPTIONS.find((option) => option.value === dateRange)?.label ?? "This week";
+
+  const refreshDashboard = useCallback(() => {
+    void kpisQuery.refetch();
+    void latestProjectsQuery.refetch();
+  }, [kpisQuery.refetch, latestProjectsQuery.refetch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshDashboard();
+    }, [refreshDashboard]),
+  );
+
+  const openKpiCard = useCallback(
+    (key: DesignerMetricKey) => {
+      if (key === "confirmedMeasurements") {
+        navigation.navigate("DesignerKpiList", { kind: "confirmed-measurements", dateRange });
+        return;
+      }
+      if (key === "proposalConsulting") {
+        navigation.navigate("DesignerKpiList", { kind: "proposal-consulting", dateRange });
+        return;
+      }
+      if (key === "revisionRequests") {
+        navigation.navigate("DesignerKpiList", { kind: "revision-requested", dateRange });
+        return;
+      }
+      navigation.navigate("DesignerKpiList", { kind: "assigned-projects" });
+    },
+    [dateRange, navigation],
+  );
 
   return (
     <DesignerFrame>
@@ -130,10 +159,7 @@ export function DesignerDashboardScreen(): React.JSX.Element {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => {
-              void kpisQuery.refetch();
-              void queueQuery.refetch();
-            }}
+            onRefresh={refreshDashboard}
             tintColor={DESIGNER.accent}
           />
         }
@@ -189,8 +215,8 @@ export function DesignerDashboardScreen(): React.JSX.Element {
                 </View>
                 <Text style={[d.quickLabel, d.quickLabelPrimary]}>Projects</Text>
                 <Text style={[d.quickMeta, d.quickMetaPrimary]}>
-                  {kpisQuery.data
-                    ? `${kpisQuery.data.proposalsInProgress} proposals · ${kpisQuery.data.measurementDue} measure`
+                  {kpiCounts
+                    ? `${kpiCounts.assignedProjects} assigned · ${kpiCounts.proposalConsulting} consulting`
                     : "Open assigned work"}
                 </Text>
               </Pressable>
@@ -206,7 +232,20 @@ export function DesignerDashboardScreen(): React.JSX.Element {
 
           <View style={d.section}>
             <View style={d.sectionHeader}>
-              <Text style={d.sectionLabel}>This week</Text>
+              <Text style={d.sectionLabel}>Workspace</Text>
+              <Text style={d.sectionAction}>{formatDesignerDateRangeLabel(dateRange)}</Text>
+            </View>
+            <View style={d.chipsWrap}>
+              <FilterChips
+                options={dateRangeChips}
+                selected={selectedDateChip}
+                onSelect={(value) => {
+                  const matched = DATE_RANGE_OPTIONS.find((option) => option.label === value);
+                  if (matched) {
+                    setDateRange(matched.value);
+                  }
+                }}
+              />
             </View>
             {kpisQuery.isLoading ? (
               <ActivityIndicator color={DESIGNER.accent} />
@@ -216,17 +255,24 @@ export function DesignerDashboardScreen(): React.JSX.Element {
               </View>
             ) : (
               <View style={d.metricGrid}>
-                {metrics.map((metric, index) => (
-                  <View key={metric.label} style={d.metricCard}>
+                {metrics.map((metric) => (
+                  <Pressable
+                    key={metric.key}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${metric.label}, ${metric.value}`}
+                    style={({ pressed }) => [d.metricCard, pressed && d.metricCardPressed]}
+                    onPress={() => openKpiCard(metric.key)}
+                  >
                     <View style={[d.metricAccent, { backgroundColor: metric.color }]} />
                     <View style={d.metricIconRow}>
                       <View style={[d.metricIcon, { backgroundColor: `${metric.color}18` }]}>
-                        <AppIcon definition={KPI_ICONS[index] ?? projectIconDefinition} size={13} color={metric.color} />
+                        <AppIcon definition={KPI_ICONS[metric.key]} size={13} color={metric.color} />
                       </View>
                     </View>
                     <Text style={[d.metricValue, { color: metric.color }]}>{metric.value}</Text>
                     <Text style={d.metricLabel}>{metric.label}</Text>
-                  </View>
+                    <Text style={d.metricHint}>{metric.hint}</Text>
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -234,102 +280,87 @@ export function DesignerDashboardScreen(): React.JSX.Element {
 
           <View style={d.section}>
             <View style={d.sectionHeader}>
-              <Text style={d.sectionLabel}>Work queue</Text>
-              {totalActions > 0 ? <Text style={d.sectionAction}>{totalActions} open</Text> : null}
+              <Text style={d.sectionLabel}>Latest projects</Text>
+              <Pressable onPress={() => navigation.navigate("DesignerProjects")}>
+                <Text style={d.sectionAction}>
+                  {assignedTotal > 0 ? `See all · ${assignedTotal}` : "See all"}
+                </Text>
+              </Pressable>
             </View>
-            <View style={d.chipsWrap}>
-              <FilterChips
-                options={groupChips}
-                selected={selectedChip}
-                onSelect={(value) => {
-                  const label = value.split("  ")[0];
-                  setSelectedGroup(label === "All" ? "All" : label);
-                  setQueuePage(1);
-                }}
-              />
-            </View>
-            {queueQuery.isLoading ? (
+            {latestProjectsQuery.isLoading ? (
               <ActivityIndicator color={DESIGNER.accent} style={{ marginTop: 12 }} />
-            ) : queueQuery.isError ? (
-              <Text style={s.centerMuted}>{getErrorMessage(queueQuery.error, "Unable to load queue.")}</Text>
-            ) : queueItems.length === 0 ? (
+            ) : latestProjectsQuery.isError ? (
               <View style={d.emptyState}>
-                <Text style={d.emptyTitle}>Queue clear</Text>
-                <Text style={d.emptyText}>Nothing waiting in this filter right now.</Text>
+                <Text style={d.emptyTitle}>Unable to load</Text>
+                <Text style={d.emptyText}>
+                  {getErrorMessage(latestProjectsQuery.error, "Unable to load latest projects.")}
+                </Text>
+              </View>
+            ) : latestProjects.length === 0 ? (
+              <View style={d.emptyState}>
+                <Text style={d.emptyTitle}>No assigned projects</Text>
+                <Text style={d.emptyText}>Projects assigned to you will show up here.</Text>
               </View>
             ) : (
               <View style={d.queueList}>
-                {queueItems.map((item) => {
-                  const priorityColor = getPriorityColor(item.priority);
-                  return (
-                    <Pressable
-                      key={item.id}
-                      style={d.queueCard}
-                      onPress={() =>
-                        navigation.navigate("DesignerProjectDetail", {
-                          projectId: item.projectId,
-                          tab: "Overview",
-                        })
-                      }
-                    >
-                      <View style={[d.queueAccent, { backgroundColor: priorityColor }]} />
-                      <View style={d.queueTop}>
-                        <View style={d.queueCopy}>
-                          <Text style={d.queueTitle} numberOfLines={1}>
-                            {item.projectName}
-                          </Text>
-                          <Text style={d.queueMeta}>{item.projectCode}</Text>
-                        </View>
-                        <View style={[d.priorityBadge, { backgroundColor: priorityColor }]}>
-                          <Text style={d.priorityText}>{item.priority}</Text>
-                        </View>
-                      </View>
-                      <Text style={d.queueActionLabel}>Next action</Text>
-                      <Text style={d.queueActionText} numberOfLines={2}>
-                        {item.action}
-                      </Text>
-                      <View style={d.queueFooter}>
-                        <Text style={d.queueMeta} numberOfLines={1}>
-                          {item.customerName}
-                          {item.dueBucket ? ` · ${item.dueBucket}` : ""}
-                        </Text>
-                        <Text style={d.openHint}>Open →</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                {latestProjects.map((item) => (
+                  <LatestProjectCard
+                    key={item.projectId}
+                    item={item}
+                    onOpen={() =>
+                      navigation.navigate("DesignerProjectDetail", {
+                        projectId: item.projectId,
+                        tab: "Overview",
+                      })
+                    }
+                  />
+                ))}
               </View>
             )}
-            {totalPages > 1 ? (
-              <View style={s.paginationRow}>
-                <Pressable
-                  disabled={queuePage <= 1}
-                  style={[s.paginationButton, queuePage <= 1 && s.paginationButtonDisabled]}
-                  onPress={() => setQueuePage((page) => Math.max(1, page - 1))}
-                >
-                  <Text style={[s.paginationButtonText, queuePage <= 1 && s.paginationButtonTextDisabled]}>
-                    Previous
-                  </Text>
-                </Pressable>
-                <Text style={s.paginationMeta}>
-                  {queuePage}/{totalPages}
-                </Text>
-                <Pressable
-                  disabled={queuePage >= totalPages}
-                  style={[s.paginationButton, queuePage >= totalPages && s.paginationButtonDisabled]}
-                  onPress={() => setQueuePage((page) => Math.min(totalPages, page + 1))}
-                >
-                  <Text style={[s.paginationButtonText, queuePage >= totalPages && s.paginationButtonTextDisabled]}>
-                    Next
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
           </View>
         </View>
       </ScrollView>
       <DesignerBottomNav active="dashboard" />
     </DesignerFrame>
+  );
+}
+
+function LatestProjectCard({
+  item,
+  onOpen,
+}: {
+  item: DesignerAssignedProjectItemDto;
+  onOpen: () => void;
+}): React.JSX.Element {
+  const tone = getSaleProjectStatusColors(item.status ?? "");
+  return (
+    <Pressable style={d.projectCard} onPress={onOpen}>
+      <View style={[d.projectAccent, { backgroundColor: tone.color }]} />
+      <View style={d.projectTop}>
+        <View style={d.projectCopy}>
+          <Text style={d.projectCode}>{item.projectCode}</Text>
+          <Text style={d.projectName} numberOfLines={2}>
+            {item.projectName}
+          </Text>
+          <Text style={d.projectType} numberOfLines={1}>
+            {item.customerName || "Customer"}
+          </Text>
+        </View>
+        <View style={d.projectChevron}>
+          <AppIcon definition={chevronRightIconDefinition} size={14} color={DESIGNER.muted} />
+        </View>
+      </View>
+      <View style={d.projectFooter}>
+        {item.status ? (
+          <View style={[d.statusPill, { backgroundColor: tone.backgroundColor, borderColor: tone.borderColor }]}>
+            <Text style={[d.statusPillText, { color: tone.color }]}>{getProjectStatusLabel(item.status)}</Text>
+          </View>
+        ) : (
+          <View />
+        )}
+        <Text style={d.projectTarget}>{formatSaleDate(item.updatedAt ?? item.designerAssignedAt)}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -806,6 +837,7 @@ export function DesignerMoreScreen(): React.JSX.Element {
   const logout = useLogoutAction();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const kpisQuery = useDesignerKpisQuery({ scope: "mine", dateRange: "thisWeek" });
+  const kpiCounts = kpisQuery.data ? resolveDesignerKpiCounts(kpisQuery.data) : null;
   const menu: { icon: IconDefinition; title: string; subtitle: string; action?: () => void }[] = [
     {
       icon: calendarIconDefinition,
@@ -862,20 +894,20 @@ export function DesignerMoreScreen(): React.JSX.Element {
             <SectionTitle title="Design Workspace" />
             <View style={s.infoGrid}>
               <View style={s.infoCell}>
-                <Text style={s.infoLabel}>Measurement due</Text>
-                <Text style={s.infoValue}>{String(kpisQuery.data?.measurementDue ?? "—")}</Text>
+                <Text style={s.infoLabel}>Confirmed measures</Text>
+                <Text style={s.infoValue}>{String(kpiCounts?.confirmedMeasurements ?? "—")}</Text>
               </View>
               <View style={s.infoCell}>
-                <Text style={s.infoLabel}>Proposals</Text>
-                <Text style={s.infoValue}>{String(kpisQuery.data?.proposalsInProgress ?? "—")}</Text>
+                <Text style={s.infoLabel}>Proposal consulting</Text>
+                <Text style={s.infoValue}>{String(kpiCounts?.proposalConsulting ?? "—")}</Text>
               </View>
               <View style={s.infoCell}>
-                <Text style={s.infoLabel}>Revisions</Text>
-                <Text style={s.infoValue}>{String(kpisQuery.data?.revisionRequested ?? "—")}</Text>
+                <Text style={s.infoLabel}>Revision requests</Text>
+                <Text style={s.infoValue}>{String(kpiCounts?.revisionRequests ?? "—")}</Text>
               </View>
               <View style={s.infoCell}>
-                <Text style={s.infoLabel}>Overdue</Text>
-                <Text style={s.infoValue}>{String(kpisQuery.data?.overdueTasks ?? "—")}</Text>
+                <Text style={s.infoLabel}>Assigned projects</Text>
+                <Text style={s.infoValue}>{String(kpiCounts?.assignedProjects ?? "—")}</Text>
               </View>
             </View>
           </View>

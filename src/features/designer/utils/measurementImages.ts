@@ -53,7 +53,7 @@ export function isAllowedMeasurementMimeType(mimeType: string | null | undefined
   return ALLOWED_MIME_TYPES.has(mimeType.toLowerCase());
 }
 
-export function normalizeMeasurementMimeType(mimeType: string | null | undefined, fileName?: string): string {
+export function normalizeMeasurementMimeType(mimeType: string | null | undefined, fileName?: string | null): string {
   if (mimeType && isAllowedMeasurementMimeType(mimeType)) {
     return mimeType.toLowerCase() === "image/jpg" ? "image/jpeg" : mimeType.toLowerCase();
   }

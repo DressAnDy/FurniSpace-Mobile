@@ -3,14 +3,17 @@ import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { compareProjectsByStatusFlow, getProjectStatusLabel } from "../../project/utils/project.mapper";
 import { getProjectsApi } from "../../project/services/project.api";
-import type { ProjectStatus } from "../../project/models/project.model";
+import type { ProjectListItemDto, ProjectStatus } from "../../project/models/project.model";
 import { formatSaleDate } from "../../sale/utils/sale.mapper";
 import {
   CreateProposalRequestDto,
   CreateProposalSceneRequestDto,
   DesignerCatalogProductsQuery,
+  DesignerDateRange,
+  DesignerKpiListQuery,
   DesignerKpisDto,
   DesignerKpisQuery,
+  DesignerMetricKey,
   DesignerWorkQueueQuery,
   PublishProposalRequestDto,
   UpdateProposalRequestDto,
@@ -19,9 +22,13 @@ import {
 import {
   createProposalApi,
   createProposalSceneApi,
+  getDesignerAssignedProjectsKpiApi,
   getDesignerCatalogProductApi,
   getDesignerCatalogProductsApi,
+  getDesignerConfirmedMeasurementsApi,
   getDesignerKpisApi,
+  getDesignerProposalConsultingApi,
+  getDesignerRevisionRequestedApi,
   getDesignerWorkQueueApi,
   getProposalDetailForDesignerApi,
   publishProposalApi,
@@ -43,19 +50,73 @@ import { ProjectMeasurementImagesQuery } from "../../sale/models/sale.ops.model"
 
 export function useDesignerKpisQuery(query: DesignerKpisQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
   return useQuery({
-    queryKey: queryKeys.designer.kpis(query),
-    enabled: isLoggedIn,
+    queryKey: queryKeys.designer.kpis({ ...query, accountId }),
+    enabled: isLoggedIn && Boolean(accountId),
     queryFn: () => getDesignerKpisApi(query),
   });
 }
 
 export function useDesignerWorkQueueQuery(query: DesignerWorkQueueQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
   return useQuery({
-    queryKey: queryKeys.designer.workQueue(query),
-    enabled: isLoggedIn,
+    queryKey: queryKeys.designer.workQueue({ ...query, accountId }),
+    enabled: isLoggedIn && Boolean(accountId),
     queryFn: () => getDesignerWorkQueueApi(query),
+  });
+}
+
+const DASHBOARD_LIST_LIMIT = 5;
+
+export function useDesignerConfirmedMeasurementsQuery(query: DesignerKpiListQuery = {}, enabled = true) {
+  return useDesignerKpiListQuery("confirmed-measurements", query, true, getDesignerConfirmedMeasurementsApi, enabled);
+}
+
+export function useDesignerProposalConsultingQuery(query: DesignerKpiListQuery = {}, enabled = true) {
+  return useDesignerKpiListQuery("proposal-consulting", query, true, getDesignerProposalConsultingApi, enabled);
+}
+
+export function useDesignerRevisionRequestedQuery(query: DesignerKpiListQuery = {}, enabled = true) {
+  return useDesignerKpiListQuery("revision-requested", query, true, getDesignerRevisionRequestedApi, enabled);
+}
+
+export function useDesignerAssignedProjectsKpiQuery(query: DesignerKpiListQuery = {}, enabled = true) {
+  return useDesignerKpiListQuery("assigned-projects", query, false, getDesignerAssignedProjectsKpiApi, enabled);
+}
+
+function useDesignerKpiListQuery<T>(
+  kind: "confirmed-measurements" | "proposal-consulting" | "revision-requested" | "assigned-projects",
+  query: DesignerKpiListQuery,
+  includeDateRange: boolean,
+  queryFn: (query: DesignerKpiListQuery) => Promise<T>,
+  enabled = true,
+) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
+  const page = query.page ?? 1;
+  const limit = query.limit ?? DASHBOARD_LIST_LIMIT;
+  const scope = query.scope ?? "mine";
+  const dateRange = includeDateRange ? query.dateRange : undefined;
+
+  return useQuery({
+    queryKey: queryKeys.designer.kpiList(kind, {
+      accountId,
+      scope,
+      ...(dateRange ? { dateRange } : {}),
+      page,
+      limit,
+    }),
+    enabled: enabled && isLoggedIn && Boolean(accountId),
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      queryFn({
+        scope,
+        ...(dateRange ? { dateRange } : {}),
+        page,
+        limit,
+      }),
   });
 }
 
@@ -99,7 +160,8 @@ export function useDesignerAssignedProjectsQuery(
 
       return {
         items: sorted.slice(start, start + limit).map((item) => {
-          const targetLabel = formatSaleDate(item.targetCompletionDate);
+          const targetDate = (item as ProjectListItemDto & { targetCompletionDate?: string | null }).targetCompletionDate;
+          const targetLabel = formatSaleDate(targetDate);
           return {
             projectId: item.projectId,
             projectCode: item.projectCode,
@@ -364,16 +426,71 @@ export function useUpdateScheduleStatusMutation(projectId: string | null) {
   });
 }
 
-export function mapDesignerKpisToMetrics(kpis: DesignerKpisDto): Array<{
+export function resolveDesignerKpiCounts(kpis: DesignerKpisDto): Record<DesignerMetricKey, number> {
+  return {
+    confirmedMeasurements: kpis.confirmedMeasurements ?? kpis.measurementDue ?? 0,
+    proposalConsulting: kpis.proposalConsultingProjects ?? kpis.proposalsInProgress ?? 0,
+    revisionRequests: kpis.proposalRevisionsRequested ?? kpis.revisionRequested ?? 0,
+    assignedProjects: kpis.assignedProjects ?? 0,
+  };
+}
+
+export function formatDesignerDateRangeLabel(dateRange: DesignerDateRange): string {
+  if (dateRange === "today") {
+    return "Today";
+  }
+  if (dateRange === "thisMonth") {
+    return "This month";
+  }
+  return "This week";
+}
+
+export function mapDesignerKpisToMetrics(
+  kpis: DesignerKpisDto,
+  dateRange: DesignerDateRange,
+): Array<{
+  key: DesignerMetricKey;
   value: string;
+  count: number;
   label: string;
+  hint: string;
   color: string;
 }> {
+  const counts = resolveDesignerKpiCounts(kpis);
+  const rangeLabel = formatDesignerDateRangeLabel(dateRange);
   return [
-    { value: String(kpis.measurementDue), label: "Measurement due", color: "#B45309" },
-    { value: String(kpis.proposalsInProgress), label: "Proposals in progress", color: "#2F5D50" },
-    { value: String(kpis.revisionRequested), label: "Revision requested", color: "#C9A86A" },
-    { value: String(kpis.overdueTasks), label: "Overdue tasks", color: "#DC2626" },
+    {
+      key: "confirmedMeasurements",
+      value: String(counts.confirmedMeasurements),
+      count: counts.confirmedMeasurements,
+      label: "Confirmed measurements",
+      hint: rangeLabel,
+      color: "#B45309",
+    },
+    {
+      key: "proposalConsulting",
+      value: String(counts.proposalConsulting),
+      count: counts.proposalConsulting,
+      label: "Proposal consulting",
+      hint: rangeLabel,
+      color: "#2F5D50",
+    },
+    {
+      key: "revisionRequests",
+      value: String(counts.revisionRequests),
+      count: counts.revisionRequests,
+      label: "Revision requests",
+      hint: rangeLabel,
+      color: "#C9A86A",
+    },
+    {
+      key: "assignedProjects",
+      value: String(counts.assignedProjects),
+      count: counts.assignedProjects,
+      label: "Assigned projects",
+      hint: "Stock · not by week",
+      color: "#3A3330",
+    },
   ];
 }
 

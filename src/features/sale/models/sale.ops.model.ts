@@ -113,6 +113,7 @@ export type UploadProjectFileInput = {
   uri: string;
   name: string;
   type: string;
+  size?: number | null;
   fileType?: ProjectFileType;
   visibility?: ProjectFileVisibility;
   note?: string;

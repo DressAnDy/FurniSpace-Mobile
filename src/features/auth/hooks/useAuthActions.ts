@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppError } from "../../../core/errors/AppError";
 import { mapAxiosError } from "../../../core/errors/errorMapper";
 import { clearAuthTokens } from "../../../core/storage/secureStorage";
@@ -18,6 +18,7 @@ import {
 } from "../services/auth.api";
 import { mapUserFromCurrentUser } from "../utils/auth.mapper";
 import { useAuthStore } from "../store/auth.store";
+import { clearSessionQueryCache } from "../../../shared/utils/dashboardCache";
 
 function toAppError(error: unknown): AppError {
   if (error instanceof AppError) {
@@ -28,6 +29,7 @@ function toAppError(error: unknown): AppError {
 
 export function useLoginAction() {
   const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: { email: string; password: string }) => {
@@ -39,7 +41,10 @@ export function useLoginAction() {
         throw toAppError(error);
       }
     },
-    onSuccess: (user) => setUser(user),
+    onSuccess: (user) => {
+      clearSessionQueryCache(queryClient);
+      setUser(user);
+    },
   });
 }
 
@@ -57,6 +62,7 @@ export function useRegisterAction() {
 
 export function useVerifyEmailAction() {
   const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: { email: string; otpCode: string }) => {
@@ -68,7 +74,10 @@ export function useVerifyEmailAction() {
         throw toAppError(error);
       }
     },
-    onSuccess: (user) => setUser(user),
+    onSuccess: (user) => {
+      clearSessionQueryCache(queryClient);
+      setUser(user);
+    },
   });
 }
 
@@ -110,6 +119,7 @@ export function useResetPasswordAction() {
 
 export function useChangePasswordAction() {
   const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (payload: Parameters<typeof changePasswordApi>[0]) => {
@@ -125,12 +135,14 @@ export function useChangePasswordAction() {
       await disconnectProjectChatHub();
       await clearAuthTokens();
       setUser(null);
+      clearSessionQueryCache(queryClient);
     },
   });
 }
 
 export function useLogoutAction() {
   const setUser = useAuthStore((state) => state.setUser);
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
@@ -146,6 +158,7 @@ export function useLogoutAction() {
       await disconnectProjectChatHub();
       await clearAuthTokens();
       setUser(null);
+      clearSessionQueryCache(queryClient);
     },
   });
 }

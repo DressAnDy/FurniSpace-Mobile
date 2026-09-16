@@ -68,8 +68,8 @@ export function compareProjectsByStatusFlow(
   return rightTime - leftTime;
 }
 
-export function getProjectStatusLabel(status: ProjectStatus): string {
-  return STATUS_LABELS[status] ?? status.replaceAll("_", " ");
+export function getProjectStatusLabel(status: ProjectStatus | string): string {
+  return STATUS_LABELS[status as ProjectStatus] ?? status.replaceAll("_", " ");
 }
 
 export function mapProjectListItemToSummary(dto: ProjectListItemDto): ProjectSummaryItem {

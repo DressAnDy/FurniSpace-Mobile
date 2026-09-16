@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { RealtimeNotificationPayloadDto } from "../../notification/models/notification.model";
+import { invalidateDashboardQueries } from "../../../shared/utils/dashboardCache";
 
 export function isProjectRequestSubmittedEvent(
   payload: Pick<RealtimeNotificationPayloadDto, "notificationType" | "referenceType">,
@@ -15,8 +16,7 @@ export function isProjectRequestSubmittedEvent(
 /** Invalidate Sales lead inbox + badges after a new project request arrives. */
 export function invalidateSaleLeadInboxQueries(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
-  void queryClient.invalidateQueries({ queryKey: ["sale", "kpis"] });
-  void queryClient.invalidateQueries({ queryKey: ["sale", "action-queue"] });
+  invalidateDashboardQueries(queryClient);
   void queryClient.invalidateQueries({ queryKey: ["notification", "unread-count"] });
   void queryClient.invalidateQueries({ queryKey: ["notification", "list"] });
 }

@@ -17,6 +17,7 @@ import { resolveNotificationCategory } from "../../features/notification/utils/n
 import { queryKeys } from "../../shared/constants/queryKeys";
 import { subscribeAuthTokenRefresh } from "../../core/api/interceptors";
 import { isProjectRequestSubmittedEvent, invalidateSaleLeadInboxQueries } from "../../features/sale/utils/sale.lead.realtime";
+import { invalidateDashboardQueries } from "../../shared/utils/dashboardCache";
 
 export function NotificationRealtimeBridge(): null {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
@@ -54,6 +55,13 @@ export function NotificationRealtimeBridge(): null {
 
       if (isProjectRequestSubmittedEvent(payload)) {
         invalidateSaleLeadInboxQueries(queryClient);
+      }
+
+      const isChatOnly =
+        payload.referenceType === "PROJECT_CHAT_MESSAGE" ||
+        payload.notificationType === "project_chat.message_sent";
+      if (!isChatOnly) {
+        invalidateDashboardQueries(queryClient);
       }
 
       if (
@@ -112,6 +120,7 @@ export function NotificationRealtimeBridge(): null {
         void queryClient.invalidateQueries({ queryKey: ["chat"], type: "active" });
         // Sales lead inbox has no claim-broadcast SignalR — refresh SUBMITTED lists on resume.
         void queryClient.invalidateQueries({ queryKey: ["project", "list"], type: "active" });
+        invalidateDashboardQueries(queryClient);
       });
     });
 

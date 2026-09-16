@@ -14,17 +14,59 @@ export type SaleActionPriority = "URGENT" | "HIGH" | "MEDIUM" | "LOW" | string;
 export type SaleDueBucket = "OVERDUE" | "TODAY" | "THIS_WEEK" | "LATER" | string;
 
 export type SalesKpisDto = {
-  newRequests: number;
-  waitingCustomer: number;
-  paymentFollowUp: number;
-  overdueTasks: number;
-  activeProjects: number;
+  acceptedProjects?: number;
+  unpaidRemaining?: number;
+  overdueTasks?: number;
+  /** Legacy — do not use for new cards when scope=mine; count from request queue instead. */
+  newRequests?: number;
+  waitingCustomer?: number;
+  paymentFollowUp?: number;
+  activeProjects?: number;
 };
 
 export type SalesKpisQuery = {
   scope?: SaleDashboardScope;
   dateRange?: SaleDateRange;
   search?: string;
+};
+
+export type SalesKpiListQuery = {
+  scope?: SaleDashboardScope;
+  page?: number;
+  limit?: number;
+};
+
+export type SalesUnpaidRemainingItemDto = {
+  orderId: string;
+  orderCode: string;
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  assignedSalesId?: string | null;
+  assignedSalesName?: string | null;
+  status?: string | null;
+  remainingAmount?: number | null;
+  currency?: string | null;
+  paymentId?: string | null;
+  paymentStatus?: string | null;
+  updatedAt?: string | null;
+};
+
+export type SalesOverdueTaskItemDto = {
+  projectId: string;
+  projectCode: string;
+  projectName: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  assignedSalesId?: string | null;
+  assignedSalesName?: string | null;
+  status?: string | null;
+  targetCompletionDate?: string | null;
+  overdueDays?: number | null;
+  submittedAt?: string | null;
+  updatedAt?: string | null;
 };
 
 export type SalesActionQueueItemDto = {
@@ -92,12 +134,7 @@ export type RequestProjectInformationResponseDto = {
   requestedAt: string;
 };
 
-export type SaleMetricKey =
-  | "newRequests"
-  | "activeProjects"
-  | "waitingCustomer"
-  | "paymentFollowUp"
-  | "overdueTasks";
+export type SaleMetricKey = "newRequests" | "acceptedProjects" | "unpaidRemaining" | "overdueTasks";
 
 export type SaleMetricCard = {
   key: SaleMetricKey;
@@ -111,7 +148,6 @@ export type SaleMetricCard = {
 
 export type SaleWeekSnapshot = {
   tiles: SaleMetricCard[];
-  alert: SaleMetricCard;
   attentionCount: number;
 };
 

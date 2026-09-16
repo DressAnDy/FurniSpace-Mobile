@@ -18,7 +18,7 @@ import { helpIconDefinition } from "../../../icons/common/definitions";
 import { fileTextIconDefinition } from "../../../icons/file/definitions";
 import { paymentIconDefinition } from "../../../icons/commerce/definitions";
 import { chevronDownIconDefinition, chevronRightIconDefinition, searchIconDefinition } from "../../../icons/navigation/definitions";
-import { clipboardIconDefinition, clockIconDefinition, projectIconDefinition } from "../../../icons/project/definitions";
+import { clipboardIconDefinition, projectIconDefinition } from "../../../icons/project/definitions";
 import { warningIconDefinition } from "../../../icons/status/definitions";
 import { filterIconDefinition } from "../../../icons/action/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
@@ -52,9 +52,8 @@ import { SALE, saleStyles as s } from "../styles/sale.styles";
 
 const WEEK_METRIC_ICONS: Record<SaleMetricKey, IconDefinition> = {
   newRequests: clipboardIconDefinition,
-  activeProjects: projectIconDefinition,
-  waitingCustomer: clockIconDefinition,
-  paymentFollowUp: paymentIconDefinition,
+  acceptedProjects: projectIconDefinition,
+  unpaidRemaining: paymentIconDefinition,
   overdueTasks: warningIconDefinition,
 };
 
@@ -94,7 +93,8 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const [queuePage, setQueuePage] = useState(1);
   const queuePageSize = 5;
 
-  const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
+  const kpisQuery = useSalesKpisQuery({ scope: "mine" });
+  const inboxCountQuery = useSaleInboxProjectsQuery({ filter: "New", page: 1, limit: 1 });
   const queueQuery = useSalesActionQueueQuery({
     scope: "mine",
     dateRange: "thisWeek",
@@ -103,9 +103,10 @@ export function SaleDashboardScreen(): React.JSX.Element {
     limit: queuePageSize,
   });
 
+  const inboxCount = inboxCountQuery.data?.total ?? 0;
   const week = useMemo(
-    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data) : null),
-    [kpisQuery.data],
+    () => (kpisQuery.data ? mapSalesKpisToMetrics(kpisQuery.data, inboxCount) : null),
+    [inboxCount, kpisQuery.data],
   );
   const queueItems = queueQuery.data?.items ?? [];
   const countsByGroup = queueQuery.data?.countsByGroup ?? {};
@@ -133,7 +134,7 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const totalPages = Math.max(1, Math.ceil(totalActions / queuePageSize));
   const canPrev = queuePage > 1;
   const canNext = queuePage < totalPages;
-  const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching;
+  const refreshing = kpisQuery.isRefetching || queueQuery.isRefetching || inboxCountQuery.isRefetching;
 
   const handleGroupSelect = useCallback((value: string) => {
     const label = value.split("  ")[0];
@@ -149,7 +150,14 @@ export function SaleDashboardScreen(): React.JSX.Element {
   const refreshDashboard = useCallback(() => {
     void kpisQuery.refetch();
     void queueQuery.refetch();
-  }, [kpisQuery.refetch, queueQuery.refetch]);
+    void inboxCountQuery.refetch();
+  }, [inboxCountQuery.refetch, kpisQuery.refetch, queueQuery.refetch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshDashboard();
+    }, [refreshDashboard]),
+  );
 
   const openWeekMetric = useCallback(
     (key: SaleMetricKey) => {
@@ -157,12 +165,15 @@ export function SaleDashboardScreen(): React.JSX.Element {
         navigation.navigate("SaleRequests");
         return;
       }
-      if (key === "paymentFollowUp") {
-        setSelectedGroup("Order and Payment");
-        setQueuePage(1);
+      if (key === "acceptedProjects") {
+        navigation.navigate("SaleProjects");
         return;
       }
-      navigation.navigate("SaleProjects");
+      if (key === "unpaidRemaining") {
+        navigation.navigate("SaleKpiList", { kind: "unpaid-remaining" });
+        return;
+      }
+      navigation.navigate("SaleKpiList", { kind: "overdue-tasks" });
     },
     [navigation],
   );
@@ -212,13 +223,15 @@ export function SaleDashboardScreen(): React.JSX.Element {
               <Pressable style={[s.quickAction, s.quickActionPrimary]} onPress={() => navigation.navigate("SaleRequests")}>
                 <Text style={[s.quickActionLabel, s.quickActionLabelPrimary]}>Requests</Text>
                 <Text style={[s.quickActionMeta, s.quickActionMetaPrimary]}>
-                  {kpisQuery.data ? `${kpisQuery.data.newRequests} new` : "Open inbox"}
+                  {inboxCountQuery.data ? `${inboxCount} new` : "Open inbox"}
                 </Text>
               </Pressable>
               <Pressable style={s.quickAction} onPress={() => navigation.navigate("SaleProjects")}>
                 <Text style={s.quickActionLabel}>Projects</Text>
                 <Text style={s.quickActionMeta}>
-                  {kpisQuery.data ? `${kpisQuery.data.activeProjects} active` : "Assigned work"}
+                  {kpisQuery.data
+                    ? `${kpisQuery.data.acceptedProjects ?? kpisQuery.data.activeProjects ?? 0} accepted`
+                    : "Assigned work"}
                 </Text>
               </Pressable>
             </View>
@@ -325,14 +338,13 @@ const WeekMetricsSection = React.memo(function WeekMetricsSection({
             <WeekMetricTile key={metric.key} metric={metric} onPress={onPressMetric} />
           ))}
         </View>
-        <WeekAlertRow metric={week.alert} />
       </View>
     );
   }
 
   return (
     <View style={s.dashboardSection}>
-      <SectionTitle title="This week" action={week ? weekStatusLabel(week.attentionCount) : undefined} />
+      <SectionTitle title="Overview" action={week ? weekStatusLabel(week.attentionCount) : undefined} />
       {body}
     </View>
   );
@@ -367,26 +379,6 @@ const WeekMetricTile = React.memo(function WeekMetricTile({
         {metric.hint}
       </Text>
     </Pressable>
-  );
-});
-
-const WeekAlertRow = React.memo(function WeekAlertRow({ metric }: { metric: SaleMetricCard }): React.JSX.Element {
-  const hot = metric.count > 0;
-  return (
-    <View
-      accessibilityLabel={`${metric.label}, ${metric.value}`}
-      style={[s.metricAlert, hot && s.metricAlertHot]}
-    >
-      <View style={[s.metricAccent, s.metricAlertAccent, { backgroundColor: metric.color }]} />
-      <View style={[s.metricIcon, { backgroundColor: `${metric.color}18` }]}>
-        <AppIcon definition={WEEK_METRIC_ICONS[metric.key]} size={12} color={metric.color} />
-      </View>
-      <View style={s.metricAlertCopy}>
-        <Text style={s.metricTileLabel}>{metric.label}</Text>
-        <Text style={s.metricTileHint}>{metric.hint}</Text>
-      </View>
-      <Text style={[s.metricAlertValue, { color: metric.color }]}>{metric.value}</Text>
-    </View>
   );
 });
 
@@ -1117,7 +1109,7 @@ export function SaleMoreScreen(): React.JSX.Element {
   const currentUser = useAuthStore((state) => state.user);
   const logout = useLogoutAction();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const kpisQuery = useSalesKpisQuery({ scope: "mine", dateRange: "thisWeek" });
+  const kpisQuery = useSalesKpisQuery({ scope: "mine" });
   const menu: { icon: IconDefinition; title: string; subtitle: string; action?: () => void }[] = [
     {
       icon: bellIconDefinition,
@@ -1170,10 +1162,13 @@ export function SaleMoreScreen(): React.JSX.Element {
           <View style={s.card}>
             <SectionTitle title="Sales Workspace" />
             <View style={s.infoGrid}>
-              <InfoCell label="Active projects" value={String(kpisQuery.data?.activeProjects ?? "—")} />
+              <InfoCell
+                label="Accepted projects"
+                value={String(kpisQuery.data?.acceptedProjects ?? kpisQuery.data?.activeProjects ?? "—")}
+              />
+              <InfoCell label="Unpaid remaining" value={String(kpisQuery.data?.unpaidRemaining ?? "—")} />
+              <InfoCell label="Overdue tasks" value={String(kpisQuery.data?.overdueTasks ?? "—")} />
               <InfoCell label="Open requests" value={String(kpisQuery.data?.newRequests ?? "—")} />
-              <InfoCell label="Waiting customer" value={String(kpisQuery.data?.waitingCustomer ?? "—")} />
-              <InfoCell label="Payment follow-up" value={String(kpisQuery.data?.paymentFollowUp ?? "—")} />
             </View>
           </View>
           <Pressable

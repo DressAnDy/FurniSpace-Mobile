@@ -14,6 +14,8 @@ import {
   getDashboardProjectPhaseDeadlinesApi,
   getSalesActionQueueApi,
   getSalesKpisApi,
+  getSalesOverdueTasksApi,
+  getSalesUnpaidRemainingApi,
   requestProjectInformationApi,
 } from "../services/sale.api";
 import {
@@ -21,6 +23,7 @@ import {
   ClaimSalesAssignmentRequestDto,
   RequestProjectInformationDto,
   SalesActionQueueQuery,
+  SalesKpiListQuery,
   SalesKpisQuery,
 } from "../models/sale.model";
 import { mapProjectToSaleProjectCard, mapProjectToSaleRequestCard } from "../utils/sale.mapper";
@@ -31,21 +34,73 @@ const DASHBOARD_STALE_MS = 60_000;
 
 export function useSalesKpisQuery(query: SalesKpisQuery = {}) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
 
   return useQuery({
-    queryKey: queryKeys.sale.kpis(query),
-    enabled: isLoggedIn,
+    queryKey: queryKeys.sale.kpis({ ...query, accountId }),
+    enabled: isLoggedIn && Boolean(accountId),
     staleTime: DASHBOARD_STALE_MS,
     queryFn: () => getSalesKpisApi(query),
   });
 }
 
-export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
+export function useSalesUnpaidRemainingQuery(query: SalesKpiListQuery = {}, enabled = true) {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 5;
 
   return useQuery({
-    queryKey: queryKeys.sale.actionQueue(query),
-    enabled: isLoggedIn,
+    queryKey: queryKeys.sale.kpiList("unpaid-remaining", {
+      accountId,
+      scope: query.scope ?? "mine",
+      page,
+      limit,
+    }),
+    enabled: enabled && isLoggedIn && Boolean(accountId),
+    staleTime: DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      getSalesUnpaidRemainingApi({
+        scope: query.scope ?? "mine",
+        page,
+        limit,
+      }),
+  });
+}
+
+export function useSalesOverdueTasksQuery(query: SalesKpiListQuery = {}, enabled = true) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 5;
+
+  return useQuery({
+    queryKey: queryKeys.sale.kpiList("overdue-tasks", {
+      accountId,
+      scope: query.scope ?? "mine",
+      page,
+      limit,
+    }),
+    enabled: enabled && isLoggedIn && Boolean(accountId),
+    staleTime: DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousData,
+    queryFn: () =>
+      getSalesOverdueTasksApi({
+        scope: query.scope ?? "mine",
+        page,
+        limit,
+      }),
+  });
+}
+
+export function useSalesActionQueueQuery(query: SalesActionQueueQuery = {}) {
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+  const accountId = useAuthStore((state) => state.user?.accountId);
+
+  return useQuery({
+    queryKey: queryKeys.sale.actionQueue({ ...query, accountId }),
+    enabled: isLoggedIn && Boolean(accountId),
     staleTime: DASHBOARD_STALE_MS,
     placeholderData: keepPreviousData,
     queryFn: () => getSalesActionQueueApi(query),

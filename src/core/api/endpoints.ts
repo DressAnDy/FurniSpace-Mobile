@@ -16,7 +16,8 @@ export const endpoints = {
     listByProject: (projectId: string) => `/projects/${projectId}/chats`,
     messages: (chatId: string) => `/project-chats/${chatId}/messages`,
     sendMessage: (chatId: string) => `/project-chats/${chatId}/messages`,
-    sendFile: (chatId: string) => `/project-chats/${chatId}/messages/files`,
+    fileUploadUrl: (chatId: string) => `/project-chats/${chatId}/messages/files/upload-url`,
+    fileComplete: (chatId: string) => `/project-chats/${chatId}/messages/files/complete`,
     updateStatus: (chatId: string) => `/project-chats/${chatId}/status`,
     search: (projectId: string) => `/projects/${projectId}/chat-messages/search`,
   },
@@ -43,6 +44,8 @@ export const endpoints = {
     areas: (projectId: string) => `/projects/${projectId}/areas`,
     schedules: (projectId: string) => `/projects/${projectId}/schedules`,
     files: (projectId: string) => `/projects/${projectId}/files`,
+    fileUploadUrl: (projectId: string) => `/projects/${projectId}/files/upload-url`,
+    fileComplete: (projectId: string) => `/projects/${projectId}/files/complete`,
     searchFiles: (projectId: string) => `/projects/${projectId}/files/search`,
     measurementImages: (projectId: string) => `/projects/${projectId}/measurement-images`,
     proposals: (projectId: string) => `/projects/${projectId}/proposals`,
@@ -60,11 +63,17 @@ export const endpoints = {
   },
   saleDashboard: {
     kpis: "/api/dashboard/sales/kpis",
+    unpaidRemaining: "/api/dashboard/sales/kpis/unpaid-remaining",
+    overdueTasks: "/api/dashboard/sales/kpis/overdue-tasks",
     actionQueue: "/api/dashboard/sales/action-queue",
     phaseDeadlines: "/api/dashboard/project-phase-deadlines",
   },
   designerDashboard: {
     kpis: "/api/dashboard/designer/kpis",
+    confirmedMeasurements: "/api/dashboard/designer/kpis/confirmed-measurements",
+    proposalConsulting: "/api/dashboard/designer/kpis/proposal-consulting",
+    revisionRequested: "/api/dashboard/designer/kpis/revision-requested",
+    assignedProjects: "/api/dashboard/designer/kpis/assigned-projects",
     workQueue: "/api/dashboard/designer/work-queue",
     phaseDeadlines: "/api/dashboard/project-phase-deadlines",
   },
@@ -131,6 +140,10 @@ export const endpoints = {
     completeDelivery: (orderId: string, deliveryId: string) =>
       `/orders/${orderId}/deliveries/${deliveryId}/complete`,
     productIssues: (orderId: string) => `/orders/${orderId}/product-issues`,
+    productIssueEvidenceUploadUrl: (orderId: string) =>
+      `/orders/${orderId}/product-issues/evidence/upload-url`,
+    productIssueEvidenceComplete: (orderId: string) =>
+      `/orders/${orderId}/product-issues/evidence/complete`,
   },
   productIssues: {
     byProject: (projectId: string) => `/projects/${projectId}/product-issues`,
@@ -155,6 +168,10 @@ export const endpoints = {
     updateStatus: (scheduleId: string) => `/project-schedules/${scheduleId}/status`,
     delete: (scheduleId: string) => `/project-schedules/${scheduleId}`,
     measurementImages: (scheduleId: string) => `/project-schedules/${scheduleId}/measurement-images`,
+    measurementImageUploadUrl: (scheduleId: string) =>
+      `/project-schedules/${scheduleId}/measurement-images/upload-url`,
+    measurementImageComplete: (scheduleId: string) =>
+      `/project-schedules/${scheduleId}/measurement-images/complete`,
   },
   payments: {
     list: "/api/payments",

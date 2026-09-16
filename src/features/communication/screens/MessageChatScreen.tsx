@@ -168,6 +168,7 @@ export function MessageChatScreen(): React.JSX.Element {
             uri: asset.uri,
             name: asset.name ?? "attachment",
             type: asset.mimeType ?? "application/octet-stream",
+            size: asset.size,
           },
           content: draft.trim() || undefined,
         },

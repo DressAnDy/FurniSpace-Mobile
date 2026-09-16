@@ -1,5 +1,6 @@
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
+import { directUploadFile } from "../../../core/upload/directUpload";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   PhaseDeadlinesResponseDto,
@@ -199,22 +200,21 @@ export async function uploadProjectFileApi(
   projectId: string,
   input: UploadProjectFileInput,
 ): Promise<ProjectFileDto> {
-  const formData = new FormData();
-  formData.append("file", {
-    uri: input.uri,
-    name: input.name,
-    type: input.type,
-  } as unknown as Blob);
-  formData.append("fileType", input.fileType ?? "OTHER");
-  formData.append("visibility", input.visibility ?? "STAFF_ONLY");
-  if (input.note?.trim()) {
-    formData.append("note", input.note.trim());
-  }
-
-  const response = await httpClient.post<ApiResponse<ProjectFileDto>>(endpoints.projects.files(projectId), formData, {
-    headers: { "Content-Type": "multipart/form-data" },
+  return directUploadFile<ProjectFileDto>({
+    preparePath: endpoints.projects.fileUploadUrl(projectId),
+    completePath: endpoints.projects.fileComplete(projectId),
+    file: {
+      uri: input.uri,
+      name: input.name,
+      mimeType: input.type,
+      size: input.size,
+    },
+    prepareBody: {
+      fileType: input.fileType ?? "OTHER",
+      visibility: input.visibility ?? "STAFF_ONLY",
+      note: input.note?.trim(),
+    },
   });
-  return response.data.data;
 }
 
 export async function getScheduleMeasurementImagesApi(scheduleId: string): Promise<MeasurementImageListResponseDto> {

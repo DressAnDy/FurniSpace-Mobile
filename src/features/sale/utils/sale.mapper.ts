@@ -78,27 +78,27 @@ function toMetric(
   };
 }
 
-export function mapSalesKpisToMetrics(kpis: SalesKpisDto): SaleWeekSnapshot {
-  const newRequests = kpis.newRequests ?? 0;
-  const paymentFollowUp = kpis.paymentFollowUp ?? 0;
+export function mapSalesKpisToMetrics(kpis: SalesKpisDto, inboxCount: number): SaleWeekSnapshot {
+  const newRequests = inboxCount;
+  const acceptedProjects = kpis.acceptedProjects ?? kpis.activeProjects ?? 0;
+  const unpaidRemaining = kpis.unpaidRemaining ?? 0;
   const overdueTasks = kpis.overdueTasks ?? 0;
 
   return {
     tiles: [
-      toMetric("newRequests", newRequests, "New requests", "Unclaimed inbox", "#C9A86A", false),
-      toMetric("activeProjects", kpis.activeProjects ?? 0, "Active", "In your pipeline", "#3A3330", false),
-      toMetric("waitingCustomer", kpis.waitingCustomer ?? 0, "Waiting", "Customer reply", "#7A6F68", false),
-      toMetric("paymentFollowUp", paymentFollowUp, "Payments", "Follow-up due", "#DC2626", true),
+      toMetric("newRequests", newRequests, "New requests", "Request queue", "#C9A86A", false),
+      toMetric("acceptedProjects", acceptedProjects, "Accepted", "Assigned to you", "#3A3330", false),
+      toMetric("unpaidRemaining", unpaidRemaining, "Unpaid", "Balance remaining", "#DC2626", true),
+      toMetric(
+        "overdueTasks",
+        overdueTasks,
+        "Overdue",
+        overdueTasks > 0 ? "Past target date" : "Nothing past due",
+        "#DC2626",
+        true,
+      ),
     ],
-    alert: toMetric(
-      "overdueTasks",
-      overdueTasks,
-      "Overdue",
-      overdueTasks > 0 ? "Needs a look today" : "Nothing past due",
-      "#DC2626",
-      true,
-    ),
-    attentionCount: newRequests + paymentFollowUp + overdueTasks,
+    attentionCount: newRequests + unpaidRemaining + overdueTasks,
   };
 }
 

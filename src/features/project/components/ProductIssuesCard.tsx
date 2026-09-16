@@ -105,6 +105,7 @@ export function ProductIssuesCard({
           uri: asset.uri,
           name: asset.name ?? "evidence",
           mimeType: asset.mimeType,
+          size: asset.size,
         })),
       ]);
     } catch {

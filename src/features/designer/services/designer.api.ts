@@ -1,17 +1,22 @@
 import { endpoints } from "../../../core/api/endpoints";
 import { httpClient } from "../../../core/api/httpClient";
-import { getAccessToken } from "../../../core/storage/secureStorage";
-import { env } from "../../../core/config/env";
+import { directUploadFile } from "../../../core/upload/directUpload";
 import { ApiResponse } from "../../../shared/types/api";
+import { unwrapPagedList, type PagedList } from "../../../shared/utils/pagedList";
 import {
   CreateProposalRequestDto,
   CreateProposalSceneRequestDto,
   DesignerCatalogProductDto,
   DesignerCatalogProductListResponseDto,
   DesignerCatalogProductsQuery,
+  DesignerAssignedProjectItemDto,
   DesignerCatalogVersionSummaryDto,
+  DesignerConfirmedMeasurementItemDto,
+  DesignerKpiListQuery,
   DesignerKpisDto,
   DesignerKpisQuery,
+  DesignerProposalConsultingItemDto,
+  DesignerRevisionRequestedItemDto,
   DesignerWorkQueueQuery,
   DesignerWorkQueueResponseDto,
   MeasurementImageUploadResponseDto,
@@ -23,20 +28,7 @@ import {
 } from "../models/designer.model";
 import { ProposalDetailDto, ProposalDto, ProposalSceneDto } from "../../project/models/proposal.model";
 import { normalizeProposalItems } from "../../project/utils/proposal.mapper";
-import {
-  MEASUREMENT_UPLOAD_TIMEOUT_MS,
-  prepareMeasurementImageForUpload,
-} from "../utils/measurementImages";
-
-let measurementUploadSequence = 0;
-
-function resolveApiUrl(path: string): string {
-  let apiUrl = env.apiUrl;
-  while (apiUrl.endsWith("/")) {
-    apiUrl = apiUrl.slice(0, -1);
-  }
-  return `${apiUrl}${path}`;
-}
+import { prepareMeasurementImageForUpload } from "../utils/measurementImages";
 
 function sanitizeUploadFileName(name: string, mimeType: string): string {
   const trimmed = name.trim() || `measurement-${Date.now()}.jpg`;
@@ -53,20 +45,60 @@ function sanitizeUploadFileName(name: string, mimeType: string): string {
   return `${safe}.jpg`;
 }
 
-function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
-}
 export async function getDesignerKpisApi(query: DesignerKpisQuery = {}): Promise<DesignerKpisDto> {
   const response = await httpClient.get<ApiResponse<DesignerKpisDto>>(endpoints.designerDashboard.kpis, {
     params: {
       scope: query.scope ?? "mine",
-      dateRange: query.dateRange ?? "thisWeek",
+      ...(query.dateRange ? { dateRange: query.dateRange } : {}),
       ...(query.search ? { search: query.search } : {}),
     },
   });
-  return response.data.data;
+  return response.data.data ?? {};
+}
+
+function designerKpiListParams(query: DesignerKpiListQuery, includeDateRange: boolean) {
+  return {
+    scope: query.scope ?? "mine",
+    ...(includeDateRange && query.dateRange ? { dateRange: query.dateRange } : {}),
+    page: query.page ?? 1,
+    limit: query.limit ?? 5,
+  };
+}
+
+export async function getDesignerConfirmedMeasurementsApi(
+  query: DesignerKpiListQuery = {},
+): Promise<PagedList<DesignerConfirmedMeasurementItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.designerDashboard.confirmedMeasurements, {
+    params: designerKpiListParams(query, true),
+  });
+  return unwrapPagedList<DesignerConfirmedMeasurementItemDto>(response.data.data);
+}
+
+export async function getDesignerProposalConsultingApi(
+  query: DesignerKpiListQuery = {},
+): Promise<PagedList<DesignerProposalConsultingItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.designerDashboard.proposalConsulting, {
+    params: designerKpiListParams(query, true),
+  });
+  return unwrapPagedList<DesignerProposalConsultingItemDto>(response.data.data);
+}
+
+export async function getDesignerRevisionRequestedApi(
+  query: DesignerKpiListQuery = {},
+): Promise<PagedList<DesignerRevisionRequestedItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.designerDashboard.revisionRequested, {
+    params: designerKpiListParams(query, true),
+  });
+  return unwrapPagedList<DesignerRevisionRequestedItemDto>(response.data.data);
+}
+
+export async function getDesignerAssignedProjectsKpiApi(
+  query: DesignerKpiListQuery = {},
+): Promise<PagedList<DesignerAssignedProjectItemDto>> {
+  const response = await httpClient.get<ApiResponse<unknown>>(endpoints.designerDashboard.assignedProjects, {
+    params: designerKpiListParams(query, false),
+  });
+  return unwrapPagedList<DesignerAssignedProjectItemDto>(response.data.data);
 }
 
 export async function getDesignerWorkQueueApi(
@@ -200,7 +232,7 @@ export async function getProposalDetailForDesignerApi(proposalId: string): Promi
 export async function uploadScheduleMeasurementImageApi(
   input: UploadMeasurementImageInput,
 ): Promise<MeasurementImageUploadResponseDto> {
-  // Compress/resize on device first so multipart payloads stay ~200–500KB instead of multi‑MB.
+  // Compress/resize on device first so the signed upload stays a few hundred KB.
   const prepared = await prepareMeasurementImageForUpload({
     uri: input.uri,
     name: input.name,
@@ -208,70 +240,18 @@ export async function uploadScheduleMeasurementImageApi(
   });
   const mimeType = prepared.mimeType;
   const fileName = sanitizeUploadFileName(prepared.name, mimeType);
-  const formData = new FormData();
-  formData.append("file", {
-    uri: prepared.uri,
-    name: fileName,
-    type: mimeType,
-  } as unknown as Blob);
-  formData.append("visibility", input.visibility?.trim() || "STAFF_ONLY");
-  if (input.note?.trim()) {
-    formData.append("note", input.note.trim());
-  }
-  if (input.projectAreaId) {
-    formData.append("projectAreaId", input.projectAreaId);
-  }
-
-  measurementUploadSequence += 1;
-  const correlationId = `mobile-measure-${Date.now()}-${measurementUploadSequence}`;
-  const token = await getAccessToken();
-  const url = resolveApiUrl(endpoints.projectSchedules.measurementImages(input.scheduleId));
-
-  // Use fetch (not axios) so RN can set multipart boundary correctly — same pattern as customer file upload.
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      url,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "X-Correlation-ID": correlationId,
-        },
-        body: formData,
-      },
-      MEASUREMENT_UPLOAD_TIMEOUT_MS,
-    );
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("Upload timed out. Try again on a stronger connection or with fewer photos.");
-    }
-    throw error;
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | ApiResponse<MeasurementImageUploadResponseDto>
-    | { message?: string; errorCode?: string | null; errors?: unknown }
-    | null;
-
-  if (!response.ok) {
-    const errorCode =
-      payload && typeof payload === "object" && "errorCode" in payload
-        ? payload.errorCode
-        : null;
-    const message =
-      (payload && typeof payload === "object" && "message" in payload && payload.message?.trim()) ||
-      `Upload failed with status ${response.status}.`;
-    const error = new Error(message) as Error & { errorCode?: string | null; status?: number };
-    error.errorCode = errorCode;
-    error.status = response.status;
-    throw error;
-  }
-
-  if (payload && typeof payload === "object" && "data" in payload && payload.data) {
-    return payload.data;
-  }
-
-  throw new Error("Upload succeeded but response payload was empty.");
+  return directUploadFile<MeasurementImageUploadResponseDto>({
+    preparePath: endpoints.projectSchedules.measurementImageUploadUrl(input.scheduleId),
+    completePath: endpoints.projectSchedules.measurementImageComplete(input.scheduleId),
+    file: {
+      uri: prepared.uri,
+      name: fileName,
+      mimeType,
+    },
+    prepareBody: {
+      visibility: input.visibility?.trim() || "STAFF_ONLY",
+      note: input.note?.trim(),
+      projectAreaId: input.projectAreaId || undefined,
+    },
+  });
 }
