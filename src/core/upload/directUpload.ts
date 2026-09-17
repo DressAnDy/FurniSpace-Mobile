@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { httpClient } from "../api/httpClient";
 import { ApiResponse } from "../../shared/types/api";
+import { ensureReadableUploadUri } from "./readableFile";
 
 export type DirectUploadFile = {
   uri: string;
@@ -114,14 +115,25 @@ async function putRawFile(uri: string, uploadUrl: string, contentType: string): 
     return;
   }
 
-  const result = await FileSystem.uploadAsync(uploadUrl, uri, {
-    httpMethod: "PUT",
-    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-    headers: { "Content-Type": contentType },
-  });
+  try {
+    const result = await FileSystem.uploadAsync(uploadUrl, uri, {
+      httpMethod: "PUT",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers: { "Content-Type": contentType },
+    });
 
-  if (result.status < 200 || result.status >= 300) {
-    throw uploadError(`Storage rejected the upload (${result.status}).`, result.status);
+    if (result.status < 200 || result.status >= 300) {
+      throw uploadError(`Storage rejected the upload (${result.status}).`, result.status);
+    }
+  } catch (error) {
+    if (error instanceof Error && "status" in error && typeof error.status === "number") {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if (/isn't readable|uploadAsync/i.test(message)) {
+      throw uploadError("Could not read the selected file. Please choose it again.");
+    }
+    throw error instanceof Error ? error : uploadError("Upload failed.");
   }
 }
 
@@ -172,8 +184,10 @@ export async function directUploadFile<TComplete>(options: {
   prepareBody?: Record<string, unknown>;
   completeBody?: Record<string, unknown>;
 }): Promise<TComplete> {
-  const contentType = resolveUploadContentType(options.file.name, options.file.mimeType);
-  const fileSizeBytes = await resolveFileSize(options.file);
+  const localUri = await ensureReadableUploadUri(options.file.uri, options.file.name);
+  const file: DirectUploadFile = { ...options.file, uri: localUri };
+  const contentType = resolveUploadContentType(file.name, file.mimeType);
+  const fileSizeBytes = await resolveFileSize(file);
   if (fileSizeBytes <= 0) {
     throw uploadError("Could not read the selected file. Please choose it again.");
   }
@@ -183,7 +197,7 @@ export async function directUploadFile<TComplete>(options: {
     preparedResponse = await httpClient.post<ApiResponse<PrepareUploadResponse>>(
       options.preparePath,
       omitEmpty({
-        originalFileName: options.file.name.trim() || "upload.bin",
+        originalFileName: file.name.trim() || "upload.bin",
         contentType,
         fileSizeBytes,
         ...(options.prepareBody ?? {}),
@@ -216,7 +230,7 @@ export async function directUploadFile<TComplete>(options: {
   };
 
   try {
-    await putRawFile(options.file.uri, prepared.uploadUrl, prepared.contentType);
+    await putRawFile(file.uri, prepared.uploadUrl, prepared.contentType);
     return await complete();
   } catch (error) {
     const failure = readAxiosFailure(error);
@@ -227,7 +241,7 @@ export async function directUploadFile<TComplete>(options: {
       throw error instanceof Error && !axios.isAxiosError(error) ? error : toUploadError(error);
     }
 
-    await putRawFile(options.file.uri, prepared.uploadUrl, prepared.contentType);
+    await putRawFile(file.uri, prepared.uploadUrl, prepared.contentType);
     try {
       return await complete();
     } catch (retryError) {

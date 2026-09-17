@@ -22,6 +22,7 @@ import { fileIconDefinition, uploadIconDefinition } from "../../../icons/file/de
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
+import { copyPickedFileToCache } from "../../../core/upload/readableFile";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useCreateProjectMutation } from "../hooks/useProjects";
 import { CreateProjectRequestDto } from "../models/project.model";
@@ -238,19 +239,55 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
   };
 
   const handlePickFiles = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ["image/*", "application/pdf", "model/*", "application/octet-stream"],
-      multiple: true,
-      copyToCacheDirectory: true,
-    });
-    if (!result.canceled) {
-      setProjectFiles((current) => {
-        const existing = new Set(current.map((file) => `${file.name}:${file.size ?? 0}`));
-        return [
-          ...current,
-          ...result.assets.filter((file) => !existing.has(`${file.name}:${file.size ?? 0}`)),
-        ];
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf", "model/*", "application/octet-stream"],
+        multiple: true,
+        copyToCacheDirectory: true,
       });
+      if (result.canceled) {
+        return;
+      }
+
+      const copiedAssets: DocumentPicker.DocumentPickerAsset[] = [];
+      const failedNames: string[] = [];
+      for (const asset of result.assets) {
+        try {
+          const copied = await copyPickedFileToCache({
+            uri: asset.uri,
+            name: asset.name,
+            size: asset.size,
+          });
+          copiedAssets.push({
+            ...asset,
+            uri: copied.uri,
+            size: copied.size ?? asset.size,
+          });
+        } catch {
+          failedNames.push(asset.name);
+        }
+      }
+
+      if (copiedAssets.length > 0) {
+        setProjectFiles((current) => {
+          const existing = new Set(current.map((file) => `${file.name}:${file.size ?? 0}`));
+          return [
+            ...current,
+            ...copiedAssets.filter((file) => !existing.has(`${file.name}:${file.size ?? 0}`)),
+          ];
+        });
+      }
+
+      if (failedNames.length > 0) {
+        Alert.alert(
+          "Unable to attach file",
+          failedNames.length === 1
+            ? `${failedNames[0]} could not be read. Please choose it again.`
+            : `${failedNames.length} file(s) could not be read. Please choose them again.`,
+        );
+      }
+    } catch {
+      Alert.alert("Unable to pick files", "Please try again.");
     }
   };
 
