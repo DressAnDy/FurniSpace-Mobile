@@ -13,19 +13,17 @@ import { formatQuotationDepositLabel, hasVisibleDeposit, resolveQuotationDisplay
 import {
   useAcceptQuotationMutation,
   useQuotationDetailQuery,
-  useRejectQuotationMutation,
   useRequestQuotationRevisionMutation,
 } from "../hooks/useCustomerFlow";
 import {
   canAcceptQuotation,
-  canRejectQuotation,
   canRequestQuotationRevision,
 } from "../utils/project.customer-flow.mapper";
 import { QuotationStatus } from "../models/quotation.model";
 import { quotationDetailStyles as styles } from "./QuotationDetailScreen.styles";
 
 type Route = RouteProp<RootStackParamList, "QuotationDetail">;
-type ActionMode = "none" | "revision" | "reject";
+type ActionMode = "none" | "revision";
 
 function formatStatusLabel(status: QuotationStatus): string {
   return status.replaceAll("_", " ");
@@ -68,7 +66,6 @@ export function QuotationDetailScreen(): React.JSX.Element {
   const resolvedProjectId = projectId ?? quotation?.projectId ?? null;
   const acceptMutation = useAcceptQuotationMutation(resolvedProjectId);
   const revisionMutation = useRequestQuotationRevisionMutation(resolvedProjectId);
-  const rejectMutation = useRejectQuotationMutation(resolvedProjectId);
 
   const [actionMode, setActionMode] = useState<ActionMode>("none");
   const [reasonText, setReasonText] = useState("");
@@ -77,9 +74,8 @@ export function QuotationDetailScreen(): React.JSX.Element {
 
   const canAccept = quotation ? canAcceptQuotation(quotation.status) && !isExpired : false;
   const canRevise = quotation ? canRequestQuotationRevision(quotation.status) && !isExpired : false;
-  const canReject = quotation ? canRejectQuotation(quotation.status) : false;
-  const isBusy = acceptMutation.isPending || revisionMutation.isPending || rejectMutation.isPending;
-  const hasActions = (canAccept || canRevise || canReject) && actionMode === "none";
+  const isBusy = acceptMutation.isPending || revisionMutation.isPending;
+  const hasActions = (canAccept || canRevise) && actionMode === "none";
   const depositLabel = quotation ? formatQuotationDepositLabel(quotation) : "Deposit";
   const displayDepositAmount = quotation ? resolveQuotationDisplayDeposit(quotation) : 0;
 
@@ -131,26 +127,6 @@ export function QuotationDetailScreen(): React.JSX.Element {
             ]);
           },
           onError: (error) => Alert.alert("Unable to request revision", getCustomerFlowErrorMessage(error)),
-        },
-      );
-      return;
-    }
-
-    if (actionMode === "reject") {
-      rejectMutation.mutate(
-        { quotationId, rejectReason: reason },
-        {
-          onSuccess: () => {
-            Alert.alert("Quotation Rejected", "Sales has been notified.", [
-              {
-                text: "OK",
-                onPress: () => {
-                  if (resolvedProjectId) navigation.navigate("Tracking", { projectId: resolvedProjectId });
-                },
-              },
-            ]);
-          },
-          onError: (error) => Alert.alert("Unable to reject", getCustomerFlowErrorMessage(error)),
         },
       );
     }
@@ -310,19 +286,12 @@ export function QuotationDetailScreen(): React.JSX.Element {
                       <Text style={styles.secondaryButtonText}>Request Revision</Text>
                     </Pressable>
                   ) : null}
-                  {canReject ? (
-                    <Pressable style={styles.dangerButton} onPress={() => setActionMode("reject")}>
-                      <Text style={styles.dangerButtonText}>Reject Quotation</Text>
-                    </Pressable>
-                  ) : null}
                 </View>
               ) : null}
 
               {actionMode !== "none" ? (
                 <View style={styles.formCard}>
-                  <Text style={styles.formLabel}>
-                    {actionMode === "revision" ? "REVISION REASON" : "REJECT REASON"}
-                  </Text>
+                  <Text style={styles.formLabel}>REVISION REASON</Text>
                   <TextInput
                     style={styles.input}
                     multiline

@@ -321,17 +321,6 @@ export const quotationDetailStyles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-  dangerButton: {
-    backgroundColor: "#DC2626",
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  dangerButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "700",
-  },
   buttonDisabled: {
     opacity: 0.5,
   },
