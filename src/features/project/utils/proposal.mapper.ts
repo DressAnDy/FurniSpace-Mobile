@@ -5,7 +5,34 @@ function readString(value: unknown): string | undefined {
 }
 
 function readNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return undefined;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -58,6 +85,16 @@ export function normalizeProposalItem(raw: unknown, index = 0): ProposalItemSumm
     readString(record.proposalItemId) ?? readString(record.ProposalItemId) ?? readString(record.id) ?? `item-${index}`;
 
   const itemName = resolveProposalItemName(record) ?? `Item ${index + 1}`;
+  const unitPrice =
+    readNumber(record.unitPrice) ??
+    readNumber(record.UnitPrice) ??
+    readNumber(record.unitPriceSnapshot) ??
+    readNumber(record.UnitPriceSnapshot);
+  const totalAmount =
+    readNumber(record.totalAmount) ??
+    readNumber(record.TotalAmount) ??
+    readNumber(record.subtotalAmount) ??
+    readNumber(record.SubtotalAmount);
 
   return {
     proposalItemId,
@@ -65,8 +102,27 @@ export function normalizeProposalItem(raw: unknown, index = 0): ProposalItemSumm
     sceneId: readString(record.sceneId) ?? readString(record.SceneId) ?? null,
     itemName,
     quantity: readNumber(record.quantity) ?? readNumber(record.Quantity),
-    unitPrice: readNumber(record.unitPrice) ?? readNumber(record.UnitPrice),
-    totalAmount: readNumber(record.totalAmount) ?? readNumber(record.TotalAmount),
+    unitPrice,
+    totalAmount,
+    productNameSnapshot: readString(record.productNameSnapshot) ?? readString(record.ProductNameSnapshot) ?? null,
+    productVersionNameSnapshot:
+      readString(record.productVersionNameSnapshot) ??
+      readString(record.ProductVersionNameSnapshot) ??
+      readString(record.versionNameSnapshot) ??
+      readString(record.VersionNameSnapshot) ??
+      null,
+    materialSnapshot: readString(record.materialSnapshot) ?? readString(record.MaterialSnapshot) ?? null,
+    widthSnapshot: readNumber(record.widthSnapshot) ?? readNumber(record.WidthSnapshot) ?? null,
+    heightSnapshot: readNumber(record.heightSnapshot) ?? readNumber(record.HeightSnapshot) ?? null,
+    depthSnapshot: readNumber(record.depthSnapshot) ?? readNumber(record.DepthSnapshot) ?? null,
+    dimensionUnit: readString(record.dimensionUnit) ?? readString(record.DimensionUnit) ?? null,
+    sourceProductVersionId:
+      readString(record.sourceProductVersionId) ??
+      readString(record.SourceProductVersionId) ??
+      readString(record.productVersionId) ??
+      readString(record.ProductVersionId) ??
+      null,
+    isCustomized: readBoolean(record.isCustomized) ?? readBoolean(record.IsCustomized),
   };
 }
 
@@ -106,6 +162,15 @@ export function mergeProposalItems(
       unitPrice: item.unitPrice ?? enriched?.unitPrice,
       totalAmount: item.totalAmount ?? enriched?.totalAmount,
       sceneId: item.sceneId ?? enriched?.sceneId,
+      productNameSnapshot: item.productNameSnapshot ?? enriched?.productNameSnapshot,
+      productVersionNameSnapshot: item.productVersionNameSnapshot ?? enriched?.productVersionNameSnapshot,
+      materialSnapshot: item.materialSnapshot ?? enriched?.materialSnapshot,
+      widthSnapshot: item.widthSnapshot ?? enriched?.widthSnapshot,
+      heightSnapshot: item.heightSnapshot ?? enriched?.heightSnapshot,
+      depthSnapshot: item.depthSnapshot ?? enriched?.depthSnapshot,
+      dimensionUnit: item.dimensionUnit ?? enriched?.dimensionUnit,
+      sourceProductVersionId: item.sourceProductVersionId ?? enriched?.sourceProductVersionId,
+      isCustomized: item.isCustomized ?? enriched?.isCustomized,
     };
   });
 }

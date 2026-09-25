@@ -30,6 +30,17 @@ export const queryKeys = {
     items: (proposalId: string, query?: { sceneId?: string; page?: number; limit?: number }) =>
       ["proposal", "items", proposalId, query ?? {}] as const,
   },
+  customization: {
+    byProject: (
+      projectId: string,
+      query?: {
+        proposalId?: string | null;
+        sourceProductVersionId?: string | null;
+        status?: string | null;
+      },
+    ) => ["customization", "project", projectId, query ?? {}] as const,
+    detail: (customizationRequestId: string) => ["customization", "detail", customizationRequestId] as const,
+  },
   quotation: {
     detail: (quotationId: string) => ["quotation", "detail", quotationId] as const,
   },

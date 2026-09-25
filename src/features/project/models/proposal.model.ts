@@ -56,8 +56,25 @@ export type ProposalItemSummaryDto = {
   totalAmount?: number;
   productNameSnapshot?: string | null;
   productVersionNameSnapshot?: string | null;
+  materialSnapshot?: string | null;
+  widthSnapshot?: number | null;
+  heightSnapshot?: number | null;
+  depthSnapshot?: number | null;
+  dimensionUnit?: string | null;
+  sourceProductVersionId?: string | null;
   isCustomized?: boolean;
 };
+
+const CUSTOMER_VISIBLE_PROPOSAL_STATUSES: readonly CustomerVisibleProposalStatus[] = [
+  "PUBLISHED",
+  "REVISION_REQUESTED",
+  "SELECTED",
+  "REJECTED",
+];
+
+export function isCustomerVisibleProposalStatus(status: string): status is CustomerVisibleProposalStatus {
+  return (CUSTOMER_VISIBLE_PROPOSAL_STATUSES as readonly string[]).includes(status);
+}
 
 export type ProposalItemListQuery = {
   sceneId?: string;

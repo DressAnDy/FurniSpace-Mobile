@@ -3,6 +3,7 @@ export const designerProjectTabs = [
   "Measurement",
   "Areas",
   "Catalog",
+  "Customization",
   "Chat",
 ] as const;
 

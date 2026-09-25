@@ -175,7 +175,10 @@ export async function navigateFromNotification(
     if (designer) {
       if (projectId) {
         options?.setActiveProjectId?.(projectId);
-        navigation.navigate("DesignerProjectDetail", { projectId, tab: "Overview" });
+        navigation.navigate("DesignerProjectDetail", {
+          projectId,
+          tab: type.includes("customization") ? "Customization" : "Overview",
+        });
         return;
       }
       navigateDesignerHome(navigation);
