@@ -7,6 +7,7 @@ import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../icons/navigation/definitions";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
+import { isCustomerVisibleProposalStatus } from "../models/proposal.model";
 import { useProjectProposalsQuery } from "../hooks/useCustomerFlow";
 import { customerFlowStyles as styles } from "./CustomerFlowScreen.styles";
 
@@ -30,7 +31,9 @@ export function ProjectProposalsScreen(): React.JSX.Element {
   const { projectId, projectName } = route.params;
   const proposalsQuery = useProjectProposalsQuery(projectId);
 
-  const proposals = proposalsQuery.data?.items ?? [];
+  const proposals = (proposalsQuery.data?.items ?? []).filter((proposal) =>
+    isCustomerVisibleProposalStatus(proposal.status),
+  );
 
   return (
     <View style={styles.screen}>

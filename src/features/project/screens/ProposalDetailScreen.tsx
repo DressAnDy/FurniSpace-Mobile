@@ -1,13 +1,25 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { queryKeys } from "../../../shared/constants/queryKeys";
+import { CustomerProposalCustomization } from "../../customization/components/CustomerProposalCustomization";
 import { getCustomerFlowErrorMessage } from "../utils/customer-flow.errors";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
-import { formatVndAmount } from "../../payment/utils/payment.mapper";
+import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import {
   useProposalDetailQuery,
   useRequestProposalRevisionMutation,
@@ -21,6 +33,7 @@ type Route = RouteProp<RootStackParamList, "ProposalDetail">;
 export function ProposalDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Route>();
+  const queryClient = useQueryClient();
   const { proposalId, projectId, projectName } = route.params;
 
   const proposalQuery = useProposalDetailQuery(proposalId);
@@ -31,14 +44,28 @@ export function ProposalDetailScreen(): React.JSX.Element {
 
   const [revisionNote, setRevisionNote] = useState("");
   const [showRevisionInput, setShowRevisionInput] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const canSelect = proposal ? canSelectProposal(proposal.status) : false;
   const canRevise = proposal ? canRequestProposalRevision(proposal.status) : false;
   const isBusy = selectFinalMutation.isPending || requestRevisionMutation.isPending;
 
-  const totalItemsAmount = useMemo(() => {
-    return (proposal?.items ?? []).reduce((sum, item) => sum + (item.totalAmount ?? 0), 0);
-  }, [proposal?.items]);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        proposalQuery.refetch(),
+        queryClient.refetchQueries({ queryKey: queryKeys.proposal.detail(proposalId) }),
+        queryClient.refetchQueries({ queryKey: ["proposal", "items", proposalId] }),
+        queryClient.refetchQueries({ queryKey: ["customization"] }),
+        resolvedProjectId
+          ? queryClient.refetchQueries({ queryKey: ["project", "proposals", resolvedProjectId] })
+          : Promise.resolve(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [proposalId, proposalQuery, queryClient, resolvedProjectId]);
 
   const handleSelectFinal = () => {
     Alert.alert(
@@ -93,7 +120,14 @@ export function ProposalDetailScreen(): React.JSX.Element {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={() => void handleRefresh()} tintColor="#C9A86A" />
+        }
+      >
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -126,6 +160,11 @@ export function ProposalDetailScreen(): React.JSX.Element {
                 <Text style={styles.noteText}>
                   Version {proposal.versionNo} · {proposal.status.replaceAll("_", " ")}
                 </Text>
+                {proposal.publishedAt ? (
+                  <Text style={[styles.noteText, { marginTop: 8 }]}>
+                    Published {formatTrackingDate(proposal.publishedAt)}
+                  </Text>
+                ) : null}
                 {proposal.revisionNote ? (
                   <Text style={[styles.noteText, { marginTop: 8 }]}>Revision note: {proposal.revisionNote}</Text>
                 ) : null}
@@ -143,30 +182,14 @@ export function ProposalDetailScreen(): React.JSX.Element {
                 </View>
               ) : null}
 
-              <View style={styles.card}>
-                <Text style={styles.cardLabel}>ITEMS ({proposal.items.length})</Text>
-                {proposal.items.length === 0 ? (
-                  <Text style={styles.emptyText}>No items listed yet.</Text>
-                ) : (
-                  proposal.items.map((item, index) => (
-                    <View key={item.proposalItemId} style={styles.itemRow}>
-                      <Text style={styles.itemName}>
-                        {item.itemName || item.productNameSnapshot || `Item ${index + 1}`}
-                        {item.quantity ? ` × ${item.quantity}` : ""}
-                      </Text>
-                      {item.totalAmount != null ? (
-                        <Text style={styles.itemAmount}>{formatVndAmount(item.totalAmount)}</Text>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-                {totalItemsAmount > 0 ? (
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Items subtotal</Text>
-                    <Text style={styles.totalValue}>{formatVndAmount(totalItemsAmount)}</Text>
-                  </View>
-                ) : null}
-              </View>
+              {resolvedProjectId ? (
+                <CustomerProposalCustomization
+                  projectId={resolvedProjectId}
+                  proposalId={proposal.proposalId}
+                  proposalStatus={proposal.status}
+                  items={proposal.items}
+                />
+              ) : null}
 
               {canSelect ? (
                 <Pressable

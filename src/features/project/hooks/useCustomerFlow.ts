@@ -99,12 +99,11 @@ export function useProposalDetailQuery(proposalId: string | null) {
     queryKey: queryKeys.proposal.detail(proposalId ?? "none"),
     enabled: isLoggedIn && Boolean(proposalId),
     queryFn: async () => {
-      const detail = await getProposalByIdApi(proposalId!);
-      if (detail.items.length > 0) {
-        return detail;
-      }
+      const [detail, itemsResponse] = await Promise.all([
+        getProposalByIdApi(proposalId!),
+        getProposalItemsApi(proposalId!, { limit: 50 }).catch(() => null),
+      ]);
 
-      const itemsResponse = await getProposalItemsApi(proposalId!, { limit: 50 }).catch(() => null);
       if (!itemsResponse) {
         return detail;
       }

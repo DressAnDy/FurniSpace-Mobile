@@ -110,6 +110,13 @@ export const endpoints = {
   proposalItems: {
     update: (itemId: string) => `/proposal-items/${itemId}`,
     delete: (itemId: string) => `/proposal-items/${itemId}`,
+    customizationRequests: (proposalItemId: string) =>
+      `/proposal-items/${proposalItemId}/customization-requests`,
+  },
+  customizationRequests: {
+    byProject: (projectId: string) => `/projects/${projectId}/customization-requests`,
+    detail: (customizationRequestId: string) => `/customization-requests/${customizationRequestId}`,
+    accept: (customizationRequestId: string) => `/customization-requests/${customizationRequestId}/accept`,
   },
   quotations: {
     detail: (quotationId: string) => `/quotations/${quotationId}`,

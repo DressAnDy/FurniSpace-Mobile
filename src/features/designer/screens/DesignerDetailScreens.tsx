@@ -22,6 +22,7 @@ import { useProjectDetailQuery } from "../../project/hooks/useProjects";
 import { getProjectStatusLabel, resolveProjectMemberDisplay } from "../../project/utils/project.mapper";
 import { getScheduleStartAt } from "../../project/services/project.tracking.api";
 import type { ProjectScheduleDto } from "../../project/models/project.tracking.model";
+import { DesignerCustomizationTab } from "../../customization/components/DesignerCustomizationTab";
 import { SaleProjectChatTab } from "../../sale/screens/SaleProjectChatTab";
 import { useCreateProjectAreaMutation, useSalePhaseDeadlinesQuery } from "../../sale/hooks/useSaleOps";
 import { formatSaleDate, getInitials, getSaleProjectStatusColors } from "../../sale/utils/sale.mapper";
@@ -115,6 +116,7 @@ export function DesignerProjectDetailScreen({ route }: Props): React.JSX.Element
         queryClient.refetchQueries({ queryKey: queryKeys.sale.measurementImages(projectId) }),
         queryClient.refetchQueries({ queryKey: queryKeys.designer.catalogProducts(projectId) }),
         queryClient.refetchQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) }),
+        queryClient.refetchQueries({ queryKey: ["customization"] }),
       ]);
     } finally {
       setIsRefreshing(false);
@@ -163,6 +165,7 @@ export function DesignerProjectDetailScreen({ route }: Props): React.JSX.Element
             />
           ) : null}
           {activeTab === "Catalog" ? <CatalogTab projectId={projectId} /> : null}
+          {activeTab === "Customization" ? <DesignerCustomizationTab projectId={projectId} /> : null}
         </ScrollView>
       )}
     </DesignerFrame>
