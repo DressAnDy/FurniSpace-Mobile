@@ -28,7 +28,14 @@ export const linking: LinkingOptions<RootStackParamList> = {
       SePayPayment: "sepay-payment",
       Tracking: {
         path: "tracking/:projectId?",
-        parse: { projectId: (value: string) => value },
+        parse: {
+          projectId: (value: string) => value,
+          issueId: (value: string) => value,
+        },
+        stringify: {
+          projectId: (value: string) => value,
+          issueId: (value: string) => value,
+        },
       },
       ProjectProposals: "projects/:projectId/proposals",
       ProposalDetail: "proposals/:proposalId",

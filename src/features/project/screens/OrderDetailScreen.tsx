@@ -14,11 +14,15 @@ import {
   hasPaidPayment,
 } from "../../payment/utils/payment.helpers";
 import { usePaymentsQuery } from "../../payment/hooks/usePayments";
+import { ProductIssuesCard } from "../components/ProductIssuesCard";
 import {
   useConfirmOrderDeliveryMutation,
 } from "../hooks/useProjectTracking";
 import { useOrderDetailQuery } from "../hooks/useCustomerFlow";
 import { useProjectDetailQuery } from "../hooks/useProjects";
+import { queryKeys } from "../../../shared/constants/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
+import { formatCustomerOrderLabel } from "../utils/order.mapper";
 import { orderDetailStyles as styles } from "./OrderDetailScreen.styles";
 
 type Route = RouteProp<RootStackParamList, "OrderDetail">;
@@ -26,6 +30,7 @@ type Route = RouteProp<RootStackParamList, "OrderDetail">;
 export function OrderDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Route>();
+  const queryClient = useQueryClient();
   const { orderId, projectId, projectName } = route.params;
 
   const orderQuery = useOrderDetailQuery(orderId);
@@ -105,7 +110,15 @@ export function OrderDetailScreen(): React.JSX.Element {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([orderQuery.refetch(), paymentsQuery.refetch(), projectQuery.refetch()]);
+      await Promise.all([
+        orderQuery.refetch(),
+        paymentsQuery.refetch(),
+        projectQuery.refetch(),
+        queryClient.refetchQueries({ queryKey: queryKeys.productIssue.byOrder(orderId) }),
+        resolvedProjectId
+          ? queryClient.refetchQueries({ queryKey: queryKeys.productIssue.byProject(resolvedProjectId) })
+          : Promise.resolve(),
+      ]);
     } finally {
       setIsRefreshing(false);
     }
@@ -131,7 +144,9 @@ export function OrderDetailScreen(): React.JSX.Element {
               </Text>
             </View>
           </View>
-          {order?.orderCode ? <Text style={styles.projectName}>{order.orderCode}</Text> : null}
+          {order ? (
+            <Text style={styles.projectName}>{formatCustomerOrderLabel(order)}</Text>
+          ) : null}
         </View>
 
         <View style={styles.content}>
@@ -199,6 +214,14 @@ export function OrderDetailScreen(): React.JSX.Element {
                   </View>
                 ))}
               </View>
+
+              <ProductIssuesCard
+                projectId={resolvedProjectId}
+                orderId={order.orderId}
+                orderItems={order.items}
+                allowCreate
+                title="My product issues"
+              />
 
               <View style={styles.actionCard}>
                 <Text style={styles.actionTitle}>Next action</Text>

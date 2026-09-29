@@ -3,6 +3,10 @@ import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { NotificationListItem } from "../models/notification.model";
 import { readMetadataString } from "./notification.metadata";
 import { resolveChatNotificationTarget } from "./notification.chatResolve";
+import {
+  extractProductIssueId,
+  isProductIssueNotification,
+} from "../../project/utils/productIssue.realtime";
 
 type NavigateFromNotificationOptions = {
   setActiveProjectId?: (projectId: string) => void;
@@ -244,6 +248,39 @@ export async function navigateFromNotification(
       }
       return;
     }
+  }
+
+  if (
+    isProductIssueNotification({
+      notificationType: item.notificationType,
+      referenceType: item.referenceType,
+      referenceId: item.referenceId,
+      metadata: item.metadata,
+    }) ||
+    referenceType === "DELIVERY_PRODUCT_ISSUE_REPORT"
+  ) {
+    const issueId =
+      extractProductIssueId({
+        notificationType: item.notificationType,
+        referenceType: item.referenceType,
+        referenceId: item.referenceId,
+        metadata: item.metadata,
+      }) ?? undefined;
+
+    if (sales && projectId) {
+      options?.setActiveProjectId?.(projectId);
+      navigation.navigate("SaleProjectDetail", { projectId, tab: "Issues" });
+      return;
+    }
+
+    if (projectId) {
+      options?.setActiveProjectId?.(projectId);
+      navigation.navigate("Tracking", { projectId, issueId });
+      return;
+    }
+
+    navigation.navigate("Tracking", { issueId });
+    return;
   }
 
   if (referenceType === "PRODUCTION_REQUEST" || type.includes("production")) {

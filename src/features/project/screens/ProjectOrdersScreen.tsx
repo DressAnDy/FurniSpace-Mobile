@@ -10,7 +10,7 @@ import { arrowLeftIconDefinition, chevronRightIconDefinition } from "../../../ic
 import { formatVndAmount } from "../../payment/utils/payment.mapper";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { prefetchOrderDetailQuery, useProjectOrdersQuery } from "../hooks/useCustomerFlow";
-import { resolveOrderDisplayTotal } from "../utils/order.mapper";
+import { formatCustomerOrderLabel, resolveOrderDisplayTotal } from "../utils/order.mapper";
 import { canPayOrderDeposit } from "../utils/project.customer-flow.mapper";
 import { OrderStatus } from "../models/order.model";
 import { projectOrdersStyles as styles } from "./ProjectOrdersScreen.styles";
@@ -19,15 +19,6 @@ type Route = RouteProp<RootStackParamList, "ProjectOrders">;
 
 function formatStatusLabel(status: OrderStatus | string): string {
   return status.replaceAll("_", " ");
-}
-
-function formatOrderShortCode(code: string): string {
-  const parts = code.split("-");
-  if (parts.length >= 3) {
-    return `${parts[0]}-...-${parts[parts.length - 1]}`;
-  }
-
-  return code;
 }
 
 function getStatusStyles(status: OrderStatus | string) {
@@ -97,8 +88,8 @@ export function ProjectOrdersScreen(): React.JSX.Element {
               {orders.map((order, index) => {
                 const statusStyles = getStatusStyles(order.status);
                 const needsDeposit = canPayOrderDeposit(order.status);
-                const orderCode = order.orderCode ?? order.orderId.slice(0, 8);
                 const displayTotal = resolveOrderDisplayTotal(order);
+                const orderLabel = formatCustomerOrderLabel(order, index);
 
                 return (
                   <Pressable
@@ -126,10 +117,12 @@ export function ProjectOrdersScreen(): React.JSX.Element {
                       </View>
                     </View>
 
-                    <Text style={styles.cardTitle}>Order #{orders.length - index}</Text>
-                    <Text style={styles.cardCode} numberOfLines={1}>
-                      {formatOrderShortCode(orderCode)}
-                    </Text>
+                    <Text style={styles.cardTitle}>{orderLabel}</Text>
+                    {order.createdAt ? (
+                      <Text style={styles.cardCode} numberOfLines={1}>
+                        Created {formatTrackingDate(order.createdAt)}
+                      </Text>
+                    ) : null}
 
                     {needsDeposit ? (
                       <View style={styles.depositDueBadge}>

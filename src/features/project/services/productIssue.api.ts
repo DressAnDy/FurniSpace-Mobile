@@ -62,9 +62,9 @@ export async function createProductIssueApi(input: CreateProductIssueInput): Pro
         orderItemId: input.orderItemId,
         issueType: input.issueType,
         description: input.description.trim(),
-        ...(input.deliveryItemId ? { deliveryItemId: input.deliveryItemId } : {}),
+        deliveryItemId: input.deliveryItemId ?? null,
         ...(input.affectedQuantity != null ? { affectedQuantity: input.affectedQuantity } : {}),
-        ...(evidenceFileIds.length > 0 ? { evidenceFileIds } : {}),
+        evidenceFileIds,
       },
     );
     return response.data.data;
@@ -99,7 +99,7 @@ export function getProductIssueErrorMessage(error: unknown, fallback = "Unable t
     return "You do not have permission to access product issues for this order.";
   }
   if (coded.status === 404) {
-    return "Product issues were not found for this project.";
+    return "Product issues endpoint was not found for this order.";
   }
 
   const messages: Record<string, string> = {
@@ -108,6 +108,8 @@ export function getProductIssueErrorMessage(error: unknown, fallback = "Unable t
     PRODUCT_ISSUE_DELIVERY_ITEM_ORDER_ITEM_MISMATCH: "The selected delivery item does not match this order item.",
     PRODUCT_ISSUE_FORBIDDEN: "You do not have permission to report an issue for this order.",
     PRODUCT_ISSUE_EVIDENCE_FILE_INVALID: "One or more evidence photos are not ready. Upload them again, then submit.",
+    REPORT_RESOLUTION_NOTE_TOO_LONG: "Resolution note must be at most 4000 characters.",
+    PRODUCT_ISSUE_RESOLUTION_NOTE_TOO_LONG: "Resolution note must be at most 4000 characters.",
   };
 
   if (coded.errorCode && messages[coded.errorCode]) {

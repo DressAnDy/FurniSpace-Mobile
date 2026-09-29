@@ -47,7 +47,7 @@ export function SaleIssuesTab({ projectId }: SaleIssuesTabProps): React.JSX.Elem
       </View>
 
       {scope === "CUSTOMER" ? (
-        <ProductIssuesCard projectId={projectId} allowCreate={false} />
+        <ProductIssuesCard projectId={projectId} allowCreate={false} title="Customer product issues" />
       ) : (
         <OperationalDelayPanel
           projectId={projectId}

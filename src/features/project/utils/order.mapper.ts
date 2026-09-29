@@ -159,3 +159,23 @@ export function normalizeOrderDetail(raw: unknown): OrderDetailDto {
     updatedAt: readString(record.updatedAt) ?? readString(record.UpdatedAt),
   };
 }
+
+/** Customer-facing order label without raw orderId / opaque code suffixes. */
+export function formatCustomerOrderLabel(
+  order: { orderCode?: string | null; status?: string | null; createdAt?: string | null },
+  index = 0,
+): string {
+  const status = order.status?.replaceAll("_", " ").trim();
+  if (status) {
+    return index > 0 ? `Order ${index + 1} · ${status}` : status;
+  }
+
+  if (order.createdAt) {
+    const date = new Date(order.createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      return `Order · ${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    }
+  }
+
+  return `Order ${index + 1}`;
+}
