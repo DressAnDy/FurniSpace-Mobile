@@ -16,9 +16,11 @@ import { arrowLeftIconDefinition, chevronDownIconDefinition } from "../../../ico
 import { calendarIconDefinition } from "../../../icons/project/definitions";
 import { checkIconDefinition, pendingIconDefinition } from "../../../icons/status/definitions";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { AppBottomNav } from "../../../shared/components/AppBottomNav";
 import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   canCustomerPayDeposit,
   canCustomerPayRemaining,
@@ -29,6 +31,7 @@ import {
 import type { MacroStageItem, PhaseDeadlineItemDto, ProjectScheduleDto } from "../models/project.tracking.model";
 import { ProjectSwitcherModal } from "../components/ProjectSwitcherModal";
 import { ProductIssuesCard } from "../components/ProductIssuesCard";
+import { useOrderDetailQuery } from "../hooks/useCustomerFlow";
 import { useActiveProjectSummary } from "../hooks/useProjects";
 import { useActiveProjectId, useProjectStore } from "../store/project.store";
 import {
@@ -51,6 +54,7 @@ import {
   getPhaseDeadlineMetricLabel,
   getPhaseDeadlineStatusColor,
 } from "../utils/project.tracking.mapper";
+import { formatCustomerOrderLabel } from "../utils/order.mapper";
 import { getProjectStatusLabel } from "../utils/project.mapper";
 import {
   resolveCustomerFlowDecision,
@@ -78,6 +82,7 @@ function mapStageUiState(uiState: MacroStageItem["uiState"]): TimelineVisualStat
 export function ProjectTrackingScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<TrackingRoute>();
+  const queryClient = useQueryClient();
   const { scrollPaddingBottom } = useBottomNavMetrics();
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const projectId = useActiveProjectId(route.params?.projectId);
@@ -99,19 +104,6 @@ export function ProjectTrackingScreen(): React.JSX.Element {
     refetchAll,
   });
 
-  const handlePullRefresh = useCallback(async () => {
-    if (!projectId) {
-      return;
-    }
-
-    setIsPullRefreshing(true);
-    try {
-      await refetchAll();
-    } finally {
-      setIsPullRefreshing(false);
-    }
-  }, [projectId, refetchAll]);
-
   const handleSelectProject = useCallback(
     (nextProjectId: string) => {
       prefetchProject(nextProjectId);
@@ -129,6 +121,45 @@ export function ProjectTrackingScreen(): React.JSX.Element {
 
   const upcomingSchedules = useMemo(() => getUpcomingSchedules(data?.schedules ?? []), [data?.schedules]);
   const primaryOrder = useMemo(() => getPrimaryOrder(data?.orders ?? []), [data?.orders]);
+  const trackingOrders = useMemo(
+    () => (data?.orders ?? []).filter((order) => order.status !== "CANCELLED"),
+    [data?.orders],
+  );
+  const [selectedIssueOrderId, setSelectedIssueOrderId] = useState<string | null>(null);
+  const issueOrderId = selectedIssueOrderId ?? primaryOrder?.orderId ?? null;
+  const issueOrderDetailQuery = useOrderDetailQuery(issueOrderId);
+
+  useEffect(() => {
+    if (!primaryOrder?.orderId) {
+      setSelectedIssueOrderId(null);
+      return;
+    }
+    setSelectedIssueOrderId((current) => {
+      if (current && trackingOrders.some((order) => order.orderId === current)) {
+        return current;
+      }
+      return primaryOrder.orderId;
+    });
+  }, [primaryOrder?.orderId, trackingOrders]);
+
+  const handlePullRefresh = useCallback(async () => {
+    if (!projectId) {
+      return;
+    }
+
+    setIsPullRefreshing(true);
+    try {
+      await Promise.all([
+        refetchAll(),
+        queryClient.refetchQueries({ queryKey: ["product-issue"] }),
+        issueOrderId
+          ? queryClient.refetchQueries({ queryKey: queryKeys.order.detail(issueOrderId) })
+          : Promise.resolve(),
+      ]);
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  }, [issueOrderId, projectId, queryClient, refetchAll]);
 
   const payments = data?.payments.items ?? [];
   const pendingStartFeePayment = useMemo(() => findPendingPayment(payments, "PROJECT_START_FEE"), [payments]);
@@ -510,7 +541,48 @@ export function ProjectTrackingScreen(): React.JSX.Element {
                 </Pressable>
               ) : null}
 
-              <ProductIssuesCard projectId={projectId} orderId={primaryOrder?.orderId ?? null} />
+              {trackingOrders.length > 0 ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardLabel}>REPORT FROM ORDER</Text>
+                  <Text style={styles.emptyHint}>
+                    Choose an order that already has delivered items, then report from My product issues below.
+                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                    {trackingOrders.map((order, index) => {
+                      const active = order.orderId === issueOrderId;
+                      return (
+                        <Pressable
+                          key={order.orderId}
+                          style={[
+                            {
+                              backgroundColor: active ? "#3A3330" : "#FFFFFF",
+                              borderColor: active ? "#3A3330" : "rgba(58,51,48,0.12)",
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                            },
+                          ]}
+                          onPress={() => setSelectedIssueOrderId(order.orderId)}
+                        >
+                          <Text style={{ color: active ? "#FFFFFF" : "#7A6F68", fontSize: 12, fontWeight: "700" }}>
+                            {formatCustomerOrderLabel(order, index)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+
+              <ProductIssuesCard
+                projectId={projectId}
+                orderId={issueOrderId}
+                orderItems={issueOrderDetailQuery.data?.items ?? null}
+                allowCreate
+                title="My product issues"
+                initialIssueId={route.params?.issueId ?? null}
+              />
 
               <View style={styles.completionCard}>
                 <View style={styles.completionIconWrap}>

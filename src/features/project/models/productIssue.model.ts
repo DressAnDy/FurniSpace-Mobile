@@ -19,6 +19,10 @@ export const DELIVERY_PRODUCT_ISSUE_TYPES: DeliveryProductIssueType[] = [
   "OTHER",
 ];
 
+export type ProductIssueReportResolutionStatus = "OPEN" | "RESOLVED";
+
+export type ProductIssueStatusFilter = "ALL" | "OPEN" | "RESOLVED";
+
 export type ProductIssueEvidenceFileDto = {
   fileId: string;
   fileLinkId: string;
@@ -43,6 +47,9 @@ export type ProductIssueReportDto = {
   reporterName: string | null;
   reportedAt: string;
   createdAt: string;
+  status?: ProductIssueReportResolutionStatus | null;
+  resolvedAt?: string | null;
+  resolutionNote?: string | null;
   evidenceFiles?: ProductIssueEvidenceFileDto[];
 };
 

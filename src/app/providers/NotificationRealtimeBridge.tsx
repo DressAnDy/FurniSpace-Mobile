@@ -17,6 +17,10 @@ import { resolveNotificationCategory } from "../../features/notification/utils/n
 import { queryKeys } from "../../shared/constants/queryKeys";
 import { subscribeAuthTokenRefresh } from "../../core/api/interceptors";
 import { isProjectRequestSubmittedEvent, invalidateSaleLeadInboxQueries } from "../../features/sale/utils/sale.lead.realtime";
+import {
+  invalidateProductIssueQueries,
+  isProductIssueNotification,
+} from "../../features/project/utils/productIssue.realtime";
 import { invalidateDashboardQueries } from "../../shared/utils/dashboardCache";
 
 export function NotificationRealtimeBridge(): null {
@@ -55,6 +59,16 @@ export function NotificationRealtimeBridge(): null {
 
       if (isProjectRequestSubmittedEvent(payload)) {
         invalidateSaleLeadInboxQueries(queryClient);
+      }
+
+      if (isProductIssueNotification(payload)) {
+        invalidateProductIssueQueries(queryClient, {
+          notificationType: payload.notificationType,
+          referenceType: payload.referenceType,
+          referenceId: payload.referenceId,
+          projectId: payload.projectId,
+          metadata: payload.metadata,
+        });
       }
 
       const isChatOnly =

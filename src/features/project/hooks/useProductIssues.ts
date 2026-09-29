@@ -45,8 +45,11 @@ export function useCreateProductIssueMutation() {
   return useMutation({
     mutationFn: (input: CreateProductIssueInput) => createProductIssueApi(input),
     onSuccess: (issue, input) => {
+      void queryClient.invalidateQueries({ queryKey: ["product-issue"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.productIssue.byOrder(input.orderId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.productIssue.byProject(issue.projectId) });
+      if (issue.projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.productIssue.byProject(issue.projectId) });
+      }
       queryClient.setQueryData(queryKeys.productIssue.detail(issue.deliveryProductIssueReportId), issue);
     },
   });
@@ -58,4 +61,8 @@ export function formatProductIssueTypeLabel(issueType: string): string {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+export function formatProductIssueStatusLabel(status: "OPEN" | "RESOLVED"): string {
+  return status === "RESOLVED" ? "Resolved" : "Open";
 }

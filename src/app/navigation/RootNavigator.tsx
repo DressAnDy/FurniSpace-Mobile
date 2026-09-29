@@ -75,7 +75,7 @@ export type RootStackParamList = {
   PaymentMethod: PaymentRouteParams;
   SePayPayment: PaymentRouteParams;
   PayOSPayment: PaymentRouteParams;
-  Tracking: { projectId?: string } | undefined;
+  Tracking: { projectId?: string; issueId?: string } | undefined;
   CreateProjectRequest: undefined;
   ProjectProposals: { projectId: string; projectName?: string };
   ProposalDetail: { proposalId: string; projectId?: string; projectName?: string };

@@ -55,6 +55,8 @@ export const NOTIFICATION_HUB_EVENTS = [
   "production.request.created",
   "production.request.completed",
   "production_item.cancelled",
+  "product_issue.reported",
+  "product_issue.resolved",
 ] as const;
 
 type NotificationEventHandler = (payload: RealtimeNotificationPayloadDto) => void;

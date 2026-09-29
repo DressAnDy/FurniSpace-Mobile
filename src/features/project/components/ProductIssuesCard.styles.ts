@@ -10,16 +10,27 @@ export const styles = StyleSheet.create({
     padding: 16,
   },
   headerRow: {
-    alignItems: "center",
+    alignItems: "flex-start",
     flexDirection: "row",
+    gap: 10,
     justifyContent: "space-between",
     marginBottom: 10,
+  },
+  headerTextWrap: {
+    flex: 1,
+    paddingRight: 4,
   },
   cardLabel: {
     color: "#7A6F68",
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.7,
+  },
+  headerHint: {
+    color: "#9B8F86",
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
   },
   reportButton: {
     backgroundColor: "rgba(201,168,106,0.14)",
@@ -40,6 +51,26 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  inlineLoading: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 8,
+  },
+  emptyBox: {
+    backgroundColor: "#FAF8F5",
+    borderColor: "rgba(58,51,48,0.06)",
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
+  emptyTitle: {
+    color: "#2C2420",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
   issueRow: {
     borderColor: "rgba(58,51,48,0.08)",
     borderRadius: 14,
@@ -48,15 +79,45 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11,
   },
+  issueTitleRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 8,
+  },
   issueTitle: {
     color: "#2C2420",
     fontSize: 14,
+    fontWeight: "700",
+  },
+  typeBadge: {
+    backgroundColor: "#F5EFE6",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  typeBadgeText: {
+    color: "#8A6D3B",
+    fontSize: 10,
     fontWeight: "700",
   },
   issueMeta: {
     color: "#7A6F68",
     fontSize: 11,
     marginTop: 3,
+  },
+  fieldHint: {
+    color: "#9B8F86",
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  evidenceActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  evidenceAction: {
+    flex: 1,
+    marginTop: 0,
   },
   modalBackdrop: {
     backgroundColor: "rgba(26,22,20,0.45)",
@@ -247,6 +308,68 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginTop: 4,
+  },
+  filterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  filterChip: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(58,51,48,0.12)",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+  },
+  filterChipActive: {
+    backgroundColor: "#3A3330",
+    borderColor: "#3A3330",
+  },
+  filterChipText: {
+    color: "#7A6F68",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  statusOpen: {
+    backgroundColor: "#FFF3E0",
+  },
+  statusOpenText: {
+    color: "#E65100",
+  },
+  statusResolved: {
+    backgroundColor: "#E8F5E9",
+  },
+  statusResolvedText: {
+    color: "#2E7D32",
+  },
+  evidenceThumb: {
+    borderRadius: 10,
+    height: 72,
+    marginTop: 8,
+    width: 72,
+  },
+  evidenceFileChip: {
+    alignItems: "center",
+    backgroundColor: "#FAF8F5",
+    borderColor: "rgba(58,51,48,0.08)",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  evidenceFileChipText: {
+    color: "#8A6D3B",
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
   },
   evidenceLink: {
     color: "#8A6D3B",
