@@ -25,8 +25,11 @@ import { quotationDetailStyles as styles } from "./QuotationDetailScreen.styles"
 type Route = RouteProp<RootStackParamList, "QuotationDetail">;
 type ActionMode = "none" | "revision";
 
-function formatStatusLabel(status: QuotationStatus): string {
-  return status.replaceAll("_", " ");
+function formatStatusLabel(status: QuotationStatus | string | null | undefined): string {
+  if (!status) {
+    return "Unknown";
+  }
+  return String(status).replaceAll("_", " ");
 }
 
 function getStatusStyles(status: QuotationStatus) {
@@ -114,6 +117,10 @@ export function QuotationDetailScreen(): React.JSX.Element {
     const reason = reasonText.trim();
     if (!reason) {
       Alert.alert("Reason required", "Please enter a reason.");
+      return;
+    }
+    if (reason.length > 1000) {
+      Alert.alert("Reason too long", "Reason must be at most 1000 characters.");
       return;
     }
 
@@ -299,7 +306,9 @@ export function QuotationDetailScreen(): React.JSX.Element {
                     placeholderTextColor="#9B8F86"
                     value={reasonText}
                     onChangeText={setReasonText}
+                    maxLength={1000}
                   />
+                  <Text style={styles.formLabel}>{reasonText.trim().length}/1000</Text>
                   <Pressable
                     style={[styles.primaryButton, { marginTop: 12 }, isBusy && styles.buttonDisabled]}
                     disabled={isBusy}

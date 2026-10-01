@@ -33,14 +33,17 @@ export function emptyCustomizationFormValues(): CustomizationFormValues {
 }
 
 function parsePositiveNumber(raw: string, label: string): { value: number | null; error?: string } {
-  const trimmed = raw.trim();
+  const trimmed = raw.trim().replace(",", ".");
   if (!trimmed) {
     return { value: null };
   }
 
   const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return { value: null, error: `${label} must be a number greater than 0.` };
+  if (!Number.isFinite(parsed)) {
+    return { value: null, error: `${label} must be a valid number.` };
+  }
+  if (parsed <= 0) {
+    return { value: null, error: `${label} must be greater than 0.` };
   }
 
   return { value: parsed };
@@ -81,8 +84,8 @@ export function validateCustomizationForm(
 
   if (!hasChange && !width.error && !height.error && !depth.error) {
     errors.form = options.includeChangeNote
-      ? "Add at least one change: description, material, color, dimensions, or a change note."
-      : "Add at least one change: description, material, color, or dimensions.";
+      ? "Select a proposal item, add a title, and provide at least one customization field."
+      : "Add a title and provide at least one customization field.";
   }
 
   if (errors.requestTitle || errors.requestedWidth || errors.requestedHeight || errors.requestedDepth || errors.form) {

@@ -90,7 +90,7 @@ export type RootStackParamList = {
   SaleKpiList: { kind: "unpaid-remaining" | "overdue-tasks" };
   SaleRequests: undefined;
   SaleProjects: undefined;
-  SaleMessages: undefined;
+  SaleMessages: { projectId?: string; chatId?: string } | undefined;
   SaleMore: undefined;
   SaleChat: {
     chatId: string;

@@ -4,7 +4,7 @@ import {
   HubConnectionState,
 } from "@microsoft/signalr";
 import { PaymentUpdatedRealtimeDto } from "../../features/payment/models/payment.model";
-import { getAccessToken } from "../storage/secureStorage";
+import { ensureFreshAccessToken } from "../api/interceptors";
 import {
   getHubUrl,
   getSignalRRetryDelay,
@@ -20,6 +20,8 @@ type PaymentEventHandler = (payload: PaymentUpdatedRealtimeDto) => void;
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+let allowReconnect = true;
 const handlers = new Set<PaymentEventHandler>();
 const joinedPaymentIds = new Set<string>();
 
@@ -58,11 +60,11 @@ function normalizePaymentUpdatedPayload(payload: unknown): PaymentUpdatedRealtim
   const paymentId = pickString(raw, "paymentId", "PaymentId");
   const projectId = pickString(raw, "projectId", "ProjectId");
   const paymentCode = pickString(raw, "paymentCode", "PaymentCode");
-  const status = pickString(raw, "status", "Status") as PaymentUpdatedRealtimeDto["status"] | null;
-  const paymentTransactionId = pickString(raw, "paymentTransactionId", "PaymentTransactionId");
-  const occurredAt = pickString(raw, "occurredAt", "OccurredAt");
+  const status = pickString(raw, "status", "Status");
+  const paymentTransactionId = pickString(raw, "paymentTransactionId", "PaymentTransactionId") ?? "";
+  const occurredAt = pickString(raw, "occurredAt", "OccurredAt") ?? new Date().toISOString();
 
-  if (!paymentId || !projectId || !paymentCode || !status || !paymentTransactionId || !occurredAt) {
+  if (!paymentId || !projectId || !paymentCode) {
     return null;
   }
 
@@ -70,7 +72,7 @@ function normalizePaymentUpdatedPayload(payload: unknown): PaymentUpdatedRealtim
     paymentId,
     projectId,
     paymentCode,
-    status,
+    status: status as PaymentUpdatedRealtimeDto["status"],
     amount: pickNumber(raw, "amount", "Amount"),
     paidAmount: pickNumber(raw, "paidAmount", "PaidAmount"),
     remainingAmount: pickNumber(raw, "remainingAmount", "RemainingAmount"),
@@ -80,6 +82,38 @@ function normalizePaymentUpdatedPayload(payload: unknown): PaymentUpdatedRealtim
     paidAt: pickString(raw, "paidAt", "PaidAt"),
     occurredAt,
   };
+}
+
+function clearReconnectTimer(): void {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function schedulePaymentHubReconnect(): void {
+  if (!allowReconnect || connectTask || reconnectTimer) {
+    return;
+  }
+
+  const delay = Math.min(2000 * 2 ** reconnectAttempt, 30000);
+  reconnectAttempt += 1;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void ensureFreshAccessToken().then((token) => {
+      if (!token || !allowReconnect) {
+        return;
+      }
+      void connectPaymentHub().then((connected) => {
+        if (connected) {
+          reconnectAttempt = 0;
+        } else {
+          schedulePaymentHubReconnect();
+        }
+      });
+    });
+  }, delay);
 }
 
 function attachEventHandlers(hub: HubConnection): void {
@@ -96,19 +130,15 @@ function attachEventHandlers(hub: HubConnection): void {
   });
 
   hub.onreconnected(async () => {
+    reconnectAttempt = 0;
     await rejoinActivePayments();
   });
 
-  hub.onclose((error) => {
+  hub.onclose(() => {
     if (connection === hub) {
       connection = null;
     }
-    if (error && joinedPaymentIds.size > 0 && !reconnectTimer) {
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        void connectPaymentHub();
-      }, 2000);
-    }
+    schedulePaymentHubReconnect();
   });
 }
 
@@ -162,7 +192,8 @@ export async function connectPaymentHub(): Promise<boolean> {
   }
 
   connectTask = (async () => {
-    const accessToken = await getAccessToken();
+    allowReconnect = true;
+    const accessToken = await ensureFreshAccessToken();
     if (!accessToken) {
       return false;
     }
@@ -171,13 +202,15 @@ export async function connectPaymentHub(): Promise<boolean> {
       return true;
     }
 
+    clearReconnectTimer();
+
     if (connection) {
       await connection.stop().catch(() => undefined);
       connection = null;
     }
 
     const hub = new HubConnectionBuilder()
-      .withUrl(getHubUrl("/hubs/payments"), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
+      .withUrl(getHubUrl("/hubs/payments"), getSignalRTransportOptions())
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: (context) =>
           getSignalRRetryDelay(context.previousRetryCount, context.retryReason),
@@ -190,7 +223,13 @@ export async function connectPaymentHub(): Promise<boolean> {
 
     const started = await safeHubStart(() => hub.start());
     if (started) {
+      reconnectAttempt = 0;
       await rejoinActivePayments();
+    } else {
+      if (connection === hub) {
+        connection = null;
+      }
+      schedulePaymentHubReconnect();
     }
 
     return started;
@@ -202,11 +241,10 @@ export async function connectPaymentHub(): Promise<boolean> {
 }
 
 export async function disconnectPaymentHub(): Promise<void> {
+  allowReconnect = false;
   joinedPaymentIds.clear();
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  clearReconnectTimer();
+  reconnectAttempt = 0;
 
   if (!connection) {
     return;
@@ -218,14 +256,8 @@ export async function disconnectPaymentHub(): Promise<void> {
 }
 
 export async function restartPaymentHub(): Promise<boolean> {
-  if (joinedPaymentIds.size === 0) {
-    return false;
-  }
-
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  clearReconnectTimer();
+  allowReconnect = true;
   const hub = connection;
   connection = null;
   await hub?.stop().catch(() => undefined);

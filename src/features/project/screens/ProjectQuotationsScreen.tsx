@@ -15,8 +15,11 @@ import { projectQuotationsStyles as styles } from "./ProjectQuotationsScreen.sty
 
 type Route = RouteProp<RootStackParamList, "ProjectQuotations">;
 
-function formatStatusLabel(status: QuotationStatus): string {
-  return status.replaceAll("_", " ");
+function formatStatusLabel(status: QuotationStatus | string | null | undefined): string {
+  if (!status) {
+    return "Unknown";
+  }
+  return String(status).replaceAll("_", " ");
 }
 
 function getStatusStyles(status: QuotationStatus) {

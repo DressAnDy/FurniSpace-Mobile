@@ -17,8 +17,11 @@ import { projectOrdersStyles as styles } from "./ProjectOrdersScreen.styles";
 
 type Route = RouteProp<RootStackParamList, "ProjectOrders">;
 
-function formatStatusLabel(status: OrderStatus | string): string {
-  return status.replaceAll("_", " ");
+function formatStatusLabel(status: OrderStatus | string | null | undefined): string {
+  if (!status) {
+    return "Unknown";
+  }
+  return String(status).replaceAll("_", " ");
 }
 
 function getStatusStyles(status: OrderStatus | string) {

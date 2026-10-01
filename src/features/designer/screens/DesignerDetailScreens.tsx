@@ -23,7 +23,6 @@ import { getProjectStatusLabel, resolveProjectMemberDisplay } from "../../projec
 import { getScheduleStartAt } from "../../project/services/project.tracking.api";
 import type { ProjectScheduleDto } from "../../project/models/project.tracking.model";
 import { DesignerCustomizationTab } from "../../customization/components/DesignerCustomizationTab";
-import { SaleProjectChatTab } from "../../sale/screens/SaleProjectChatTab";
 import { useCreateProjectAreaMutation, useSalePhaseDeadlinesQuery } from "../../sale/hooks/useSaleOps";
 import { formatSaleDate, getInitials, getSaleProjectStatusColors } from "../../sale/utils/sale.mapper";
 import type { DesignerProjectTab } from "../data/designer.mock";
@@ -133,41 +132,37 @@ export function DesignerProjectDetailScreen({ route }: Props): React.JSX.Element
         statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
       />
       <DesignerProjectTabs active={activeTab} projectId={projectId ?? undefined} />
-      {activeTab === "Chat" ? (
-        <SaleProjectChatTab projectId={projectId} />
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void handleRefresh()}
-              tintColor={DESIGNER.accent}
-            />
-          }
-          contentContainerStyle={detail.body}
-        >
-          {activeTab === "Overview" ? (
-            projectQuery.isLoading ? (
-              <ActivityIndicator color={DESIGNER.accent} />
-            ) : projectQuery.isError ? (
-              <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
-            ) : (
-              <OverviewTab projectId={projectId} />
-            )
-          ) : null}
-          {activeTab === "Measurement" ? <MeasurementTab projectId={projectId} /> : null}
-          {activeTab === "Areas" ? (
-            <AreasTab
-              projectId={projectId}
-              totalAreaSqm={project?.totalAreaSqm ?? null}
-              numberOfFloors={project?.numberOfFloors ?? null}
-            />
-          ) : null}
-          {activeTab === "Catalog" ? <CatalogTab projectId={projectId} /> : null}
-          {activeTab === "Customization" ? <DesignerCustomizationTab projectId={projectId} /> : null}
-        </ScrollView>
-      )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={DESIGNER.accent}
+          />
+        }
+        contentContainerStyle={detail.body}
+      >
+        {activeTab === "Overview" ? (
+          projectQuery.isLoading ? (
+            <ActivityIndicator color={DESIGNER.accent} />
+          ) : projectQuery.isError ? (
+            <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
+          ) : (
+            <OverviewTab projectId={projectId} />
+          )
+        ) : null}
+        {activeTab === "Measurement" ? <MeasurementTab projectId={projectId} /> : null}
+        {activeTab === "Areas" ? (
+          <AreasTab
+            projectId={projectId}
+            totalAreaSqm={project?.totalAreaSqm ?? null}
+            numberOfFloors={project?.numberOfFloors ?? null}
+          />
+        ) : null}
+        {activeTab === "Catalog" ? <CatalogTab projectId={projectId} /> : null}
+        {activeTab === "Customization" ? <DesignerCustomizationTab projectId={projectId} /> : null}
+      </ScrollView>
     </DesignerFrame>
   );
 }

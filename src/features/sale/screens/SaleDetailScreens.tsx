@@ -16,7 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { queryKeys } from "../../../shared/constants/queryKeys";
@@ -43,7 +43,7 @@ import {
 } from "../../payment/hooks/usePayments";
 import { formatVndAmount, getPaymentStatusLabel } from "../../payment/utils/payment.mapper";
 import type { PaymentStatus } from "../../payment/models/payment.model";
-import { type ProjectDetailTab } from "../data/sale.mock";
+import { projectTabs, type ProjectDetailTab } from "../data/sale.mock";
 import {
   useAssignProjectDesignerMutation,
   useAvailableDesignersQuery,
@@ -73,7 +73,6 @@ import {
 import { getQuotationStatusPillColors } from "../utils/sale.quotation.mapper";
 import { Avatar, DetailFixedActions, ProjectDetailHeader, ProjectTabs, SaleFrame } from "../components/SaleShared";
 import { SaleIssuesTab } from "../components/SaleIssuesTab";
-import { SaleProjectChatTab } from "./SaleProjectChatTab";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
 type ProjectProps = NativeStackScreenProps<RootStackParamList, "SaleProjectDetail">;
@@ -237,7 +236,11 @@ function shouldShowStartFeeSection(
 export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const activeTab: ProjectDetailTab = route.params?.tab ?? "Overview";
+  const requestedTab = route.params?.tab;
+  const activeTab: ProjectDetailTab =
+    requestedTab && (projectTabs as readonly string[]).includes(requestedTab)
+      ? (requestedTab as ProjectDetailTab)
+      : "Overview";
   const projectId = route.params?.projectId ?? null;
   const [scheduleModal, setScheduleModal] = useState(route.params?.openScheduleModal ?? false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -255,7 +258,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
     !project?.assignedDesignerId &&
     !project?.assignedDesigner &&
     (project?.status === "WAITING_FOR_DESIGNER_ASSIGNMENT" || Boolean(startFeeStatus?.isEligibleForDesignerAssignment));
-  const showFixedActions = activeTab !== "Chat" && Boolean(needsDesigner);
+  const showFixedActions = Boolean(needsDesigner);
   const bottomPad = showFixedActions ? 88 + Math.max(insets.bottom, 12) : 24;
 
   const handleRefresh = useCallback(async () => {
@@ -292,50 +295,46 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
         statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
       />
       <ProjectTabs active={activeTab} projectId={projectId ?? undefined} />
-      {activeTab === "Chat" ? (
-        <SaleProjectChatTab projectId={projectId} />
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => void handleRefresh()}
-              tintColor={SALE.gold}
-              colors={[SALE.gold]}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void handleRefresh()}
+            tintColor={SALE.gold}
+            colors={[SALE.gold]}
+          />
+        }
+        contentContainerStyle={[s.content, s.contentGap, { paddingTop: 16, paddingBottom: bottomPad }]}
+      >
+        {activeTab === "Overview" ? (
+          projectQuery.isLoading ? (
+            <ActivityIndicator color={SALE.gold} />
+          ) : projectQuery.isError ? (
+            <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
+          ) : (
+            <OverviewTab project={project} projectId={projectId} />
+          )
+        ) : null}
+        {activeTab === "Member" ? (
+          projectQuery.isLoading ? (
+            <ActivityIndicator color={SALE.gold} />
+          ) : (
+            <MemberTab
+              project={project}
+              projectId={projectId}
+              pickerOpen={pickerOpen}
+              onTogglePicker={() => setPickerOpen((open) => !open)}
+              onAssigned={() => setPickerOpen(false)}
             />
-          }
-          contentContainerStyle={[s.content, s.contentGap, { paddingTop: 16, paddingBottom: bottomPad }]}
-        >
-          {activeTab === "Overview" ? (
-            projectQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} />
-            ) : projectQuery.isError ? (
-              <Text style={s.centerMuted}>{getErrorMessage(projectQuery.error, "Unable to load project.")}</Text>
-            ) : (
-              <OverviewTab project={project} projectId={projectId} />
-            )
-          ) : null}
-          {activeTab === "Member" ? (
-            projectQuery.isLoading ? (
-              <ActivityIndicator color={SALE.gold} />
-            ) : (
-              <MemberTab
-                project={project}
-                projectId={projectId}
-                pickerOpen={pickerOpen}
-                onTogglePicker={() => setPickerOpen((open) => !open)}
-                onAssigned={() => setPickerOpen(false)}
-              />
-            )
-          ) : null}
-          {activeTab === "Files" ? <FilesTab projectId={projectId} /> : null}
-          {activeTab === "Schedules" ? (
-            <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
-          ) : null}
-          {activeTab === "Issues" ? <SaleIssuesTab projectId={projectId} /> : null}
-        </ScrollView>
-      )}
+          )
+        ) : null}
+        {activeTab === "Files" ? <FilesTab projectId={projectId} /> : null}
+        {activeTab === "Schedules" ? (
+          <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
+        ) : null}
+        {activeTab === "Issues" ? <SaleIssuesTab projectId={projectId} /> : null}
+      </ScrollView>
       {showFixedActions ? (
         <DetailFixedActions
           showAssignDesigner={Boolean(needsDesigner)}
@@ -986,12 +985,9 @@ function MemberTab({
     );
   }, [pickerOpen, phaseQuery.data, targetCompletionDate]);
 
-  const handleProposalPickerChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleProposalPickerValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") {
       setShowProposalPicker(false);
-    }
-    if (event.type === "dismissed" || !date) {
-      return;
     }
     setProposalDeadline(date);
   };
@@ -1190,7 +1186,8 @@ function MemberTab({
                       value={proposalDeadline}
                       mode="date"
                       display={Platform.OS === "ios" ? "spinner" : "default"}
-                      onChange={handleProposalPickerChange}
+                      onValueChange={handleProposalPickerValueChange}
+                      onDismiss={() => setShowProposalPicker(false)}
                     />
                     {Platform.OS === "ios" ? (
                       <Pressable
@@ -1457,12 +1454,12 @@ function CreateScheduleModal({
 
   const closePicker = () => setPickerMode(null);
 
-  const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handlePickerValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") {
       setPickerMode(null);
     }
 
-    if (event.type === "dismissed" || !date || !pickerMode) {
+    if (!pickerMode) {
       return;
     }
 
@@ -1475,9 +1472,11 @@ function CreateScheduleModal({
     if (pickerMode === "start") {
       const nextStart = applyTimeKeepDate(startAt, date);
       setStartAt(nextStart);
-      setEndAt((current) => (current.getTime() <= nextStart.getTime()
-        ? new Date(nextStart.getTime() + 2 * 60 * 60 * 1000)
-        : current));
+      setEndAt((current) =>
+        current.getTime() <= nextStart.getTime()
+          ? new Date(nextStart.getTime() + 2 * 60 * 60 * 1000)
+          : current,
+      );
       return;
     }
 
@@ -1578,7 +1577,8 @@ function CreateScheduleModal({
                   mode={pickerMode === "date" ? "date" : "time"}
                   display={Platform.OS === "ios" ? "spinner" : "default"}
                   minimumDate={pickerMode === "date" ? new Date() : undefined}
-                  onChange={handlePickerChange}
+                  onValueChange={handlePickerValueChange}
+                  onDismiss={closePicker}
                 />
                 {Platform.OS === "ios" ? (
                   <Pressable style={s.buttonSecondary} onPress={closePicker}>

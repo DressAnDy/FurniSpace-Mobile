@@ -1,4 +1,18 @@
-export type ProjectChatType = "SALES" | "DESIGNER" | "PRODUCTION" | "DELIVERY" | "GENERAL" | "INTERNAL";
+export type ProjectChatType =
+  | "SALES"
+  | "DESIGNER"
+  | "DESIGNER_SALES"
+  | "PRODUCTION"
+  | "DELIVERY"
+  | "GENERAL"
+  | "INTERNAL";
+
+/** Sales-visible channels, UI order: Customer → Designer → Production */
+export const SALE_CHAT_CHANNELS = ["SALES", "DESIGNER_SALES", "PRODUCTION"] as const;
+export type SaleChatChannel = (typeof SALE_CHAT_CHANNELS)[number];
+
+export const CUSTOMER_CHAT_CHANNELS = ["SALES", "DESIGNER"] as const;
+export type CustomerChatTab = (typeof CUSTOMER_CHAT_CHANNELS)[number];
 
 export type ProjectChatStatus = "OPEN" | "CLOSED" | "ARCHIVED";
 
@@ -107,9 +121,12 @@ export type ChatListItem = {
   initials: string;
   avatarColor: string;
   roleLabel: string;
+  channelLabel: string;
   preview: string;
   timeLabel: string;
   isOpen: boolean;
+  lastMessageSenderId: string | null;
+  lastMessageCreatedAt: string | null;
 };
 
 export type ChatMessageListItem = {
@@ -126,5 +143,3 @@ export type ChatMessageListItem = {
   createdAt: string;
   isDeleted: boolean;
 };
-
-export type CustomerChatTab = "SALES" | "DESIGNER";

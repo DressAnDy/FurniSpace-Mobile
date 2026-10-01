@@ -28,22 +28,40 @@ const CATEGORY_LABELS: Record<NotificationCategory, string> = {
 };
 
 export function resolveNotificationCategory(
-  notificationType: string,
+  notificationType: string | null | undefined,
   referenceType: string | null,
 ): NotificationCategory {
-  const type = notificationType.toLowerCase();
+  const type = (notificationType ?? "").toLowerCase();
 
   if (referenceType === "PAYMENT" || type.includes("payment")) {
     return "payment";
   }
 
   if (
+    referenceType === "PROJECT_CHAT_MESSAGE" ||
+    type.includes("project_chat") ||
+    type.includes("projectchat") ||
+    type.includes("chat")
+  ) {
+    return "chat";
+  }
+
+  if (
     referenceType === "ORDER" ||
     referenceType === "QUOTATION" ||
     type.includes("order") ||
-    type.includes("quotation")
+    type.includes("quotation") ||
+    type.includes("delivery")
   ) {
     return "order";
+  }
+
+  if (type.includes("proposal") || type.includes("customization")) {
+    return "proposal";
+  }
+
+  if (type.includes("production")) {
+    return "production";
   }
 
   return "project";
@@ -59,8 +77,8 @@ type NotificationVisual = {
   iconBackground: string;
 };
 
-function resolveNotificationVisual(notificationType: string, referenceType: string | null): NotificationVisual {
-  const type = notificationType.toLowerCase();
+function resolveNotificationVisual(notificationType: string | null | undefined, referenceType: string | null): NotificationVisual {
+  const type = (notificationType ?? "").toLowerCase();
 
   if (type.includes("chat") || referenceType === "PROJECT_CHAT_MESSAGE") {
     return { iconDefinition: chatIconDefinition, iconColor: "#7A6F68", iconBackground: "#F5F2ED" };
@@ -212,13 +230,13 @@ export function mapRealtimePayloadToListItem(payload: RealtimeNotificationPayloa
   const metadata = normalizeNotificationMetadata(payload.metadata);
   const isChatNotification = payload.referenceType === "PROJECT_CHAT_MESSAGE";
   const chatPresentation = isChatNotification
-    ? buildChatNotificationPresentation(payload.message, metadata)
+    ? buildChatNotificationPresentation(payload.message ?? "", metadata)
     : null;
 
   return {
     id: payload.notificationId,
     title: payload.title,
-    description: chatPresentation?.description ?? payload.message,
+    description: chatPresentation?.description ?? payload.message ?? "",
     projectLabel: chatPresentation?.projectLabel,
     previewText: chatPresentation?.previewText,
     timeLabel: formatNotificationTime(payload.createdAt || payload.occurredAt),

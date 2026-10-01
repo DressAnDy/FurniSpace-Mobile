@@ -1,19 +1,20 @@
 import { Platform } from "react-native";
 import { HttpTransportType, LogLevel } from "@microsoft/signalr";
+import { ensureFreshAccessToken } from "../api/interceptors";
 import { env } from "../config/env";
 
 export function getRealtimeBaseUrl(): string {
   const raw = (env.wsUrl || env.apiUrl).trim().replace(/\/$/, "");
 
+  let httpBase = raw;
   if (raw.startsWith("wss://")) {
-    return raw.replace(/^wss:\/\//, "https://").replace(/\/ws$/i, "");
+    httpBase = raw.replace(/^wss:\/\//, "https://");
+  } else if (raw.startsWith("ws://")) {
+    httpBase = raw.replace(/^ws:\/\//, "http://");
   }
 
-  if (raw.startsWith("ws://")) {
-    return raw.replace(/^ws:\/\//, "http://").replace(/\/ws$/i, "");
-  }
-
-  return raw.replace(/\/ws$/i, "");
+  // Hubs live on API host without trailing /api (same as VITE_API_BASE_URL).
+  return httpBase.replace(/\/ws$/i, "").replace(/\/api$/i, "");
 }
 
 export function getHubUrl(hubPath: string): string {
@@ -21,9 +22,13 @@ export function getHubUrl(hubPath: string): string {
   return `${getRealtimeBaseUrl()}${normalizedPath}`;
 }
 
-export function getSignalRTransportOptions(accessTokenFactory: () => Promise<string>) {
+/**
+ * Always pass JWT via accessTokenFactory (negotiate + WebSocket query).
+ * Do not rely on cookies alone on mobile.
+ */
+export function getSignalRTransportOptions() {
   return {
-    accessTokenFactory,
+    accessTokenFactory: async () => (await ensureFreshAccessToken()) ?? "",
     // Native WebSocket often fails against ASP.NET SignalR (proxy/TLS). Long polling is reliable on mobile.
     transport:
       Platform.OS === "web"
@@ -51,6 +56,7 @@ export function getSignalRRetryDelay(previousRetryCount: number, error?: Error):
 
 export async function safeHubStart(start: () => Promise<void>): Promise<boolean> {
   try {
+    await ensureFreshAccessToken();
     await start();
     return true;
   } catch {

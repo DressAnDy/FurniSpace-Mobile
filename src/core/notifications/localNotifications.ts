@@ -74,7 +74,7 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
 
 export async function showLocalNotification(input: {
   title: string;
-  body: string;
+  body: string | null | undefined;
   data?: Record<string, unknown>;
 }): Promise<void> {
   if (isExpoGo) {
@@ -105,7 +105,7 @@ export async function showLocalNotification(input: {
   await Notifications.scheduleNotificationAsync({
     content: {
       title: input.title,
-      body: input.body,
+      body: input.body ?? "",
       data: input.data ?? {},
       sound: true,
     },

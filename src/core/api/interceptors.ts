@@ -29,6 +29,70 @@ function shouldSkipRefresh(url?: string): boolean {
   );
 }
 
+function readJwtExpiryMs(token: string): number | null {
+  try {
+    const payloadPart = token.split(".")[1];
+    if (!payloadPart) {
+      return null;
+    }
+
+    const normalized = payloadPart.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const json = typeof globalThis.atob === "function" ? globalThis.atob(padded) : "";
+    if (!json) {
+      return null;
+    }
+    const payload = JSON.parse(json) as { exp?: number };
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function runTokenRefresh(): Promise<void> {
+  const savedRefreshToken = await getRefreshToken();
+  if (!savedRefreshToken) {
+    throw new Error("Missing refresh token");
+  }
+
+  refreshTask ??= (async () => {
+    const response = await postAuthJson(endpoints.auth.refresh, { refreshToken: savedRefreshToken });
+    const tokens = extractAuthTokensFromSetCookie(response.setCookieLines);
+    await setAuthTokens(tokens);
+    for (const handler of tokenRefreshHandlers) {
+      handler();
+    }
+  })().finally(() => {
+    refreshTask = null;
+  });
+
+  await refreshTask;
+}
+
+/**
+ * SignalR should refresh JWT before reconnect / negotiate when close to expiry.
+ */
+export async function ensureFreshAccessToken(skewMs = 60_000): Promise<string | null> {
+  const token = await getAccessToken();
+  if (!token) {
+    return null;
+  }
+
+  const expiresAt = readJwtExpiryMs(token);
+  const nearExpiry = expiresAt != null && expiresAt <= Date.now() + skewMs;
+  if (!nearExpiry) {
+    return token;
+  }
+
+  try {
+    await runTokenRefresh();
+  } catch {
+    // Keep current token; hub start may still work briefly.
+  }
+
+  return (await getAccessToken()) ?? token;
+}
+
 export function setupInterceptors(client: AxiosInstance): void {
   client.interceptors.request.use(async (config) => {
     const token = await getAccessToken();
@@ -56,18 +120,7 @@ export function setupInterceptors(client: AxiosInstance): void {
       originalRequest._retry = true;
 
       try {
-        refreshTask ??= (async () => {
-          const response = await postAuthJson(endpoints.auth.refresh, { refreshToken: savedRefreshToken });
-          const tokens = extractAuthTokensFromSetCookie(response.setCookieLines);
-          await setAuthTokens(tokens);
-          for (const handler of tokenRefreshHandlers) {
-            handler();
-          }
-        })().finally(() => {
-          refreshTask = null;
-        });
-
-        await refreshTask;
+        await runTokenRefresh();
         const accessToken = await getAccessToken();
         if (accessToken) {
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;

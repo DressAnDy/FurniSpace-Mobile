@@ -3,8 +3,9 @@ import {
   HubConnectionBuilder,
   HubConnectionState,
 } from "@microsoft/signalr";
-import { getAccessToken } from "../storage/secureStorage";
+import { ensureFreshAccessToken } from "../api/interceptors";
 import { RealtimeNotificationPayloadDto } from "../../features/notification/models/notification.model";
+import { NOTIFICATION_HUB_EVENTS } from "./notificationEvents";
 import {
   getHubUrl,
   getSignalRRetryDelay,
@@ -13,60 +14,19 @@ import {
   signalRLogLevel,
 } from "./signalr.config";
 
-export const NOTIFICATION_HUB_EVENTS = [
-  "project.request.submitted",
-  "project.request.accepted",
-  "project.more_information.requested",
-  "project.basic_information.updated",
-  "project.status.changed",
-  "notification.created",
-  "project.designer.assigned",
-  "proposal.published",
-  "proposal.revision.requested",
-  "proposal.selected",
-  "quotation.sent",
-  "quotation.accepted",
-  "quotation.revision_requested",
-  "quotation.revised",
-  "quotation.rejected",
-  "customization_request.submitted",
-  "customization_request.designer_reviewed",
-  "project_schedule.created",
-  "project_schedule.updated",
-  "project_schedule.confirmed",
-  "project_schedule.completed",
-  "project_schedule.cancelled",
-  "project_chat.message_sent",
-  "order.deposit.paid",
-  "order.updated",
-  "order.delivered",
-  "order.completed",
-  "order.item.delivery_updated",
-  "order.item.delivery_confirmed",
-  "payment.created",
-  "payment.processing",
-  "payment.updated",
-  "payment.expired",
-  "payment.cancelled",
-  "payment.paid",
-  "payment.transaction.failed",
-  "payment.transaction.cancelled",
-  "production.request.assigned",
-  "production.request.created",
-  "production.request.completed",
-  "production_item.cancelled",
-  "product_issue.reported",
-  "product_issue.resolved",
-] as const;
+export { NOTIFICATION_HUB_EVENTS } from "./notificationEvents";
 
-type NotificationEventHandler = (payload: RealtimeNotificationPayloadDto) => void;
+export type NotificationHubHandler = (
+  payload: RealtimeNotificationPayloadDto,
+  eventName: string,
+) => void;
 
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let allowReconnect = true;
-const handlers = new Set<NotificationEventHandler>();
+const handlers = new Set<NotificationHubHandler>();
 
 function getNotificationHubUrl(): string {
   return getHubUrl("/hubs/notifications");
@@ -89,7 +49,7 @@ function scheduleNotificationHubReconnect(): void {
 
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    void getAccessToken().then((token) => {
+    void ensureFreshAccessToken().then((token) => {
       if (!token || !allowReconnect) {
         return;
       }
@@ -97,18 +57,51 @@ function scheduleNotificationHubReconnect(): void {
       void connectNotificationHub().then((connected) => {
         if (connected) {
           reconnectAttempt = 0;
+        } else {
+          scheduleNotificationHubReconnect();
         }
       });
     });
   }, delay);
 }
 
+function normalizePayload(payload: unknown, eventName: string): RealtimeNotificationPayloadDto {
+  const raw = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const pickString = (...keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = raw[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  };
+
+  const metadataRaw = raw.metadata ?? raw.Metadata;
+  const metadata =
+    metadataRaw && typeof metadataRaw === "object" ? (metadataRaw as Record<string, unknown>) : undefined;
+
+  return {
+    notificationId: pickString("notificationId", "NotificationId"),
+    title: pickString("title", "Title") ?? eventName,
+    message: pickString("message", "Message"),
+    notificationType: pickString("notificationType", "NotificationType") ?? eventName,
+    projectId: pickString("projectId", "ProjectId"),
+    referenceType: pickString("referenceType", "ReferenceType"),
+    referenceId: pickString("referenceId", "ReferenceId"),
+    createdAt: pickString("createdAt", "CreatedAt") ?? new Date().toISOString(),
+    occurredAt: pickString("occurredAt", "OccurredAt") ?? new Date().toISOString(),
+    metadata,
+  };
+}
+
 function attachEventHandlers(hub: HubConnection): void {
   for (const eventName of NOTIFICATION_HUB_EVENTS) {
     hub.off(eventName);
-    hub.on(eventName, (payload: RealtimeNotificationPayloadDto) => {
+    hub.on(eventName, (payload: unknown) => {
+      const normalized = normalizePayload(payload, eventName);
       for (const handler of handlers) {
-        handler(payload);
+        handler(normalized, eventName);
       }
     });
   }
@@ -119,18 +112,16 @@ function attachLifecycleHandlers(hub: HubConnection): void {
     reconnectAttempt = 0;
   });
 
-  hub.onclose((error) => {
+  hub.onclose(() => {
     if (connection === hub) {
       connection = null;
     }
 
-    if (error) {
-      scheduleNotificationHubReconnect();
-    }
+    scheduleNotificationHubReconnect();
   });
 }
 
-export function subscribeNotificationHub(handler: NotificationEventHandler): () => void {
+export function subscribeNotificationHub(handler: NotificationHubHandler): () => void {
   handlers.add(handler);
   return () => {
     handlers.delete(handler);
@@ -152,7 +143,7 @@ export async function connectNotificationHub(): Promise<boolean> {
 
   connectTask = (async () => {
     allowReconnect = true;
-    const accessToken = await getAccessToken();
+    const accessToken = await ensureFreshAccessToken();
     if (!accessToken) {
       return false;
     }
@@ -174,7 +165,7 @@ export async function connectNotificationHub(): Promise<boolean> {
     }
 
     const hub = new HubConnectionBuilder()
-      .withUrl(getNotificationHubUrl(), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
+      .withUrl(getNotificationHubUrl(), getSignalRTransportOptions())
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: (retryContext) => {
           return getSignalRRetryDelay(retryContext.previousRetryCount, retryContext.retryReason);

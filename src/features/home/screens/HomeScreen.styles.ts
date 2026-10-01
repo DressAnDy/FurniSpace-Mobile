@@ -497,6 +497,27 @@ export const styles = StyleSheet.create({
   updateList: {
     gap: 0,
   },
+  updateEmptyCard: {
+    alignItems: "center",
+    backgroundColor: PAPER,
+    borderColor: "rgba(44,36,32,0.05)",
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 22,
+  },
+  updateEmptyTitle: {
+    color: INK,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  updateEmptyText: {
+    color: MUTED,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+  },
   updateCard: {
     backgroundColor: PAPER,
     borderColor: "rgba(44,36,32,0.05)",

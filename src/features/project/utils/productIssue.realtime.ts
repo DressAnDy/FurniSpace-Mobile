@@ -14,10 +14,10 @@ type ProductIssueEventSource = {
 };
 
 export function isProductIssueNotification(source: ProductIssueEventSource): boolean {
-  const type = (source.notificationType ?? "").toLowerCase();
+  const type = (source.notificationType ?? "").toLowerCase().replace(/[_\s]/g, ".");
   const referenceType = (source.referenceType ?? "").toUpperCase();
 
-  if (type.startsWith("product_issue.")) {
+  if (type.startsWith("product_issue.") || type.startsWith("product.issue.")) {
     return true;
   }
 
@@ -34,8 +34,12 @@ export function isProductIssueNotification(source: ProductIssueEventSource): boo
 }
 
 export function isProductIssueResolvedEvent(source: ProductIssueEventSource): boolean {
-  const type = (source.notificationType ?? "").toLowerCase();
-  return type.includes("product_issue.resolved") || type.includes("productissueresolved");
+  const type = (source.notificationType ?? "").toLowerCase().replace(/[_\s]/g, ".");
+  return (
+    type.includes("product_issue.resolved") ||
+    type.includes("product.issue.resolved") ||
+    type.includes("productissueresolved")
+  );
 }
 
 export function extractProductIssueId(source: ProductIssueEventSource): string | null {
