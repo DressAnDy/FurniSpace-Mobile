@@ -35,8 +35,8 @@ export function useSaleProjectOverviewRealtime({
       return;
     }
 
-    const unsubscribe = subscribeNotificationHub((payload) => {
-      if (!shouldRefreshProjectTracking(payload, projectId)) {
+    const unsubscribe = subscribeNotificationHub((payload, eventName) => {
+      if (!shouldRefreshProjectTracking(payload, projectId, eventName)) {
         return;
       }
 

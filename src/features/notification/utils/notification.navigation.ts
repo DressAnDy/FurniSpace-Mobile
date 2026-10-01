@@ -105,11 +105,11 @@ export async function navigateFromNotification(
     if (item.projectId) {
       options?.setActiveProjectId?.(item.projectId);
       if (sales) {
-        navigation.navigate("SaleProjectDetail", { projectId: item.projectId, tab: "Chat" });
+        navigation.navigate("SaleMessages", { projectId: item.projectId });
         return;
       }
       if (designer) {
-        navigation.navigate("DesignerProjectDetail", { projectId: item.projectId, tab: "Chat" });
+        navigation.navigate("DesignerMessages");
         return;
       }
       navigation.navigate("Messages", { projectId: item.projectId });

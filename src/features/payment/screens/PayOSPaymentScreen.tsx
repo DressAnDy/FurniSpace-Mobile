@@ -110,7 +110,7 @@ export function PayOSPaymentScreen(): React.JSX.Element {
         ...current,
         payment: {
           ...current.payment,
-          status: payload.status,
+          ...(payload.status ? { status: payload.status as typeof current.payment.status } : {}),
           paidAt: payload.paidAt,
         },
       };

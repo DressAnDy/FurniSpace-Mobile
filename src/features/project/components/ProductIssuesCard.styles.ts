@@ -288,6 +288,9 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 10,
   },
+  inputError: {
+    borderColor: "rgba(220,38,38,0.45)",
+  },
   detailBlock: {
     backgroundColor: "#FFFFFF",
     borderColor: "rgba(58,51,48,0.08)",

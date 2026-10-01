@@ -4,7 +4,7 @@ import {
   HubConnectionState,
 } from "@microsoft/signalr";
 import { ChatMessageDto, ProjectChatMessageSentPayload } from "../../features/communication/models/chat.model";
-import { getAccessToken } from "../storage/secureStorage";
+import { ensureFreshAccessToken } from "../api/interceptors";
 import {
   getHubUrl,
   getSignalRRetryDelay,
@@ -20,6 +20,8 @@ type ProjectChatEventHandler = (payload: ProjectChatMessageSentPayload) => void;
 let connection: HubConnection | null = null;
 let connectTask: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempt = 0;
+let allowReconnect = true;
 const handlers = new Set<ProjectChatEventHandler>();
 const joinedChatIds = new Set<string>();
 
@@ -105,6 +107,38 @@ function normalizeProjectChatPayload(payload: unknown): ProjectChatMessageSentPa
   };
 }
 
+function clearReconnectTimer(): void {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleProjectChatHubReconnect(): void {
+  if (!allowReconnect || connectTask || reconnectTimer || joinedChatIds.size === 0) {
+    return;
+  }
+
+  const delay = Math.min(2000 * 2 ** reconnectAttempt, 30000);
+  reconnectAttempt += 1;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    void ensureFreshAccessToken().then((token) => {
+      if (!token || !allowReconnect || joinedChatIds.size === 0) {
+        return;
+      }
+      void connectProjectChatHub().then((connected) => {
+        if (connected) {
+          reconnectAttempt = 0;
+        } else {
+          scheduleProjectChatHubReconnect();
+        }
+      });
+    });
+  }, delay);
+}
+
 function attachEventHandlers(hub: HubConnection): void {
   hub.off(PROJECT_CHAT_MESSAGE_SENT_EVENT);
   hub.on(PROJECT_CHAT_MESSAGE_SENT_EVENT, (payload: unknown) => {
@@ -119,19 +153,15 @@ function attachEventHandlers(hub: HubConnection): void {
   });
 
   hub.onreconnected(async () => {
+    reconnectAttempt = 0;
     await rejoinActiveChats();
   });
 
-  hub.onclose((error) => {
+  hub.onclose(() => {
     if (connection === hub) {
       connection = null;
     }
-    if (error && joinedChatIds.size > 0 && !reconnectTimer) {
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        void connectProjectChatHub();
-      }, 2000);
-    }
+    scheduleProjectChatHubReconnect();
   });
 }
 
@@ -141,7 +171,14 @@ async function rejoinActiveChats(): Promise<void> {
   }
 
   await Promise.all(
-    [...joinedChatIds].map((chatId) => connection!.invoke("JoinChat", chatId).catch(() => undefined)),
+    [...joinedChatIds].map((chatId) =>
+      connection!
+        .invoke("JoinChat", chatId)
+        .catch(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          await connection?.invoke("JoinChat", chatId).catch(() => undefined);
+        }),
+    ),
   );
 }
 
@@ -150,7 +187,10 @@ async function invokeJoinChat(chatId: string): Promise<void> {
     return;
   }
 
-  await connection.invoke("JoinChat", chatId).catch(() => undefined);
+  await connection.invoke("JoinChat", chatId).catch(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await connection?.invoke("JoinChat", chatId).catch(() => undefined);
+  });
 }
 
 async function ensureJoinedChat(chatId: string, attempt = 0): Promise<void> {
@@ -185,7 +225,8 @@ export async function connectProjectChatHub(): Promise<boolean> {
   }
 
   connectTask = (async () => {
-    const accessToken = await getAccessToken();
+    allowReconnect = true;
+    const accessToken = await ensureFreshAccessToken();
     if (!accessToken) {
       return false;
     }
@@ -194,13 +235,15 @@ export async function connectProjectChatHub(): Promise<boolean> {
       return true;
     }
 
+    clearReconnectTimer();
+
     if (connection) {
       await connection.stop().catch(() => undefined);
       connection = null;
     }
 
     const hub = new HubConnectionBuilder()
-      .withUrl(getHubUrl("/hubs/project-chat"), getSignalRTransportOptions(async () => (await getAccessToken()) ?? ""))
+      .withUrl(getHubUrl("/hubs/project-chat"), getSignalRTransportOptions())
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: (context) =>
           getSignalRRetryDelay(context.previousRetryCount, context.retryReason),
@@ -213,7 +256,13 @@ export async function connectProjectChatHub(): Promise<boolean> {
 
     const started = await safeHubStart(() => hub.start());
     if (started) {
+      reconnectAttempt = 0;
       await rejoinActiveChats();
+    } else {
+      if (connection === hub) {
+        connection = null;
+      }
+      scheduleProjectChatHubReconnect();
     }
 
     return started;
@@ -225,11 +274,10 @@ export async function connectProjectChatHub(): Promise<boolean> {
 }
 
 export async function disconnectProjectChatHub(): Promise<void> {
+  allowReconnect = false;
   joinedChatIds.clear();
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  clearReconnectTimer();
+  reconnectAttempt = 0;
 
   if (!connection) {
     return;
@@ -245,10 +293,8 @@ export async function restartProjectChatHub(): Promise<boolean> {
     return false;
   }
 
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  clearReconnectTimer();
+  allowReconnect = true;
   const hub = connection;
   connection = null;
   await hub?.stop().catch(() => undefined);

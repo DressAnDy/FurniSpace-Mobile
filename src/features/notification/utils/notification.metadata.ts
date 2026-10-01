@@ -56,8 +56,12 @@ export function inferChatTypeFromMessage(message: string): ProjectChatType | und
     return CHAT_TITLE_TO_TYPE[chatTitle];
   }
 
-  if (/design discussion/i.test(message)) {
-    return "DESIGNER";
+  if (/designer.?sales|design discussion/i.test(message)) {
+    return /designer.?sales/i.test(message) ? "DESIGNER_SALES" : "DESIGNER";
+  }
+
+  if (/production/i.test(message)) {
+    return "PRODUCTION";
   }
 
   if (/sales consultation/i.test(message)) {

@@ -1,15 +1,18 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { RealtimeNotificationPayloadDto } from "../../notification/models/notification.model";
+import { normalizeRealtimeEventKey } from "../../../core/realtime/notificationEvents";
 import { invalidateDashboardQueries } from "../../../shared/utils/dashboardCache";
 
 export function isProjectRequestSubmittedEvent(
-  payload: Pick<RealtimeNotificationPayloadDto, "notificationType" | "referenceType">,
+  payload: Pick<RealtimeNotificationPayloadDto, "notificationType" | "referenceType"> & {
+    eventKey?: string | null;
+  },
 ): boolean {
-  const type = (payload.notificationType ?? "").toLowerCase().replace(/[_\s]/g, ".");
+  const eventKey = normalizeRealtimeEventKey(payload.eventKey, payload.notificationType);
   return (
-    type.includes("project.request.submitted") ||
-    type.includes("projectrequestsubmitted") ||
-    ((payload.referenceType ?? "").toUpperCase() === "PROJECT" && type.includes("request.submitted"))
+    eventKey === "project.request.submitted" ||
+    eventKey.includes("project.request.submitted") ||
+    ((payload.referenceType ?? "").toUpperCase() === "PROJECT" && eventKey.includes("request.submitted"))
   );
 }
 

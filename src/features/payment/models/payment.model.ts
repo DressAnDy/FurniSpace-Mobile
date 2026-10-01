@@ -198,7 +198,7 @@ export type PaymentUpdatedRealtimeDto = {
   paymentId: string;
   projectId: string;
   paymentCode: string;
-  status: PaymentStatus;
+  status?: PaymentStatus | string | null;
   amount: number;
   paidAmount: number;
   remainingAmount: number;

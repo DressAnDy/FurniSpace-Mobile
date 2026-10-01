@@ -58,7 +58,7 @@ export type MarkReadResponseDto = {
 export type RealtimeNotificationPayloadDto = {
   notificationId: string | null;
   title: string;
-  message: string;
+  message: string | null;
   notificationType: string;
   projectId: string | null;
   referenceType: NotificationReferenceType;

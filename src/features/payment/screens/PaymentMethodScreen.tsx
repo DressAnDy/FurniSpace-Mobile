@@ -135,11 +135,24 @@ export function PaymentMethodScreen(): React.JSX.Element {
   const handleRealtimeUpdate = useCallback(
     (payload: PaymentUpdatedRealtimeDto) => {
       queryClient.setQueryData<PaymentDetailDto | null>(methodQueryKey, (current) =>
-        current ? { ...current, status: payload.status, paidAt: payload.paidAt } : current,
+        current
+          ? {
+              ...current,
+              ...(payload.status ? { status: payload.status as PaymentDetailDto["status"] } : {}),
+              paidAt: payload.paidAt,
+            }
+          : current,
       );
       queryClient.setQueryData<PaymentDetailDto>(
         ["payment", "detail", payload.paymentId],
-        (current) => (current ? { ...current, status: payload.status, paidAt: payload.paidAt } : current),
+        (current) =>
+          current
+            ? {
+                ...current,
+                ...(payload.status ? { status: payload.status as PaymentDetailDto["status"] } : {}),
+                paidAt: payload.paidAt,
+              }
+            : current,
       );
       void queryClient.invalidateQueries({ queryKey: ["payment", "list"] });
     },

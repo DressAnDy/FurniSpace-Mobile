@@ -22,6 +22,35 @@ async function ensureUploadsDirectory(directory: string): Promise<void> {
   await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
 }
 
+function candidateSourceUris(uri: string): string[] {
+  const candidates = [uri];
+
+  // Never decode content:// — Android ContentResolver needs the encoded form.
+  if (uri.startsWith("content://")) {
+    return candidates;
+  }
+
+  try {
+    const decoded = decodeURI(uri);
+    if (decoded !== uri) {
+      candidates.push(decoded);
+    }
+  } catch {
+    // Ignore malformed percent-encoding and keep the original URI.
+  }
+
+  return candidates;
+}
+
+async function isReadableLocalFile(uri: string): Promise<boolean> {
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    return info.exists && !info.isDirectory;
+  } catch {
+    return false;
+  }
+}
+
 async function copyViaBase64(from: string, to: string): Promise<void> {
   const base64 = await FileSystem.readAsStringAsync(from, {
     encoding: FileSystem.EncodingType.Base64,
@@ -29,6 +58,33 @@ async function copyViaBase64(from: string, to: string): Promise<void> {
   await FileSystem.writeAsStringAsync(to, base64, {
     encoding: FileSystem.EncodingType.Base64,
   });
+}
+
+async function copyViaFetch(from: string, to: string): Promise<void> {
+  const response = await fetch(from);
+  if (!response.ok) {
+    throw new Error(`Could not fetch selected file (${response.status}).`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCodePoint(byte);
+  }
+
+  if (typeof globalThis.btoa !== "function") {
+    throw new TypeError("Base64 encoding is unavailable on this device.");
+  }
+
+  await FileSystem.writeAsStringAsync(to, globalThis.btoa(binary), {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
+async function verifyCopiedFile(destination: string): Promise<boolean> {
+  const copied = await FileSystem.getInfoAsync(destination);
+  return copied.exists && !copied.isDirectory;
 }
 
 async function copyToAppUploads(uri: string, fileName: string): Promise<string> {
@@ -39,20 +95,51 @@ async function copyToAppUploads(uri: string, fileName: string): Promise<string> 
 
   await ensureUploadsDirectory(directory);
   const destination = `${directory}${Date.now()}-${sanitizeUploadFileName(fileName)}`;
-  const source = decodeURI(uri);
+  const sources = candidateSourceUris(uri);
+  let lastError: unknown;
 
-  try {
-    await FileSystem.copyAsync({ from: source, to: destination });
-  } catch {
-    await copyViaBase64(source, destination);
+  for (const source of sources) {
+    try {
+      await FileSystem.copyAsync({ from: source, to: destination });
+      if (await verifyCopiedFile(destination)) {
+        return destination;
+      }
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  const copied = await FileSystem.getInfoAsync(destination);
-  if (!copied.exists || copied.isDirectory) {
-    throw new Error("Could not copy the selected file. Please choose it again.");
+  // readAsStringAsync only supports file:// (and some SAF) URIs — not content://.
+  for (const source of sources) {
+    if (!source.startsWith("file://") && !source.startsWith("file:")) {
+      continue;
+    }
+
+    try {
+      await copyViaBase64(source, destination);
+      if (await verifyCopiedFile(destination)) {
+        return destination;
+      }
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return destination;
+  for (const source of sources) {
+    try {
+      await copyViaFetch(source, destination);
+      if (await verifyCopiedFile(destination)) {
+        return destination;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error("Could not copy the selected file. Please choose it again.");
 }
 
 /**
@@ -72,8 +159,7 @@ export async function ensureReadableUploadUri(uri: string, fileName: string): Pr
 
   const directory = uploadsDirectory();
   if (directory && uri.startsWith(directory)) {
-    const info = await FileSystem.getInfoAsync(uri);
-    if (info.exists && !info.isDirectory) {
+    if (await isReadableLocalFile(uri)) {
       return uri;
     }
   }
@@ -94,12 +180,30 @@ export async function copyPickedFileToCache(file: {
     return { uri: file.uri, size: file.size };
   }
 
-  const uri = await copyToAppUploads(file.uri, file.name);
-  const info = await FileSystem.getInfoAsync(uri);
-  const size =
-    info.exists && !info.isDirectory && typeof info.size === "number" && info.size > 0
-      ? info.size
-      : file.size;
+  const directory = uploadsDirectory();
+  if (directory && file.uri.startsWith(directory) && (await isReadableLocalFile(file.uri))) {
+    const info = await FileSystem.getInfoAsync(file.uri);
+    const size =
+      info.exists && !info.isDirectory && typeof info.size === "number" && info.size > 0
+        ? info.size
+        : file.size;
+    return { uri: file.uri, size };
+  }
 
-  return { uri, size };
+  try {
+    const uri = await copyToAppUploads(file.uri, file.name);
+    const info = await FileSystem.getInfoAsync(uri);
+    const size =
+      info.exists && !info.isDirectory && typeof info.size === "number" && info.size > 0
+        ? info.size
+        : file.size;
+
+    return { uri, size };
+  } catch (error) {
+    // Last resort: keep the picker URI if Expo already made it readable.
+    if (await isReadableLocalFile(file.uri)) {
+      return { uri: file.uri, size: file.size };
+    }
+    throw error;
+  }
 }

@@ -33,39 +33,8 @@ import { useHomeProjectRealtime } from "../../project/hooks/useHomeProjectRealti
 import { useProjectSwitcherPrefetch } from "../../project/hooks/useProjectSwitcherPrefetch";
 import { useProjectStore } from "../../project/store/project.store";
 import { resolveCustomerFlowDecision } from "../../project/utils/project.customer-flow.mapper";
+import { useRecentUpdates, type RecentUpdateItem } from "../hooks/useRecentUpdates";
 import { styles } from "./HomeScreen.styles";
-
-type UpdateItem = {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  tone: "primary" | "neutral";
-};
-
-const updates: UpdateItem[] = [
-  {
-    id: "u1",
-    title: "3D Proposal Ready for Review",
-    description: "Marcus uploaded the initial design concept — v2.1 available now",
-    time: "2h ago",
-    tone: "primary",
-  },
-  {
-    id: "u2",
-    title: "Message from Sales Team",
-    description: "Installation scheduled for June 27th at 9:00 AM",
-    time: "Yesterday",
-    tone: "neutral",
-  },
-  {
-    id: "u3",
-    title: "Quotation Document Shared",
-    description: "Your itemised quote is ready for review",
-    time: "3 days ago",
-    tone: "neutral",
-  },
-];
 
 export function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -76,6 +45,7 @@ export function HomeScreen(): React.JSX.Element {
   const { activeProject, activeProjectId, projectsQuery } = useActiveProjectSummary();
   const setActiveProjectId = useProjectStore((state) => state.setActiveProjectId);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const { updates } = useRecentUpdates(activeProject);
   const paymentsQuery = usePaymentsQuery(
     { projectId: activeProjectId ?? undefined, limit: 20 },
     { enabled: Boolean(activeProjectId) },
@@ -146,6 +116,13 @@ export function HomeScreen(): React.JSX.Element {
 
     return actions.find((action) => action.primary) ?? actions[0] ?? null;
   }, [activeProject, canPayStartFee]);
+
+  const openTracking = () => {
+    if (!activeProjectId) {
+      return;
+    }
+    navigation.navigate("Tracking", { projectId: activeProjectId });
+  };
 
   const handleFlowAction = () => {
     if (!activeProject || !primaryFlowAction) {
@@ -384,11 +361,12 @@ export function HomeScreen(): React.JSX.Element {
           <View style={styles.updateHeader}>
             <View style={styles.updateHeaderCopy}>
               <Text style={styles.updateTitle}>Recent Updates</Text>
-              <Text style={styles.updateSubtitle}>Latest activity on your project</Text>
+              <Text style={styles.updateSubtitle}>Latest progress on your project</Text>
             </View>
             <Pressable
               style={({ pressed }) => [styles.seeAllButton, pressed ? styles.seeAllPressed : null]}
-              onPress={() => navigation.navigate("Notifications")}
+              onPress={openTracking}
+              disabled={!activeProjectId}
             >
               <Text style={styles.seeAllText}>See all</Text>
               <AppIcon definition={chevronRightIconDefinition} size={11} color="#A8894E" strokeWidth={2} />
@@ -396,36 +374,10 @@ export function HomeScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.updateList}>
-            {updates.map((item, index) => (
-              <Pressable
-                key={item.id}
-                style={({ pressed }) => [
-                  styles.updateCard,
-                  index === updates.length - 1 ? styles.updateCardLast : null,
-                  item.tone === "primary" ? styles.updateCardPrimary : null,
-                  pressed ? styles.updateCardPressed : null,
-                ]}
-                onPress={() => navigation.navigate("Notifications")}
-              >
-                <View
-                  style={[
-                    styles.updateRail,
-                    item.tone === "primary" ? styles.updateRailPrimary : styles.updateRailNeutral,
-                  ]}
-                />
-                <View style={styles.updateBody}>
-                  <View style={styles.updateTitleRow}>
-                    <Text style={styles.updateCardTitle} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.updateTime}>{item.time}</Text>
-                  </View>
-                  <Text style={styles.updateCardDescription} numberOfLines={2}>
-                    {item.description}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
+            {renderRecentUpdatesContent({
+              updates,
+              onPressUpdate: openTracking,
+            })}
           </View>
         </View>
       </ScrollView>
@@ -441,6 +393,62 @@ export function HomeScreen(): React.JSX.Element {
 
       <AppBottomNav activeTab="home" />
     </View>
+  );
+}
+
+type RecentUpdatesContentProps = {
+  updates: RecentUpdateItem[];
+  onPressUpdate: () => void;
+};
+
+function renderRecentUpdatesContent({
+  updates,
+  onPressUpdate,
+}: RecentUpdatesContentProps): React.JSX.Element {
+  if (updates.length === 0) {
+    return (
+      <View style={styles.updateEmptyCard}>
+        <Text style={styles.updateEmptyTitle}>No progress yet</Text>
+        <Text style={styles.updateEmptyText}>
+          Project progress updates will appear here once you have an active project.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {updates.map((item, index) => (
+        <Pressable
+          key={item.id}
+          style={({ pressed }) => [
+            styles.updateCard,
+            index === updates.length - 1 ? styles.updateCardLast : null,
+            item.tone === "primary" ? styles.updateCardPrimary : null,
+            pressed ? styles.updateCardPressed : null,
+          ]}
+          onPress={onPressUpdate}
+        >
+          <View
+            style={[
+              styles.updateRail,
+              item.tone === "primary" ? styles.updateRailPrimary : styles.updateRailNeutral,
+            ]}
+          />
+          <View style={styles.updateBody}>
+            <View style={styles.updateTitleRow}>
+              <Text style={styles.updateCardTitle} numberOfLines={1}>
+                {item.title}
+              </Text>
+              <Text style={styles.updateTime}>{item.time}</Text>
+            </View>
+            <Text style={styles.updateCardDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
+    </>
   );
 }
 

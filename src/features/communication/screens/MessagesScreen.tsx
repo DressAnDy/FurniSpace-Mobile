@@ -21,7 +21,7 @@ import { useBottomNavMetrics } from "../../../shared/hooks/useBottomNavMetrics";
 import { useProjectsQuery } from "../../project/hooks/useProjects";
 import { useProjectStore } from "../../project/store/project.store";
 import { pickDefaultActiveProject } from "../../project/utils/project.mapper";
-import { useChatSearchQuery, useProjectChatsQuery } from "../hooks/useProjectChats";
+import { useChatSearchQuery, useCustomerProjectChatsQuery } from "../hooks/useProjectChats";
 import { ChatListItem, CustomerChatTab } from "../models/chat.model";
 import { formatChatTime, getCustomerTabLabel } from "../utils/chat.mapper";
 import { styles } from "./MessagesScreen.styles";
@@ -38,7 +38,7 @@ export function MessagesScreen(): React.JSX.Element {
   const projectId = activeProjectId;
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const chatsQuery = useProjectChatsQuery(projectId);
+  const chatsQuery = useCustomerProjectChatsQuery(projectId);
   const searchResultsQuery = useChatSearchQuery(projectId, debouncedSearchQuery);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LogBox } from "react-native";
+import { startScreenCaptureAllowGuard } from "../core/capture/screenCapture";
 import { configureLocalNotifications } from "../core/notifications/localNotifications";
 import { AppProvider } from "./providers/AppProvider";
 import { RootNavigator } from "./navigation/RootNavigator";
@@ -15,6 +16,7 @@ LogBox.ignoreLogs([
 export default function App(): React.JSX.Element {
   useEffect(() => {
     void configureLocalNotifications();
+    return startScreenCaptureAllowGuard();
   }, []);
 
   return (

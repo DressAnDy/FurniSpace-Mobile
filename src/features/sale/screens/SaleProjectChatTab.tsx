@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
   Alert,
@@ -12,43 +11,39 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { paperclipIconDefinition } from "../../../icons/file/definitions";
 import { sendIconDefinition } from "../../../icons/communication/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { useAuthStore } from "../../auth/store/auth.store";
 import { useChatActions, useVisibleChatMessages } from "../../communication/hooks/useChatMessages";
-import { useCloseProjectChatMutation, useProjectChatsQuery } from "../../communication/hooks/useProjectChats";
+import {
+  useCloseProjectChatMutation,
+  useSaleProjectChatsQuery,
+} from "../../communication/hooks/useProjectChats";
 import { useProjectChatRealtime } from "../../communication/hooks/useProjectChatRealtime";
-import type { ChatListItem, ChatMessageListItem, CustomerChatTab } from "../../communication/models/chat.model";
-import { mapChatMessageToListItem } from "../../communication/utils/chat.mapper";
+import type {
+  ChatListItem,
+  ChatMessageListItem,
+  SaleChatChannel,
+} from "../../communication/models/chat.model";
+import {
+  formatSaleChatSubtitle,
+  getSaleChannelLabel,
+  hasUnreadSaleChat,
+  mapChatMessageToListItem,
+} from "../../communication/utils/chat.mapper";
 import { styles as chatStyles } from "../../communication/screens/MessageChatScreen.styles";
 import { SALE, saleStyles as s } from "../styles/sale.styles";
 
 type SaleProjectChatTabProps = {
   projectId: string | null;
+  /** Optional deep-link chat selection */
+  initialChatId?: string | null;
 };
-
-function formatSaleChatSubtitle(chat: {
-  chatType: string;
-  roleLabel: string;
-  staffName: string;
-}): string {
-  const typeLabel = chat.chatType === "DESIGNER" ? "Designer" : "Sales";
-  const name = chat.staffName?.trim();
-  if (!name) {
-    return typeLabel;
-  }
-  const normalizedName = name.toLowerCase();
-  if (
-    normalizedName === typeLabel.toLowerCase() ||
-    normalizedName === chat.roleLabel.toLowerCase() ||
-    (normalizedName.includes("consultant") && chat.chatType === "SALES")
-  ) {
-    return typeLabel;
-  }
-  return `${typeLabel} · ${name}`;
-}
 
 function MessageBubble({
   item,
@@ -107,46 +102,63 @@ function MessageBubble({
   );
 }
 
-export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): React.JSX.Element {
+export function SaleProjectChatTab({
+  projectId,
+  initialChatId = null,
+}: SaleProjectChatTabProps): React.JSX.Element {
   const insets = useSafeAreaInsets();
-  const chatsQuery = useProjectChatsQuery(projectId);
+  const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.user?.accountId ?? null);
+  const chatsQuery = useSaleProjectChatsQuery(projectId);
   const closeChatMutation = useCloseProjectChatMutation(projectId);
-  const [activeType, setActiveType] = useState<CustomerChatTab>("SALES");
+  const [activeChatId, setActiveChatId] = useState<string | null>(initialChatId);
   const [draft, setDraft] = useState("");
+  const [readAtByChatId, setReadAtByChatId] = useState<Record<string, string>>({});
+  const [pendingUnreadByChatId, setPendingUnreadByChatId] = useState<Record<string, number>>({});
   const listRef = useRef<FlatList<ChatMessageListItem>>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
 
-  const salesChat = useMemo(
-    () => chatsQuery.data?.find((item) => item.chatType === "SALES") ?? null,
-    [chatsQuery.data],
-  );
-  const designerChat = useMemo(
-    () => chatsQuery.data?.find((item) => item.chatType === "DESIGNER") ?? null,
-    [chatsQuery.data],
-  );
+  const visibleChats = chatsQuery.data ?? [];
+  const joinedChatIds = useMemo(() => visibleChats.map((chat) => chat.chatId), [visibleChats]);
 
   useEffect(() => {
-    if (activeType === "SALES" && !salesChat && designerChat) {
-      setActiveType("DESIGNER");
+    if (visibleChats.length === 0) {
+      setActiveChatId(null);
       return;
     }
-    if (activeType === "DESIGNER" && !designerChat && salesChat) {
-      setActiveType("SALES");
-    }
-  }, [activeType, designerChat, salesChat]);
 
-  const activeChat: ChatListItem | null = activeType === "DESIGNER" ? designerChat : salesChat;
+    setActiveChatId((current) => {
+      if (current && visibleChats.some((chat) => chat.chatId === current)) {
+        return current;
+      }
+      if (initialChatId && visibleChats.some((chat) => chat.chatId === initialChatId)) {
+        return initialChatId;
+      }
+      return visibleChats[0].chatId;
+    });
+  }, [initialChatId, visibleChats]);
+
+  const activeChat: ChatListItem | null =
+    visibleChats.find((chat) => chat.chatId === activeChatId) ?? visibleChats[0] ?? null;
   const chatId = activeChat?.chatId ?? null;
   const isChatOpen = activeChat?.status === "OPEN";
 
+  useEffect(() => {
+    if (!chatId) {
+      return;
+    }
+    const now = new Date().toISOString();
+    setReadAtByChatId((current) => ({ ...current, [chatId]: now }));
+    setPendingUnreadByChatId((current) => ({ ...current, [chatId]: 0 }));
+  }, [chatId]);
+
   const messagesQuery = useVisibleChatMessages(chatId);
-  const { sendTextMutation, sendFileMutation, appendMessageToCache } = useChatActions(
+  const { sendTextMutation, appendMessageToCache } = useChatActions(
     chatId,
     projectId,
     messagesQuery.setMessages,
   );
   const displayMessages = [...messagesQuery.messages].reverse();
-  const isSendingFile = sendFileMutation.isPending;
 
   useEffect(() => {
     for (const message of messagesQuery.messages) {
@@ -155,17 +167,34 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
   }, [messagesQuery.messages]);
 
   const handleRealtimeMessage = useCallback(
-    (payload: { message: Parameters<typeof mapChatMessageToListItem>[0] }) => {
+    (payload: { projectId: string; chatId: string; message: Parameters<typeof mapChatMessageToListItem>[0] }) => {
+      if (projectId && payload.projectId === projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(projectId) });
+      }
+
       if (knownMessageIdsRef.current.has(payload.message.messageId)) {
         return;
       }
       knownMessageIdsRef.current.add(payload.message.messageId);
-      appendMessageToCache(payload.message);
+
+      if (payload.chatId === chatId) {
+        appendMessageToCache(payload.message);
+        return;
+      }
+
+      const myId = currentUserId ? String(currentUserId) : "";
+      const senderId = String(payload.message.senderId ?? "");
+      if (myId && senderId && senderId !== myId) {
+        setPendingUnreadByChatId((current) => ({
+          ...current,
+          [payload.chatId]: (current[payload.chatId] ?? 0) + 1,
+        }));
+      }
     },
-    [appendMessageToCache],
+    [appendMessageToCache, chatId, currentUserId, projectId, queryClient],
   );
 
-  useProjectChatRealtime(chatId, handleRealtimeMessage);
+  useProjectChatRealtime(joinedChatIds, handleRealtimeMessage);
 
   const handleSendText = () => {
     const content = draft.trim();
@@ -183,47 +212,6 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
         Alert.alert("Unable to send message", getErrorMessage(error, "Please try again."));
       },
     });
-  };
-
-  const handlePickFile = async () => {
-    if (!isChatOpen || isSendingFile || !chatId) {
-      return;
-    }
-
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
-
-      if (result.canceled || !result.assets[0]) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      sendFileMutation.mutate(
-        {
-          file: {
-            uri: asset.uri,
-            name: asset.name ?? "attachment",
-            type: asset.mimeType ?? "application/octet-stream",
-            size: asset.size,
-          },
-          content: draft.trim() || undefined,
-        },
-        {
-          onSuccess: (message) => {
-            knownMessageIdsRef.current.add(message.messageId);
-            setDraft("");
-          },
-          onError: (error) => {
-            Alert.alert("Unable to send file", getErrorMessage(error, "Please try again."));
-          },
-        },
-      );
-    } catch {
-      Alert.alert("Unable to pick file", "Please try again.");
-    }
   };
 
   const handleCloseChat = () => {
@@ -271,12 +259,13 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
     );
   }
 
-  if (!salesChat && !designerChat) {
+  if (visibleChats.length === 0) {
     return (
       <View style={[chatStyles.centerState, { flex: 1, paddingHorizontal: 24 }]}>
         <Text style={chatStyles.emptyThreadTitle}>No chats yet</Text>
         <Text style={chatStyles.emptyThreadText}>
-          Sales chat is created when the project is claimed. Designer chat appears after assigning a designer.
+          Conversations with the customer, designer, and production will show up here when they are available for this
+          project.
         </Text>
       </View>
     );
@@ -288,22 +277,28 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
     <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {salesChat ? (
-            <Pressable
-              style={[s.typeOption, activeType === "SALES" && s.chipActive, { flex: 1 }]}
-              onPress={() => setActiveType("SALES")}
-            >
-              <Text style={[s.chipText, activeType === "SALES" && s.chipTextActive]}>Sales</Text>
-            </Pressable>
-          ) : null}
-          {designerChat ? (
-            <Pressable
-              style={[s.typeOption, activeType === "DESIGNER" && s.chipActive, { flex: 1 }]}
-              onPress={() => setActiveType("DESIGNER")}
-            >
-              <Text style={[s.chipText, activeType === "DESIGNER" && s.chipTextActive]}>Designer</Text>
-            </Pressable>
-          ) : null}
+          {visibleChats.map((chat) => {
+            const active = chat.chatId === chatId;
+            const channel = chat.chatType as SaleChatChannel;
+            const unread = hasUnreadSaleChat(
+              chat,
+              currentUserId,
+              readAtByChatId[chat.chatId],
+              pendingUnreadByChatId[chat.chatId] ?? 0,
+            );
+            return (
+              <Pressable
+                key={chat.chatId}
+                style={[s.typeOption, active && s.chipActive, { flex: 1 }]}
+                onPress={() => setActiveChatId(chat.chatId)}
+              >
+                <Text style={[s.chipText, active && s.chipTextActive]} numberOfLines={1}>
+                  {getSaleChannelLabel(channel)}
+                </Text>
+                {unread && !active ? <View style={s.chatChannelUnreadDot} /> : null}
+              </Pressable>
+            );
+          })}
         </View>
 
         {activeChat ? (
@@ -376,7 +371,9 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
         ) : displayMessages.length === 0 ? (
           <View style={chatStyles.emptyThreadState}>
             <Text style={chatStyles.emptyThreadTitle}>Start the conversation</Text>
-            <Text style={chatStyles.emptyThreadText}>Send a message to the customer or designer thread.</Text>
+            <Text style={chatStyles.emptyThreadText}>
+              Send a text message on this channel. Files from others still appear inline.
+            </Text>
           </View>
         ) : (
           <FlatList
@@ -411,15 +408,7 @@ export function SaleProjectChatTab({ projectId }: SaleProjectChatTabProps): Reac
 
       <View style={[chatStyles.composerWrap, { paddingBottom: composerBottomPadding }]}>
         <View style={chatStyles.composer}>
-          <Pressable
-            disabled={!isChatOpen || isSendingFile}
-            style={[chatStyles.composerIconButton, !isChatOpen && chatStyles.composerDisabled]}
-            onPress={() => void handlePickFile()}
-          >
-            <AppIcon definition={paperclipIconDefinition} size={16} color="#7A6F68" />
-          </Pressable>
-
-          <View style={[chatStyles.composerInputWrap, !isChatOpen && chatStyles.composerDisabled]}>
+          <View style={[chatStyles.composerInputWrap, !isChatOpen && chatStyles.composerDisabled, { marginLeft: 0 }]}>
             <TextInput
               editable={isChatOpen}
               multiline

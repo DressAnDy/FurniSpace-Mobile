@@ -56,8 +56,8 @@ export function useProjectTrackingRealtime({
       return;
     }
 
-    const unsubscribe = subscribeNotificationHub((payload) => {
-      if (!shouldRefreshProjectTracking(payload, projectId)) {
+    const unsubscribe = subscribeNotificationHub((payload, eventName) => {
+      if (!shouldRefreshProjectTracking(payload, projectId, eventName)) {
         return;
       }
 
@@ -66,21 +66,22 @@ export function useProjectTrackingRealtime({
       }
       refreshTimerRef.current = setTimeout(() => {
         lastRefreshAtRef.current = Date.now();
-        const type = payload.notificationType;
-        if (type.startsWith("project_schedule.")) {
+        const type = (eventName || payload.notificationType || "").toLowerCase();
+        if (type.includes("project_schedule") || type.includes("projectschedule") || type.includes("measurement_image")) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.project.schedules(projectId) });
-        } else if (type.startsWith("payment.")) {
+        } else if (type.includes("payment")) {
           void queryClient.invalidateQueries({ queryKey: ["payment", "list"] });
           void queryClient.invalidateQueries({ queryKey: queryKeys.project.trackingOrders(projectId) });
-        } else if (type.startsWith("order.")) {
+        } else if (type.includes("order") || type.includes("delivery")) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.project.trackingOrders(projectId) });
           void queryClient.invalidateQueries({ queryKey: queryKeys.project.orders(projectId) });
-        } else if (type.startsWith("proposal.")) {
+        } else if (type.includes("proposal")) {
           void queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] });
-        } else if (type.startsWith("quotation.")) {
+        } else if (type.includes("quotation")) {
           void queryClient.invalidateQueries({ queryKey: ["project", "quotations", projectId] });
         }
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+        void refetchAllRef.current();
       }, 350);
     });
 

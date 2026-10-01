@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
-import {
-  subscribeNotificationHub,
-} from "../../../core/realtime/notificationHub";
+import { subscribeNotificationHub } from "../../../core/realtime/notificationHub";
+import { normalizeRealtimeEventKey } from "../../../core/realtime/notificationEvents";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { shouldRefreshProjectTracking } from "../utils/project.tracking.realtime";
+import {
+  isProjectTrackingRefreshEvent,
+  shouldRefreshProjectTracking,
+} from "../utils/project.tracking.realtime";
 
 type UseHomeProjectRealtimeOptions = {
   projectId: string | null;
@@ -53,12 +55,13 @@ export function useHomeProjectRealtime({
       return;
     }
 
-    const unsubscribe = subscribeNotificationHub((payload) => {
-      if (projectId) {
-        if (!shouldRefreshProjectTracking(payload, projectId)) {
-          return;
-        }
-      } else if (!payload.notificationType.startsWith("project.")) {
+    const unsubscribe = subscribeNotificationHub((payload, eventName) => {
+      const eventKey = normalizeRealtimeEventKey(eventName, payload.notificationType);
+      const shouldRefresh = projectId
+        ? shouldRefreshProjectTracking(payload, projectId, eventName)
+        : isProjectTrackingRefreshEvent(eventKey);
+
+      if (!shouldRefresh) {
         return;
       }
 

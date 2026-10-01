@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   Alert,
@@ -344,12 +344,9 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
     ]);
   };
 
-  const handleProductionDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleProductionDateValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") {
       setShowProductionDatePicker(false);
-    }
-    if (event.type === "dismissed" || !date) {
-      return;
     }
     setProductionDueDate(date);
   };
@@ -566,7 +563,8 @@ export function SaleOrderDetailScreen(): React.JSX.Element {
                               display={Platform.OS === "ios" ? "spinner" : "default"}
                               minimumDate={new Date()}
                               maximumDate={parseApiDateOnly(targetCompletionDate) ?? undefined}
-                              onChange={handleProductionDateChange}
+                              onValueChange={handleProductionDateValueChange}
+                              onDismiss={() => setShowProductionDatePicker(false)}
                             />
                             {Platform.OS === "ios" ? (
                               <Pressable

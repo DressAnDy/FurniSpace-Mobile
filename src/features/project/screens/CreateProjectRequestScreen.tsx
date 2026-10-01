@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import type { TextInputProps } from "react-native";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { arrowLeftIconDefinition, chevronDownIconDefinition } from "../../../icons/navigation/definitions";
@@ -25,31 +25,20 @@ import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { copyPickedFileToCache } from "../../../core/upload/readableFile";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useCreateProjectMutation } from "../hooks/useProjects";
-import { CreateProjectRequestDto } from "../models/project.model";
 import { uploadCustomerProjectFileApi } from "../services/project.api";
+import {
+  FURNITURE_REQUIREMENT_MAX,
+  PROJECT_ADDRESS_MAX,
+  PROJECT_DESCRIPTION_MAX,
+  PROJECT_NAME_MAX,
+  validateProjectRequestForm,
+  type ProjectRequestFieldErrors,
+} from "../utils/projectRequest.form";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { styles } from "./CreateProjectRequestScreen.styles";
 
-type FormErrors = Partial<Record<keyof CreateProjectRequestDto, string>>;
+type FormErrors = ProjectRequestFieldErrors;
 const BUSINESS_TYPES = ["Cafe", "Retail", "Office", "Restaurant", "Showroom"] as const;
-
-function validateForm(values: CreateProjectRequestDto): FormErrors {
-  const errors: FormErrors = {};
-
-  if (!values.projectName.trim()) {
-    errors.projectName = "Project name is required.";
-  }
-
-  if (!values.businessType.trim()) {
-    errors.businessType = "Business type is required.";
-  }
-
-  if (!values.furnitureRequirement.trim()) {
-    errors.furnitureRequirement = "Furniture requirement is required.";
-  }
-
-  return errors;
-}
 
 function formatApiDate(date: Date): string {
   const year = date.getFullYear();
@@ -62,20 +51,6 @@ function startOfToday(): Date {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today;
-}
-
-function parseOptionalNumber(value: string): number | undefined {
-  const normalized = value.trim().replace(/[,\s]/g, "");
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function parseVndAmount(value: string): number | undefined {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return undefined;
-  const parsed = Number(digits);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function formatVndInput(value: string): string {
@@ -127,78 +102,48 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
   const [errors, setErrors] = useState<FormErrors>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const formValues = useMemo<CreateProjectRequestDto>(
-    () => ({
-      projectName: projectName.trim(),
-      businessType: businessType.trim(),
-      furnitureRequirement: furnitureRequirement.trim(),
-      ...(projectAddress.trim() ? { projectAddress: projectAddress.trim() } : {}),
-      ...(description.trim() ? { description: description.trim() } : {}),
-      ...(parseOptionalNumber(totalAreaSqm) !== undefined
-        ? { totalAreaSqm: parseOptionalNumber(totalAreaSqm) }
-        : {}),
-      ...(parseOptionalNumber(numberOfFloors) !== undefined
-        ? { numberOfFloors: parseOptionalNumber(numberOfFloors) }
-        : {}),
-      ...(parseVndAmount(budgetMin) !== undefined ? { budgetMin: parseVndAmount(budgetMin) } : {}),
-      ...(parseVndAmount(budgetMax) !== undefined ? { budgetMax: parseVndAmount(budgetMax) } : {}),
-      ...(targetCompletionDate ? { targetCompletionDate: formatApiDate(targetCompletionDate) } : {}),
-    }),
-    [
-      budgetMax,
-      budgetMin,
-      businessType,
-      description,
-      furnitureRequirement,
-      numberOfFloors,
-      projectAddress,
-      projectName,
-      targetCompletionDate,
-      totalAreaSqm,
-    ],
-  );
-
-  const handleTargetDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleTargetDateValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
     }
 
-    if (event.type === "dismissed" || !date) {
+    const today = startOfToday();
+    const selected = new Date(date);
+    selected.setHours(0, 0, 0, 0);
+    if (selected < today) {
+      setTargetCompletionDate(today);
       return;
     }
 
     setTargetCompletionDate(date);
   };
 
+  const handleTargetDateDismiss = () => {
+    setShowDatePicker(false);
+  };
+
   const handleSubmit = () => {
     setHasSubmitted(true);
-    const nextErrors = validateForm(formValues);
-    const parsedArea = parseOptionalNumber(totalAreaSqm);
-    const parsedFloors = parseOptionalNumber(numberOfFloors);
-    const parsedBudgetMin = parseVndAmount(budgetMin);
-    const parsedBudgetMax = parseVndAmount(budgetMax);
-    if (totalAreaSqm.trim() && (!parsedArea || parsedArea <= 0)) {
-      nextErrors.totalAreaSqm = "Total area must be greater than 0.";
-    }
-    if (numberOfFloors.trim() && (!parsedFloors || parsedFloors <= 0 || !Number.isInteger(parsedFloors))) {
-      nextErrors.numberOfFloors = "Number of floors must be a positive whole number.";
-    }
-    if (budgetMin.trim() && (parsedBudgetMin === undefined || parsedBudgetMin < 0)) {
-      nextErrors.budgetMin = "Minimum budget is invalid.";
-    }
-    if (budgetMax.trim() && (parsedBudgetMax === undefined || parsedBudgetMax < 0)) {
-      nextErrors.budgetMax = "Maximum budget is invalid.";
-    }
-    if (parsedBudgetMin !== undefined && parsedBudgetMax !== undefined && parsedBudgetMax < parsedBudgetMin) {
-      nextErrors.budgetMax = "Maximum budget must be greater than or equal to minimum budget.";
-    }
-    setErrors(nextErrors);
+    const result = validateProjectRequestForm({
+      projectName,
+      businessType,
+      furnitureRequirement,
+      projectAddress,
+      description,
+      totalAreaSqm,
+      numberOfFloors,
+      budgetMin,
+      budgetMax,
+      targetCompletionDate: targetCompletionDate ? formatApiDate(targetCompletionDate) : null,
+    });
 
-    if (Object.keys(nextErrors).length > 0) {
+    if (!result.ok) {
+      setErrors(result.errors);
       return;
     }
 
-    createProjectMutation.mutate(formValues, {
+    setErrors({});
+    createProjectMutation.mutate(result.payload, {
       onSuccess: async (project) => {
         setIsUploadingFiles(projectFiles.length > 0);
         const uploadResults = await Promise.allSettled(
@@ -241,7 +186,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
   const handlePickFiles = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "application/pdf", "model/*", "application/octet-stream"],
+        type: ["image/*", "application/pdf", "model/*", "*/*"],
         multiple: true,
         copyToCacheDirectory: true,
       });
@@ -255,16 +200,17 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
         try {
           const copied = await copyPickedFileToCache({
             uri: asset.uri,
-            name: asset.name,
+            name: asset.name || `file-${Date.now()}.bin`,
             size: asset.size,
           });
           copiedAssets.push({
             ...asset,
+            name: asset.name || `file-${Date.now()}.bin`,
             uri: copied.uri,
             size: copied.size ?? asset.size,
           });
         } catch {
-          failedNames.push(asset.name);
+          failedNames.push(asset.name || "Selected file");
         }
       }
 
@@ -291,7 +237,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
     }
   };
 
-  const showError = (field: keyof CreateProjectRequestDto) => (hasSubmitted ? errors[field] : undefined);
+  const showError = (field: keyof FormErrors) => (hasSubmitted ? errors[field] : undefined);
 
   return (
     <ScreenContainer style={styles.screen}>
@@ -325,6 +271,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
                 value={projectName}
                 onChangeText={setProjectName}
                 placeholder="Urban Coffee House"
+                maxLength={PROJECT_NAME_MAX}
                 error={showError("projectName")}
               />
 
@@ -348,6 +295,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
                 onChangeText={setFurnitureRequirement}
                 placeholder="Describe the furniture and scope you need"
                 multiline
+                maxLength={FURNITURE_REQUIREMENT_MAX}
                 error={showError("furnitureRequirement")}
               />
 
@@ -356,6 +304,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
                 value={projectAddress}
                 onChangeText={setProjectAddress}
                 placeholder="Street, district, city"
+                maxLength={PROJECT_ADDRESS_MAX}
                 error={showError("projectAddress")}
               />
             </View>
@@ -427,7 +376,8 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
                 mode="date"
                 display={Platform.OS === "ios" ? "spinner" : "default"}
                 minimumDate={startOfToday()}
-                onChange={handleTargetDateChange}
+                onValueChange={handleTargetDateValueChange}
+                onDismiss={handleTargetDateDismiss}
               />
             ) : null}
 
@@ -471,6 +421,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
                 onChangeText={setDescription}
                 placeholder="Style preferences and other requirements..."
                 multiline
+                maxLength={PROJECT_DESCRIPTION_MAX}
                 error={showError("description")}
               />
             </View>
@@ -598,6 +549,7 @@ function FormField({
   multiline,
   keyboardType,
   suffix,
+  maxLength,
   error,
 }: Readonly<{
   label: string;
@@ -608,6 +560,7 @@ function FormField({
   multiline?: boolean;
   keyboardType?: TextInputProps["keyboardType"];
   suffix?: string;
+  maxLength?: number;
   error?: string;
 }>): React.JSX.Element {
   return (
@@ -630,6 +583,7 @@ function FormField({
           placeholderTextColor="#B8ADA4"
           multiline={multiline}
           keyboardType={keyboardType}
+          maxLength={maxLength}
         />
         {suffix ? <Text style={styles.inputSuffix}>{suffix}</Text> : null}
       </View>

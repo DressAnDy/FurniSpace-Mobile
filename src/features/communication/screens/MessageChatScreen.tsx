@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as DocumentPicker from "expo-document-picker";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { fileTextIconDefinition, paperclipIconDefinition } from "../../../icons/file/definitions";
 import { sendIconDefinition } from "../../../icons/communication/definitions";
 import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
@@ -52,9 +54,11 @@ export function MessageChatScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<MessageChatRoute>();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { chatId, projectId, title, staffName, status } = route.params;
   const isSaleShell = route.name === "SaleChat";
   const isDesignerShell = route.name === "DesignerChat";
+  const textOnlyComposer = isSaleShell;
   const [draft, setDraft] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -114,7 +118,15 @@ export function MessageChatScreen(): React.JSX.Element {
   }, []);
 
   const handleRealtimeMessage = useCallback(
-    (payload: { message: Parameters<typeof mapChatMessageToListItem>[0] }) => {
+    (payload: {
+      projectId: string;
+      chatId: string;
+      message: Parameters<typeof mapChatMessageToListItem>[0];
+    }) => {
+      if (projectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(projectId) });
+      }
+
       if (knownMessageIdsRef.current.has(payload.message.messageId)) {
         return;
       }
@@ -122,7 +134,7 @@ export function MessageChatScreen(): React.JSX.Element {
       knownMessageIdsRef.current.add(payload.message.messageId);
       appendMessageToCache(payload.message);
     },
-    [appendMessageToCache],
+    [appendMessageToCache, projectId, queryClient],
   );
 
   useProjectChatRealtime(chatId, handleRealtimeMessage);
@@ -243,15 +255,23 @@ export function MessageChatScreen(): React.JSX.Element {
 
       <View style={[styles.composerWrap, { paddingBottom: composerBottomPadding }]}>
         <View style={styles.composer}>
-          <Pressable
-            disabled={!isChatOpen || isSendingFile}
-            style={[styles.composerIconButton, !isChatOpen && styles.composerDisabled]}
-            onPress={() => void handlePickFile()}
-          >
-            <AppIcon definition={paperclipIconDefinition} size={16} color="#7A6F68" />
-          </Pressable>
+          {!textOnlyComposer ? (
+            <Pressable
+              disabled={!isChatOpen || isSendingFile}
+              style={[styles.composerIconButton, !isChatOpen && styles.composerDisabled]}
+              onPress={() => void handlePickFile()}
+            >
+              <AppIcon definition={paperclipIconDefinition} size={16} color="#7A6F68" />
+            </Pressable>
+          ) : null}
 
-          <View style={[styles.composerInputWrap, !isChatOpen && styles.composerDisabled]}>
+          <View
+            style={[
+              styles.composerInputWrap,
+              !isChatOpen && styles.composerDisabled,
+              textOnlyComposer ? { marginLeft: 0 } : null,
+            ]}
+          >
             <TextInput
               editable={isChatOpen}
               multiline

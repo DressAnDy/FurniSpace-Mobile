@@ -73,10 +73,13 @@ export function isSchedulePendingConfirmation(status: ProjectScheduleStatus | st
   return normalizeScheduleStatus(status) === "PENDING_CONFIRMATION";
 }
 
-export function formatScheduleTypeLabel(type: ProjectScheduleType | string): string {
-  return type.replaceAll("_", " ");
+export function formatScheduleTypeLabel(type: ProjectScheduleType | string | null | undefined): string {
+  if (!type) {
+    return "Other";
+  }
+  return String(type).replaceAll("_", " ");
 }
 
-export function formatScheduleStatusLabel(status: ProjectScheduleStatus | string): string {
+export function formatScheduleStatusLabel(status: ProjectScheduleStatus | string | null | undefined): string {
   return normalizeScheduleStatus(status).replaceAll("_", " ");
 }

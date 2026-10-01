@@ -35,10 +35,10 @@ type NotificationVisual = {
 };
 
 export function resolveSaleNotificationCategory(
-  notificationType: string,
+  notificationType: string | null | undefined,
   referenceType: string | null,
 ): NotificationCategory {
-  const type = notificationType.toLowerCase().replaceAll("_", ".");
+  const type = (notificationType ?? "").toLowerCase().replaceAll("_", ".");
   const ref = (referenceType ?? "").toUpperCase();
 
   if (ref === "PROJECT_CHAT_MESSAGE" || type.includes("chat") || type.includes("project_chat")) {
@@ -75,11 +75,11 @@ export function resolveSaleNotificationCategory(
 }
 
 function resolveSaleNotificationVisual(
-  notificationType: string,
+  notificationType: string | null | undefined,
   referenceType: string | null,
   category: NotificationCategory,
 ): NotificationVisual {
-  const type = notificationType.toLowerCase();
+  const type = (notificationType ?? "").toLowerCase();
 
   if (category === "chat" || referenceType === "PROJECT_CHAT_MESSAGE") {
     return { iconDefinition: chatIconDefinition, iconColor: "#7A6F68", iconBackground: "#F5F2ED" };

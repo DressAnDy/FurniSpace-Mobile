@@ -3,7 +3,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ActivityIndicator,
   Alert,
@@ -284,12 +284,9 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
   const statusColors = quotation ? getQuotationStatusPillColors(quotation.status) : getQuotationStatusPillColors("DRAFT");
   const footerPad = showFooter ? 120 + Math.max(insets.bottom, 12) : 24 + insets.bottom;
 
-  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleDateValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
-    }
-    if (event.type === "dismissed" || !date) {
-      return;
     }
     setValidUntil(date);
   };
@@ -573,7 +570,8 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
                           value={validUntil}
                           mode="date"
                           display={Platform.OS === "ios" ? "spinner" : "default"}
-                          onChange={handleDateChange}
+                          onValueChange={handleDateValueChange}
+                          onDismiss={() => setShowDatePicker(false)}
                         />
                         {Platform.OS === "ios" ? (
                           <Pressable

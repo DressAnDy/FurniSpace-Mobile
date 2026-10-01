@@ -13,7 +13,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { AppIcon } from "../../../shared/components/AppIcon";
@@ -23,6 +23,14 @@ import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useUpdateProjectBasicInfoMutation } from "../hooks/useCustomerFlow";
 import { useProjectDetailQuery } from "../hooks/useProjects";
 import { UpdateProjectBasicInfoRequestDto } from "../models/project.model";
+import {
+  BUSINESS_TYPE_MAX,
+  FURNITURE_REQUIREMENT_MAX,
+  PROJECT_ADDRESS_MAX,
+  PROJECT_DESCRIPTION_MAX,
+  PROJECT_NAME_MAX,
+  validateUpdateProjectBasicInfoForm,
+} from "../utils/projectRequest.form";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { styles } from "./CreateProjectRequestScreen.styles";
 
@@ -30,15 +38,7 @@ type Route = RouteProp<RootStackParamList, "UpdateProjectBasicInfo">;
 type UpdateProjectFormValues = UpdateProjectBasicInfoRequestDto & {
   targetCompletionDate: string | null;
 };
-type FormErrors = Partial<Record<keyof UpdateProjectFormValues, string>>;
-
-function validateForm(values: UpdateProjectFormValues): FormErrors {
-  const errors: FormErrors = {};
-  if (!values.projectName.trim()) errors.projectName = "Project name is required.";
-  if (!values.businessType.trim()) errors.businessType = "Business type is required.";
-  if (!values.furnitureRequirement.trim()) errors.furnitureRequirement = "Furniture requirement is required.";
-  return errors;
-}
+type FormErrors = ReturnType<typeof validateUpdateProjectBasicInfoForm>;
 
 function formatApiDate(date: Date): string {
   const year = date.getFullYear();
@@ -94,15 +94,30 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     [businessType, description, furnitureRequirement, projectAddress, projectName, targetCompletionDate],
   );
 
-  const handleTargetDateChange = (event: DateTimePickerEvent, date?: Date) => {
+  const handleTargetDateValueChange = (_event: unknown, date: Date) => {
     if (Platform.OS === "android") setShowDatePicker(false);
-    if (event.type === "dismissed" || !date) return;
-    setTargetCompletionDate(date);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(date);
+    selected.setHours(0, 0, 0, 0);
+    setTargetCompletionDate(selected < today ? today : date);
+  };
+
+  const handleTargetDateDismiss = () => {
+    setShowDatePicker(false);
   };
 
   const handleSubmit = () => {
     setHasSubmitted(true);
-    const nextErrors = validateForm(formValues);
+    const nextErrors = validateUpdateProjectBasicInfoForm({
+      projectName,
+      businessType,
+      furnitureRequirement,
+      projectAddress,
+      description,
+      targetCompletionDate: targetCompletionDate ? formatApiDate(targetCompletionDate) : null,
+    });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -120,7 +135,7 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
     });
   };
 
-  const showError = (field: keyof UpdateProjectFormValues) => (hasSubmitted ? errors[field] : undefined);
+  const showError = (field: keyof FormErrors) => (hasSubmitted ? errors[field] : undefined);
 
   if (isLoading && !initialized) {
     return (
@@ -153,13 +168,41 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
           </View>
 
           <View style={styles.content}>
-            <FormField label="Project Name" required value={projectName} onChangeText={setProjectName} error={showError("projectName")} />
-            <FormField label="Business Type" required value={businessType} onChangeText={setBusinessType} error={showError("businessType")} />
-            <FormField label="Furniture Requirement" required value={furnitureRequirement} onChangeText={setFurnitureRequirement} multiline error={showError("furnitureRequirement")} />
-            <FormField label="Project Address" value={projectAddress} onChangeText={setProjectAddress} />
+            <FormField
+              label="Project Name"
+              required
+              value={projectName}
+              onChangeText={setProjectName}
+              maxLength={PROJECT_NAME_MAX}
+              error={showError("projectName")}
+            />
+            <FormField
+              label="Business Type"
+              required
+              value={businessType}
+              onChangeText={setBusinessType}
+              maxLength={BUSINESS_TYPE_MAX}
+              error={showError("businessType")}
+            />
+            <FormField
+              label="Furniture Requirement"
+              required
+              value={furnitureRequirement}
+              onChangeText={setFurnitureRequirement}
+              multiline
+              maxLength={FURNITURE_REQUIREMENT_MAX}
+              error={showError("furnitureRequirement")}
+            />
+            <FormField
+              label="Project Address"
+              value={projectAddress}
+              onChangeText={setProjectAddress}
+              maxLength={PROJECT_ADDRESS_MAX}
+              error={showError("projectAddress")}
+            />
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Target Completion Date</Text>
-              <View style={styles.dateField}>
+              <View style={[styles.dateField, showError("targetCompletionDate") ? styles.inputError : null]}>
                 <Pressable style={styles.dateFieldMain} onPress={() => setShowDatePicker(true)}>
                   <AppIcon definition={calendarIconDefinition} size={16} color="#7A6F68" />
                   <Text style={[styles.dateFieldText, !targetCompletionDate && styles.dateFieldPlaceholder]}>
@@ -172,11 +215,28 @@ export function UpdateProjectBasicInfoScreen(): React.JSX.Element {
                   </Pressable>
                 ) : null}
               </View>
+              {showError("targetCompletionDate") ? (
+                <Text style={styles.errorText}>{showError("targetCompletionDate")}</Text>
+              ) : null}
             </View>
             {showDatePicker ? (
-              <DateTimePicker value={targetCompletionDate ?? new Date()} mode="date" display={Platform.OS === "ios" ? "spinner" : "default"} onChange={handleTargetDateChange} />
+              <DateTimePicker
+                value={targetCompletionDate ?? new Date()}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                minimumDate={new Date()}
+                onValueChange={handleTargetDateValueChange}
+                onDismiss={handleTargetDateDismiss}
+              />
             ) : null}
-            <FormField label="Additional Notes" value={description} onChangeText={setDescription} multiline />
+            <FormField
+              label="Additional Notes"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={PROJECT_DESCRIPTION_MAX}
+              error={showError("description")}
+            />
 
             <Pressable style={[styles.submitButton, updateMutation.isPending && styles.submitButtonDisabled]} disabled={updateMutation.isPending} onPress={handleSubmit}>
               {updateMutation.isPending ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitButtonText}>Save Changes</Text>}
@@ -194,6 +254,7 @@ function FormField({
   value,
   onChangeText,
   multiline,
+  maxLength,
   error,
 }: Readonly<{
   label: string;
@@ -201,6 +262,7 @@ function FormField({
   value: string;
   onChangeText: (value: string) => void;
   multiline?: boolean;
+  maxLength?: number;
   error?: string;
 }>): React.JSX.Element {
   return (
@@ -215,6 +277,7 @@ function FormField({
         onChangeText={onChangeText}
         placeholderTextColor="#B8ADA4"
         multiline={multiline}
+        maxLength={maxLength}
       />
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>

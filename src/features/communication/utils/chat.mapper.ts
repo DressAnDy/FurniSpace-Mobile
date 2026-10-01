@@ -6,16 +6,35 @@ import {
   CustomerChatTab,
   ProjectChatSummaryDto,
   ProjectChatType,
+  SALE_CHAT_CHANNELS,
+  SaleChatChannel,
 } from "../models/chat.model";
 
 const CHAT_TYPE_LABELS: Record<ProjectChatType, string> = {
   SALES: "Sales Consultant",
   DESIGNER: "Designer",
+  DESIGNER_SALES: "Designer",
   PRODUCTION: "Production",
   DELIVERY: "Delivery",
   GENERAL: "General",
   INTERNAL: "Internal",
 };
+
+const SALE_CHANNEL_LABELS: Record<SaleChatChannel, string> = {
+  SALES: "Customer",
+  DESIGNER_SALES: "Designer",
+  PRODUCTION: "Production",
+};
+
+const ALL_CHAT_TYPES = new Set<string>([
+  "SALES",
+  "DESIGNER",
+  "DESIGNER_SALES",
+  "PRODUCTION",
+  "DELIVERY",
+  "GENERAL",
+  "INTERNAL",
+]);
 
 const AVATAR_COLORS = ["#3A3330", "#C9A86A", "#7A6F68", "#16A34A", "#2563EB"];
 
@@ -50,6 +69,35 @@ function hashString(value: string): number {
     hash |= 0;
   }
   return Math.abs(hash);
+}
+
+export function normalizeProjectChatType(value: unknown): ProjectChatType | null {
+  const raw = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  if (!ALL_CHAT_TYPES.has(raw)) {
+    return null;
+  }
+  return raw as ProjectChatType;
+}
+
+export function isSaleChatChannel(chatType: ProjectChatType): chatType is SaleChatChannel {
+  return (SALE_CHAT_CHANNELS as readonly string[]).includes(chatType);
+}
+
+export function getSaleChannelLabel(chatType: ProjectChatType): string {
+  if (isSaleChatChannel(chatType)) {
+    return SALE_CHANNEL_LABELS[chatType];
+  }
+  return getChatTypeLabel(chatType);
+}
+
+export function getSaleChannelInitials(chatType: ProjectChatType): string {
+  if (chatType === "DESIGNER_SALES") return "DS";
+  if (chatType === "PRODUCTION") return "PR";
+  if (chatType === "SALES") return "CU";
+  return "CH";
 }
 
 export function getInitials(name: string): string {
@@ -113,29 +161,59 @@ export function formatMessageTime(isoDate: string): string {
 }
 
 export function getChatTypeLabel(chatType: ProjectChatType): string {
-  return CHAT_TYPE_LABELS[chatType];
+  return CHAT_TYPE_LABELS[chatType] ?? chatType;
 }
 
 export function getCustomerTabLabel(tab: CustomerChatTab): string {
   return tab === "SALES" ? "Sales" : "Design";
 }
 
-export function mapProjectChatToListItem(dto: ProjectChatSummaryDto): ChatListItem {
+export function formatSaleChatSubtitle(chat: {
+  chatType: ProjectChatType;
+  roleLabel: string;
+  staffName: string;
+  channelLabel: string;
+}): string {
+  const typeLabel = chat.channelLabel || getSaleChannelLabel(chat.chatType);
+  const name = chat.staffName?.trim();
+  if (!name) {
+    return typeLabel;
+  }
+  const normalizedName = name.toLowerCase();
+  if (
+    normalizedName === typeLabel.toLowerCase() ||
+    normalizedName === chat.roleLabel.toLowerCase() ||
+    (normalizedName.includes("consultant") && chat.chatType === "SALES")
+  ) {
+    return typeLabel;
+  }
+  return `${typeLabel} · ${name}`;
+}
+
+export function mapProjectChatToListItem(dto: ProjectChatSummaryDto): ChatListItem | null {
+  const chatType = normalizeProjectChatType(dto.chatType);
+  if (!chatType) {
+    return null;
+  }
+
   const displayName = dto.staffName || dto.title;
 
   return {
     chatId: dto.chatId,
     projectId: dto.projectId,
-    chatType: dto.chatType,
+    chatType,
     staffName: dto.staffName,
     title: dto.title,
     status: dto.status,
     initials: getInitials(displayName),
     avatarColor: getAvatarColor(dto.chatId),
-    roleLabel: getChatTypeLabel(dto.chatType),
+    roleLabel: getChatTypeLabel(chatType),
+    channelLabel: getSaleChannelLabel(chatType),
     preview: dto.lastMessage?.contentPreview ?? "No messages yet",
     timeLabel: dto.lastMessage ? formatChatTime(dto.lastMessage.createdAt) : formatChatTime(dto.createdAt),
     isOpen: dto.status === "OPEN",
+    lastMessageSenderId: dto.lastMessage?.senderId ?? null,
+    lastMessageCreatedAt: dto.lastMessage?.createdAt ?? null,
   };
 }
 
@@ -162,4 +240,27 @@ export function mapChatMessageToListItem(dto: ChatMessageDto, currentUserId: str
 
 export function sortMessagesAscending(messages: ChatMessageListItem[]): ChatMessageListItem[] {
   return [...messages].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+export function hasUnreadSaleChat(
+  chat: Pick<ChatListItem, "lastMessageSenderId" | "lastMessageCreatedAt">,
+  currentUserId: string | null,
+  readAtIso: string | null | undefined,
+  pendingCount = 0,
+): boolean {
+  if (pendingCount > 0) {
+    return true;
+  }
+  const senderId = chat.lastMessageSenderId;
+  const createdAt = chat.lastMessageCreatedAt;
+  if (!senderId || !createdAt || !currentUserId) {
+    return false;
+  }
+  if (String(senderId) === String(currentUserId)) {
+    return false;
+  }
+  if (!readAtIso) {
+    return true;
+  }
+  return createdAt > readAtIso;
 }

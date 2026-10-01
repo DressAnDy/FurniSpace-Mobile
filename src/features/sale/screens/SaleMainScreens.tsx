@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
@@ -26,10 +27,17 @@ import type { IconDefinition } from "../../../icons/types";
 import { AppError } from "../../../core/errors/AppError";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { mapAxiosError } from "../../../core/errors/errorMapper";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useLogoutAction } from "../../auth/hooks/useAuthActions";
 import { useAuthStore } from "../../auth/store/auth.store";
-import { useChatSearchQuery, useProjectChatsQuery } from "../../communication/hooks/useProjectChats";
-import { formatChatTime } from "../../communication/utils/chat.mapper";
+import { useChatSearchQuery, useSaleProjectChatsQuery } from "../../communication/hooks/useProjectChats";
+import { useProjectChatRealtime } from "../../communication/hooks/useProjectChatRealtime";
+import {
+  formatChatTime,
+  formatSaleChatSubtitle,
+  getSaleChannelInitials,
+  hasUnreadSaleChat,
+} from "../../communication/utils/chat.mapper";
 import {
   type SaleProjectListFilter,
   useClaimSalesAssignmentMutation,
@@ -540,12 +548,12 @@ function RequestCard({
                 Alert.alert(
                   "Lead claimed",
                   hasSalesChat
-                    ? "Project is In Consultation. Sales chat is ready."
+                    ? "Project is In Consultation. Open Messages to chat with the customer."
                     : "Project is now In Consultation.",
                 );
                 navigation.navigate("SaleProjectDetail", {
                   projectId: item.projectId,
-                  tab: hasSalesChat ? "Chat" : "Overview",
+                  tab: "Overview",
                 });
               },
               onError: (error) => {
@@ -812,36 +820,21 @@ function InfoCell({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function formatSaleChatSubtitle(chat: {
-  chatType: string;
-  roleLabel: string;
-  staffName: string;
-}): string {
-  const typeLabel = chat.chatType === "DESIGNER" ? "Designer" : "Sales";
-  const name = chat.staffName?.trim();
-  if (!name) {
-    return typeLabel;
-  }
-  const normalizedName = name.toLowerCase();
-  if (
-    normalizedName === typeLabel.toLowerCase() ||
-    normalizedName === chat.roleLabel.toLowerCase() ||
-    (normalizedName.includes("consultant") && chat.chatType === "SALES")
-  ) {
-    return typeLabel;
-  }
-  return `${typeLabel} · ${name}`;
-}
-
 export function SaleMessagesScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, "SaleMessages">>();
+  const queryClient = useQueryClient();
+  const currentUserId = useAuthStore((state) => state.user?.accountId ?? null);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Sales" | "Designer">("All");
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"All" | "Customer" | "Designer" | "Production">("All");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(route.params?.projectId ?? null);
   const [projectOpen, setProjectOpen] = useState(false);
+  const [readAtByChatId, setReadAtByChatId] = useState<Record<string, string>>({});
+  const [pendingUnreadByChatId, setPendingUnreadByChatId] = useState<Record<string, number>>({});
+  const deepLinkChatHandledRef = React.useRef<string | null>(null);
 
-  const projectsQuery = useSaleAssignedProjectsQuery({ filter: "All", page: 1, limit: 50 });
+  const projectsQuery = useSaleAssignedProjectsQuery({ filter: "All", page: 1, limit: 100 });
   const projects = projectsQuery.data?.items ?? [];
 
   useEffect(() => {
@@ -850,35 +843,36 @@ export function SaleMessagesScreen(): React.JSX.Element {
   }, [query]);
 
   useEffect(() => {
+    if (route.params?.projectId) {
+      setSelectedProjectId(route.params.projectId);
+    }
+  }, [route.params?.projectId]);
+
+  useEffect(() => {
     if (selectedProjectId || projects.length === 0) {
       return;
     }
     setSelectedProjectId(projects[0].projectId);
   }, [projects, selectedProjectId]);
 
-  const chatsQuery = useProjectChatsQuery(selectedProjectId);
+  const chatsQuery = useSaleProjectChatsQuery(selectedProjectId);
   const searchQuery = useChatSearchQuery(selectedProjectId, debouncedQuery);
   const isSearching = debouncedQuery.length >= 2;
+  const visibleChats = chatsQuery.data ?? [];
+  const joinedChatIds = useMemo(() => visibleChats.map((chat) => chat.chatId), [visibleChats]);
 
-  const salesChat = useMemo(
-    () => chatsQuery.data?.find((item) => item.chatType === "SALES") ?? null,
-    [chatsQuery.data],
-  );
-  const designerChat = useMemo(
-    () => chatsQuery.data?.find((item) => item.chatType === "DESIGNER") ?? null,
-    [chatsQuery.data],
-  );
-
-  const visibleChats = useMemo(() => {
-    const chats = [salesChat, designerChat].filter(Boolean) as NonNullable<typeof salesChat>[];
-    if (filter === "Sales") {
-      return chats.filter((item) => item.chatType === "SALES");
+  const filteredChats = useMemo(() => {
+    if (filter === "Customer") {
+      return visibleChats.filter((item) => item.chatType === "SALES");
     }
     if (filter === "Designer") {
-      return chats.filter((item) => item.chatType === "DESIGNER");
+      return visibleChats.filter((item) => item.chatType === "DESIGNER_SALES");
     }
-    return chats;
-  }, [designerChat, filter, salesChat]);
+    if (filter === "Production") {
+      return visibleChats.filter((item) => item.chatType === "PRODUCTION");
+    }
+    return visibleChats;
+  }, [filter, visibleChats]);
 
   const selectedProject = projects.find((item) => item.projectId === selectedProjectId) ?? null;
   const projectMeta = selectedProject
@@ -893,22 +887,76 @@ export function SaleMessagesScreen(): React.JSX.Element {
       ? "Loading projects…"
       : "No assigned projects";
 
-  const openChat = (chat: NonNullable<typeof salesChat>) => {
-    navigation.navigate("SaleChat", {
-      chatId: chat.chatId,
-      projectId: chat.projectId,
-      title: chat.title,
-      staffName: chat.staffName,
-      chatType: chat.chatType,
-      status: chat.status,
-    });
-  };
+  const openChat = useCallback(
+    (chat: (typeof visibleChats)[number]) => {
+      setReadAtByChatId((current) => ({ ...current, [chat.chatId]: new Date().toISOString() }));
+      setPendingUnreadByChatId((current) => ({ ...current, [chat.chatId]: 0 }));
+      navigation.navigate("SaleChat", {
+        chatId: chat.chatId,
+        projectId: chat.projectId,
+        title: chat.title,
+        staffName: chat.staffName,
+        chatType: chat.chatType,
+        status: chat.status,
+      });
+    },
+    [navigation],
+  );
+
+  useEffect(() => {
+    const deepChatId = route.params?.chatId;
+    if (!deepChatId || visibleChats.length === 0) {
+      return;
+    }
+    if (deepLinkChatHandledRef.current === deepChatId) {
+      return;
+    }
+    const chat = visibleChats.find((item) => item.chatId === deepChatId);
+    if (!chat) {
+      return;
+    }
+    deepLinkChatHandledRef.current = deepChatId;
+    openChat(chat);
+  }, [openChat, route.params?.chatId, visibleChats]);
+
+  const handleRealtimeMessage = useCallback(
+    (payload: { projectId: string; chatId: string; message: { messageId: string; senderId: string } }) => {
+      if (selectedProjectId && payload.projectId === selectedProjectId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.chat.projectList(selectedProjectId) });
+      }
+
+      const myId = currentUserId ? String(currentUserId) : "";
+      const senderId = String(payload.message.senderId ?? "");
+      if (myId && senderId && senderId !== myId) {
+        setPendingUnreadByChatId((current) => ({
+          ...current,
+          [payload.chatId]: (current[payload.chatId] ?? 0) + 1,
+        }));
+      }
+    },
+    [currentUserId, queryClient, selectedProjectId],
+  );
+
+  useProjectChatRealtime(joinedChatIds, handleRealtimeMessage);
 
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     setProjectOpen(false);
     setFilter("All");
     setQuery("");
+    navigation.setParams({ projectId, chatId: undefined });
+  };
+
+  const conversationAccentStyle = (chatType: string) => {
+    if (chatType === "DESIGNER_SALES") return s.conversationAccentDesigner;
+    if (chatType === "PRODUCTION") return s.conversationAccentProduction;
+    return s.conversationAccentSales;
+  };
+
+  const conversationAvatarColor = (chatType: string) => {
+    if (chatType === "DESIGNER_SALES") return "#7A6F68";
+    if (chatType === "PRODUCTION") return "#2563EB";
+    return SALE.charcoal;
   };
 
   return (
@@ -982,7 +1030,7 @@ export function SaleMessagesScreen(): React.JSX.Element {
 
         <View style={s.messagesFilterWrap}>
           <FilterChips
-            options={["All", "Sales", "Designer"]}
+            options={["All", "Customer", "Designer", "Production"]}
             selected={filter}
             onSelect={(value) => setFilter(value as typeof filter)}
           />
@@ -1002,24 +1050,13 @@ export function SaleMessagesScreen(): React.JSX.Element {
               <Text style={s.centerMuted}>No messages match “{debouncedQuery}”.</Text>
             ) : (
               (searchQuery.data ?? []).map((item) => {
-                const chat = chatsQuery.data?.find((entry) => entry.chatId === item.chatId);
+                const chat = visibleChats.find((entry) => entry.chatId === item.chatId);
+                if (!chat) {
+                  return null;
+                }
                 return (
-                  <Pressable
-                    key={item.messageId}
-                    style={s.conversation}
-                    onPress={() => {
-                      if (!chat) {
-                        return;
-                      }
-                      openChat(chat);
-                    }}
-                  >
-                    <View
-                      style={[
-                        s.conversationAccent,
-                        chat?.chatType === "DESIGNER" ? s.conversationAccentDesigner : s.conversationAccentSales,
-                      ]}
-                    />
+                  <Pressable key={item.messageId} style={s.conversation} onPress={() => openChat(chat)}>
+                    <View style={[s.conversationAccent, conversationAccentStyle(chat.chatType)]} />
                     <Avatar initials={getInitials(item.senderName)} color={SALE.charcoal} size={44} />
                     <View style={s.conversationBody}>
                       <View style={s.conversationTop}>
@@ -1028,7 +1065,7 @@ export function SaleMessagesScreen(): React.JSX.Element {
                             {item.senderName}
                           </Text>
                           <Text style={s.conversationMeta} numberOfLines={1}>
-                            {chat?.title ?? "Chat"}
+                            {chat.channelLabel} · {chat.title}
                           </Text>
                         </View>
                         <Text style={s.conversationTime}>{formatChatTime(item.createdAt)}</Text>
@@ -1041,62 +1078,74 @@ export function SaleMessagesScreen(): React.JSX.Element {
                 );
               })
             )
-          ) : visibleChats.length === 0 ? (
+          ) : filteredChats.length === 0 ? (
             <Text style={s.centerMuted}>
-              No chats yet for this project. Sales chat appears after claim; Designer chat after assign designer.
+              No conversations yet for this project. Chats with the customer, designer, and production appear here when available.
             </Text>
           ) : (
-            visibleChats.map((item) => (
-              <Pressable key={item.chatId} style={s.conversation} onPress={() => openChat(item)}>
-                <View
-                  style={[
-                    s.conversationAccent,
-                    item.chatType === "DESIGNER" ? s.conversationAccentDesigner : s.conversationAccentSales,
-                  ]}
-                />
-                <View>
-                  <Avatar
-                    initials={item.chatType === "DESIGNER" ? "DS" : "SC"}
-                    color={item.chatType === "DESIGNER" ? "#7A6F68" : SALE.charcoal}
-                    size={44}
-                  />
-                  {item.isOpen ? <View style={s.online} /> : null}
-                </View>
-                <View style={s.conversationBody}>
-                  <View style={s.conversationTop}>
-                    <View style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
-                      <Text style={s.conversationName} numberOfLines={1}>
-                        {item.title}
-                      </Text>
-                      <Text style={s.conversationMeta} numberOfLines={1}>
-                        {formatSaleChatSubtitle(item)}
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={s.conversationTime}>{item.timeLabel}</Text>
-                      <View
-                        style={[
-                          s.conversationStatusPill,
-                          item.isOpen ? s.conversationStatusOpen : s.conversationStatusClosed,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            s.conversationStatusText,
-                            item.isOpen ? s.conversationStatusTextOpen : s.conversationStatusTextClosed,
-                          ]}
-                        >
-                          {item.isOpen ? "Open" : "Closed"}
+            filteredChats.map((item) => {
+              const unread = hasUnreadSaleChat(
+                item,
+                currentUserId,
+                readAtByChatId[item.chatId],
+                pendingUnreadByChatId[item.chatId] ?? 0,
+              );
+              return (
+                <Pressable key={item.chatId} style={s.conversation} onPress={() => openChat(item)}>
+                  <View style={[s.conversationAccent, conversationAccentStyle(item.chatType)]} />
+                  <View>
+                    <Avatar
+                      initials={getSaleChannelInitials(item.chatType)}
+                      color={conversationAvatarColor(item.chatType)}
+                      size={44}
+                    />
+                    {item.isOpen ? <View style={s.online} /> : null}
+                  </View>
+                  <View style={s.conversationBody}>
+                    <View style={s.conversationTop}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 4 }}>
+                        <Text style={s.conversationName} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={s.conversationMeta} numberOfLines={1}>
+                          {formatSaleChatSubtitle(item)}
                         </Text>
                       </View>
+                      <View>
+                        <Text style={s.conversationTime}>{item.timeLabel}</Text>
+                        <View
+                          style={[
+                            s.conversationStatusPill,
+                            item.isOpen ? s.conversationStatusOpen : s.conversationStatusClosed,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.conversationStatusText,
+                              item.isOpen ? s.conversationStatusTextOpen : s.conversationStatusTextClosed,
+                            ]}
+                          >
+                            {item.isOpen ? "Open" : "Closed"}
+                          </Text>
+                        </View>
+                        {unread ? (
+                          <View style={s.unread}>
+                            <Text style={{ color: SALE.white, fontSize: 9, fontWeight: "700" }}>
+                              {(pendingUnreadByChatId[item.chatId] ?? 0) > 0
+                                ? String(Math.min(pendingUnreadByChatId[item.chatId] ?? 0, 9))
+                                : "!"}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
+                    <Text style={s.conversationPreview} numberOfLines={2}>
+                      {item.preview}
+                    </Text>
                   </View>
-                  <Text style={s.conversationPreview} numberOfLines={2}>
-                    {item.preview}
-                  </Text>
-                </View>
-              </Pressable>
-            ))
+                </Pressable>
+              );
+            })
           )}
         </View>
       </ScrollView>

@@ -104,6 +104,10 @@ export function ProposalDetailScreen(): React.JSX.Element {
       Alert.alert("Revision note required", "Please describe what you would like changed.");
       return;
     }
+    if (note.length > 1000) {
+      Alert.alert("Note too long", "Revision note must be at most 1000 characters.");
+      return;
+    }
 
     requestRevisionMutation.mutate(
       { proposalId, revisionNote: note },
@@ -219,6 +223,7 @@ export function ProposalDetailScreen(): React.JSX.Element {
                         onChangeText={setRevisionNote}
                         maxLength={1000}
                       />
+                      <Text style={styles.noteText}>{revisionNote.trim().length}/1000</Text>
                       <Pressable
                         style={[styles.primaryButton, isBusy && styles.buttonDisabled]}
                         disabled={isBusy}

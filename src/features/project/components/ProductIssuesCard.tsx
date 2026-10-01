@@ -40,6 +40,13 @@ import {
   resolveProductIssueStatus,
 } from "../utils/productIssue.display";
 import { PRODUCT_ISSUE_RESOLVED_EVENT } from "../utils/productIssue.realtime";
+import {
+  PRODUCT_ISSUE_DESCRIPTION_MAX,
+  PRODUCT_ISSUE_EVIDENCE_MAX_FILES,
+  validateProductIssueForm,
+  type ProductIssueFieldErrors,
+} from "../utils/productIssue.form";
+import { sanitizeIntegerInput } from "../../../shared/validation/formRules";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import { styles } from "./ProductIssuesCard.styles";
 
@@ -105,6 +112,7 @@ export function ProductIssuesCard({
   const [affectedQuantity, setAffectedQuantity] = useState("");
   const [files, setFiles] = useState<ProductIssueEvidenceLocalFile[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ProductIssueFieldErrors>({});
 
   const issues = issuesQuery.data?.items ?? [];
   const visibleIssues = useMemo(() => filterProductIssuesByStatus(issues, statusFilter), [issues, statusFilter]);
@@ -157,6 +165,7 @@ export function ProductIssuesCard({
     setAffectedQuantity("");
     setFiles([]);
     setFormError(null);
+    setFieldErrors({});
   };
 
   const openCreate = () => {
@@ -187,7 +196,18 @@ export function ProductIssuesCard({
     if (next.length === 0) {
       return;
     }
-    setFiles((current) => [...current, ...next]);
+    setFiles((current) => {
+      const merged = [...current, ...next];
+      if (merged.length > PRODUCT_ISSUE_EVIDENCE_MAX_FILES) {
+        setFieldErrors((errors) => ({
+          ...errors,
+          files: `You can attach at most ${PRODUCT_ISSUE_EVIDENCE_MAX_FILES} evidence files.`,
+        }));
+        return merged.slice(0, PRODUCT_ISSUE_EVIDENCE_MAX_FILES);
+      }
+      setFieldErrors((errors) => ({ ...errors, files: undefined }));
+      return merged;
+    });
   };
 
   const handlePickDocuments = async () => {
@@ -246,40 +266,40 @@ export function ProductIssuesCard({
   };
 
   const handleSubmit = () => {
-    if (!orderId || !selectedItem) {
+    if (!orderId) {
       setFormError("Please select a delivered product.");
+      setFieldErrors({ orderItemId: "Please select a delivered product." });
       return;
     }
 
-    if (!affectedQuantity.trim()) {
-      setFormError("Enter how many units are affected.");
-      return;
-    }
+    const result = validateProductIssueForm(
+      {
+        orderItemId: selectedOrderItemId,
+        issueType,
+        affectedQuantity,
+        description,
+        files,
+      },
+      selectedItem?.deliveredQuantity ?? null,
+    );
 
-    const quantity = Number(affectedQuantity);
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      setFormError("Affected quantity must be a positive whole number.");
-      return;
-    }
-    if (quantity > selectedItem.deliveredQuantity) {
-      setFormError(`Value must be less than or equal to ${selectedItem.deliveredQuantity}.`);
-      return;
-    }
-    if (!description.trim()) {
-      setFormError("Description is required.");
+    if (!result.ok) {
+      setFieldErrors(result.errors);
+      setFormError(result.errors.form ?? Object.values(result.errors).find(Boolean) ?? null);
       return;
     }
 
     setFormError(null);
+    setFieldErrors({});
     createMutation.mutate(
       {
         orderId,
-        orderItemId: selectedItem.orderItemId,
+        orderItemId: result.payload.orderItemId,
         deliveryItemId: null,
-        issueType,
-        description: description.trim(),
-        affectedQuantity: quantity,
-        files,
+        issueType: result.payload.issueType,
+        description: result.payload.description,
+        affectedQuantity: result.payload.affectedQuantity,
+        files: result.payload.files,
       },
       {
         onSuccess: () => {
@@ -410,13 +430,23 @@ export function ProductIssuesCard({
         description={description}
         affectedQuantity={affectedQuantity}
         files={files}
+        fieldErrors={fieldErrors}
         formError={formError}
         isSubmitting={createMutation.isPending}
         onClose={() => setIsCreateOpen(false)}
-        onSelectItem={setSelectedOrderItemId}
+        onSelectItem={(orderItemId) => {
+          setSelectedOrderItemId(orderItemId);
+          setFieldErrors((current) => ({ ...current, orderItemId: undefined }));
+        }}
         onSelectType={setIssueType}
-        onChangeDescription={setDescription}
-        onChangeQuantity={setAffectedQuantity}
+        onChangeDescription={(value) => {
+          setDescription(value);
+          setFieldErrors((current) => ({ ...current, description: undefined }));
+        }}
+        onChangeQuantity={(value) => {
+          setAffectedQuantity(sanitizeIntegerInput(value));
+          setFieldErrors((current) => ({ ...current, affectedQuantity: undefined }));
+        }}
         onPickPhotos={() => void handlePickPhotos()}
         onPickDocuments={() => void handlePickDocuments()}
         onRemoveFile={(index) => setFiles((current) => current.filter((_, i) => i !== index))}
@@ -436,6 +466,7 @@ function CreateIssueModal({
   description,
   affectedQuantity,
   files,
+  fieldErrors,
   formError,
   isSubmitting,
   onClose,
@@ -455,6 +486,7 @@ function CreateIssueModal({
   description: string;
   affectedQuantity: string;
   files: ProductIssueEvidenceLocalFile[];
+  fieldErrors: ProductIssueFieldErrors;
   formError: string | null;
   isSubmitting: boolean;
   onClose: () => void;
@@ -482,7 +514,7 @@ function CreateIssueModal({
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>Delivered product</Text>
+            <Text style={styles.fieldLabel}>Delivered product *</Text>
             <Text style={styles.fieldHint}>Only items with delivered quantity &gt; 0 can be reported.</Text>
             {eligibleItems.map((item) => {
               const active = item.orderItemId === selectedOrderItemId;
@@ -500,6 +532,7 @@ function CreateIssueModal({
                 </Pressable>
               );
             })}
+            {fieldErrors.orderItemId ? <Text style={styles.errorText}>{fieldErrors.orderItemId}</Text> : null}
 
             <Text style={styles.fieldLabel}>Issue type</Text>
             <View style={styles.typeRow}>
@@ -519,9 +552,9 @@ function CreateIssueModal({
               })}
             </View>
 
-            <Text style={styles.fieldLabel}>Affected quantity</Text>
+            <Text style={styles.fieldLabel}>Affected quantity *</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, fieldErrors.affectedQuantity ? styles.inputError : null]}
               value={affectedQuantity}
               onChangeText={onChangeQuantity}
               keyboardType="number-pad"
@@ -533,18 +566,29 @@ function CreateIssueModal({
                 Enter how many units are affected (max {selected.deliveredQuantity}).
               </Text>
             ) : null}
+            {fieldErrors.affectedQuantity ? (
+              <Text style={styles.errorText}>{fieldErrors.affectedQuantity}</Text>
+            ) : null}
 
-            <Text style={styles.fieldLabel}>Description</Text>
+            <Text style={styles.fieldLabel}>Description *</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
+              style={[styles.input, styles.textArea, fieldErrors.description ? styles.inputError : null]}
               value={description}
               onChangeText={onChangeDescription}
               multiline
+              maxLength={PRODUCT_ISSUE_DESCRIPTION_MAX}
               placeholder="Describe the issue..."
               placeholderTextColor="#A89F97"
             />
+            <Text style={styles.fieldHint}>
+              {description.trim().length}/{PRODUCT_ISSUE_DESCRIPTION_MAX}
+            </Text>
+            {fieldErrors.description ? <Text style={styles.errorText}>{fieldErrors.description}</Text> : null}
 
             <Text style={styles.fieldLabel}>Evidence (optional)</Text>
+            <Text style={styles.fieldHint}>
+              Images or PDF, up to {PRODUCT_ISSUE_EVIDENCE_MAX_FILES} files, 10 MB each.
+            </Text>
             <View style={styles.evidenceActions}>
               <Pressable style={[styles.secondaryButton, styles.evidenceAction]} onPress={onPickPhotos}>
                 <Text style={styles.secondaryButtonText}>Add photos</Text>
@@ -563,8 +607,15 @@ function CreateIssueModal({
                 </Pressable>
               </View>
             ))}
+            {fieldErrors.files ? <Text style={styles.errorText}>{fieldErrors.files}</Text> : null}
 
-            {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
+            {formError &&
+            !fieldErrors.orderItemId &&
+            !fieldErrors.affectedQuantity &&
+            !fieldErrors.description &&
+            !fieldErrors.files ? (
+              <Text style={styles.errorText}>{formError}</Text>
+            ) : null}
 
             <Pressable
               style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
