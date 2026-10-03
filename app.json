@@ -12,8 +12,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow FurniSpace to capture measurement photos for assigned projects.",
-        "NSPhotoLibraryUsageDescription": "Allow FurniSpace to upload measurement photos from your library."
+        "NSCameraUsageDescription": "Allow FurniSpace to take photos for project evidence and issue reports.",
+        "NSPhotoLibraryUsageDescription": "Allow FurniSpace to upload photos for project evidence and issue reports."
       }
     },
     "android": {
@@ -35,8 +35,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Allow FurniSpace to capture measurement photos for assigned projects.",
-          "photosPermission": "Allow FurniSpace to upload measurement photos from your library."
+          "cameraPermission": "Allow FurniSpace to take photos for project evidence and issue reports.",
+          "photosPermission": "Allow FurniSpace to upload photos for project evidence and issue reports."
         }
       ],
       "expo-web-browser"

@@ -113,11 +113,14 @@ export const styles = StyleSheet.create({
   },
   evidenceActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   evidenceAction: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "30%",
     marginTop: 0,
+    minWidth: 96,
   },
   modalBackdrop: {
     backgroundColor: "rgba(26,22,20,0.45)",
