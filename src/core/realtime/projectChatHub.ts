@@ -319,3 +319,7 @@ export async function leaveProjectChat(chatId: string): Promise<void> {
 export function getProjectChatHubState(): HubConnectionState | null {
   return connection?.state ?? null;
 }
+
+export function hasJoinedProjectChats(): boolean {
+  return joinedChatIds.size > 0;
+}

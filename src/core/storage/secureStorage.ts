@@ -45,6 +45,16 @@ export async function setAccessToken(token: string): Promise<void> {
   await safeSetGenericPassword("accessToken", token, ACCESS_TOKEN_SERVICE, ACCESS_TOKEN_FALLBACK_KEY);
 }
 
+/** Sync in-memory cache so /auth/me can run before Keychain I/O finishes. */
+export function cacheAuthTokens(tokens: { accessToken?: string; refreshToken?: string }): void {
+  if (tokens.accessToken) {
+    accessTokenCache = tokens.accessToken;
+  }
+  if (tokens.refreshToken) {
+    refreshTokenCache = tokens.refreshToken;
+  }
+}
+
 export async function getAccessToken(): Promise<string | null> {
   if (accessTokenCache !== undefined) {
     return accessTokenCache;

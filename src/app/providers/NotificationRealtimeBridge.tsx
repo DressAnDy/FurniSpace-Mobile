@@ -5,15 +5,20 @@ import { ensureNotificationPermissions, showLocalNotification } from "../../core
 import {
   connectNotificationHub,
   disconnectNotificationHub,
+  getNotificationHubState,
   restartNotificationHub,
   subscribeNotificationHub,
 } from "../../core/realtime/notificationHub";
 import {
-  connectPaymentHub,
   disconnectPaymentHub,
+  hasJoinedPayments,
   restartPaymentHub,
 } from "../../core/realtime/paymentHub";
-import { restartProjectChatHub, disconnectProjectChatHub } from "../../core/realtime/projectChatHub";
+import {
+  disconnectProjectChatHub,
+  hasJoinedProjectChats,
+  restartProjectChatHub,
+} from "../../core/realtime/projectChatHub";
 import {
   eventStartsWith,
   isChatRealtimeEvent,
@@ -35,8 +40,10 @@ import {
   isProductIssueNotification,
 } from "../../features/project/utils/productIssue.realtime";
 import { invalidateDashboardQueries } from "../../shared/utils/dashboardCache";
+import { HubConnectionState } from "@microsoft/signalr";
 
-const UNREAD_CATCHUP_INTERVAL_MS = 15_000;
+/** Backup poll when hub may be zombie — keep light for customer UX. */
+const UNREAD_CATCHUP_INTERVAL_MS = 60_000;
 
 function invalidateDomainQueriesForEvent(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -58,7 +65,9 @@ function invalidateDomainQueriesForEvent(
   }
 
   const isChatOnly = isChatRealtimeEvent(eventKey, payload.referenceType);
-  if (!isChatOnly) {
+  // Sale/Designer dashboards only — skip work for customer sessions.
+  const role = useAuthStore.getState().user?.role;
+  if (!isChatOnly && role && role !== "CUSTOMER") {
     invalidateDashboardQueries(queryClient);
   }
 
@@ -125,6 +134,7 @@ function invalidateDomainQueriesForEvent(
 async function catchUpFromUnreadCount(
   queryClient: ReturnType<typeof useQueryClient>,
   previousUnreadRef: { current: number | null },
+  options?: { domainInvalidate?: boolean },
 ): Promise<void> {
   try {
     const result = await getUnreadNotificationCountApi();
@@ -138,13 +148,14 @@ async function catchUpFromUnreadCount(
       return;
     }
 
-    // Unread increased while WS may have been zombie — refetch domain + bell.
+    // Unread increased while hub may have been zombie — refresh bell + focused domains only.
     void queryClient.invalidateQueries({ queryKey: ["notification", "list"] });
-    void queryClient.invalidateQueries({ queryKey: ["project"], type: "active" });
-    void queryClient.invalidateQueries({ queryKey: ["payment"], type: "active" });
+    if (options?.domainInvalidate === false) {
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ["project", "list"], type: "active" });
+    void queryClient.invalidateQueries({ queryKey: ["payment", "list"], type: "active" });
     void queryClient.invalidateQueries({ queryKey: ["order"], type: "active" });
-    void queryClient.invalidateQueries({ queryKey: ["customization"], type: "active" });
-    invalidateDashboardQueries(queryClient);
   } catch {
     // Catch-up is best-effort.
   }
@@ -164,11 +175,28 @@ export function NotificationRealtimeBridge(): null {
       return;
     }
 
-    void ensureNotificationPermissions().catch(() => undefined);
-    prefetchNotificationQueries(queryClient);
-    void connectNotificationHub().catch(() => undefined);
-    void connectPaymentHub().catch(() => undefined);
-    void catchUpFromUnreadCount(queryClient, previousUnreadRef);
+    // Let login navigation + Home first paint finish before hub/prefetch work.
+    const schedulePostLoginWork = () => {
+      void ensureNotificationPermissions().catch(() => undefined);
+      prefetchNotificationQueries(queryClient);
+      // Payment hub connects on-demand from payment screens (JoinPayment).
+      void connectNotificationHub().catch(() => undefined);
+      // Prefetch already seeds unread — avoid a second /unread call on login.
+    };
+
+    const idleWindow = globalThis as typeof globalThis & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    let idleHandle: number | null = null;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      idleHandle = idleWindow.requestIdleCallback(schedulePostLoginWork, { timeout: 1200 });
+    } else {
+      timeoutHandle = setTimeout(schedulePostLoginWork, 0);
+    }
 
     const unsubscribe = subscribeNotificationHub((payload, eventName) => {
       const eventKey = normalizeRealtimeEventKey(eventName, payload.notificationType);
@@ -197,10 +225,22 @@ export function NotificationRealtimeBridge(): null {
     });
 
     const catchUpTimer = setInterval(() => {
+      // Skip heavy catch-up while notification hub looks healthy.
+      const hubState = getNotificationHubState();
+      if (hubState === HubConnectionState.Connected) {
+        void catchUpFromUnreadCount(queryClient, previousUnreadRef, { domainInvalidate: false });
+        return;
+      }
       void catchUpFromUnreadCount(queryClient, previousUnreadRef);
     }, UNREAD_CATCHUP_INTERVAL_MS);
 
     return () => {
+      if (idleHandle != null && typeof idleWindow.cancelIdleCallback === "function") {
+        idleWindow.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
       unsubscribe();
       clearInterval(catchUpTimer);
     };
@@ -213,8 +253,12 @@ export function NotificationRealtimeBridge(): null {
 
     return subscribeAuthTokenRefresh(() => {
       void restartNotificationHub();
-      void restartPaymentHub();
-      void restartProjectChatHub();
+      if (hasJoinedPayments()) {
+        void restartPaymentHub();
+      }
+      if (hasJoinedProjectChats()) {
+        void restartProjectChatHub();
+      }
     });
   }, [isLoggedIn]);
 
@@ -231,17 +275,24 @@ export function NotificationRealtimeBridge(): null {
         return;
       }
 
-      void Promise.all([
-        restartNotificationHub(),
-        restartPaymentHub(),
-        restartProjectChatHub(),
-      ]).finally(() => {
-        void catchUpFromUnreadCount(queryClient, previousUnreadRef);
-        void queryClient.invalidateQueries({ queryKey: ["notification"] });
-        void queryClient.invalidateQueries({ queryKey: ["payment"], type: "active" });
-        void queryClient.invalidateQueries({ queryKey: ["chat"], type: "active" });
-        void queryClient.invalidateQueries({ queryKey: ["project", "list"], type: "active" });
-        invalidateDashboardQueries(queryClient);
+      const restarts: Array<Promise<unknown>> = [restartNotificationHub()];
+      if (hasJoinedPayments()) {
+        restarts.push(restartPaymentHub());
+      }
+      if (hasJoinedProjectChats()) {
+        restarts.push(restartProjectChatHub());
+      }
+
+      void Promise.all(restarts).finally(() => {
+        void catchUpFromUnreadCount(queryClient, previousUnreadRef, { domainInvalidate: false });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.notification.unreadCount });
+        void queryClient.invalidateQueries({ queryKey: ["notification", "list"], type: "active" });
+        if (hasJoinedPayments()) {
+          void queryClient.invalidateQueries({ queryKey: ["payment"], type: "active" });
+        }
+        if (hasJoinedProjectChats()) {
+          void queryClient.invalidateQueries({ queryKey: ["chat"], type: "active" });
+        }
       });
     });
 

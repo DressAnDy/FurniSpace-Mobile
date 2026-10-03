@@ -3,9 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -18,6 +16,7 @@ import { queryKeys } from "../../../shared/constants/queryKeys";
 import { paperclipIconDefinition } from "../../../icons/file/definitions";
 import { sendIconDefinition } from "../../../icons/communication/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeView } from "../../../shared/components/KeyboardSafe";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { useChatActions, useVisibleChatMessages } from "../../communication/hooks/useChatMessages";
 import {
@@ -274,7 +273,7 @@ export function SaleProjectChatTab({
   const composerBottomPadding = Math.max(insets.bottom, 10);
 
   return (
-    <KeyboardAvoidingView style={s.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardSafeView style={s.fill}>
       <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10 }}>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {visibleChats.map((chat) => {
@@ -431,6 +430,6 @@ export function SaleProjectChatTab({
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardSafeView>
   );
 }

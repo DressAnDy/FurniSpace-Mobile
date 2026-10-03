@@ -178,12 +178,30 @@ export const quotationDetailStyles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  lineItemName: {
+  lineItemNameWrap: {
     flex: 1,
+    gap: 6,
+  },
+  lineItemName: {
     fontSize: 15,
     fontWeight: "600",
     color: "#2A2420",
     lineHeight: 21,
+  },
+  customizedBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(201,168,106,0.16)",
+    borderColor: "rgba(201,168,106,0.45)",
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  customizedBadgeText: {
+    color: "#8A6D3B",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   lineItemAmount: {
     fontSize: 14,

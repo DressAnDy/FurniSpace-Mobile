@@ -48,7 +48,7 @@ export function PayOSPaymentScreen(): React.JSX.Element {
   const checkoutUrl = checkout?.checkoutUrl ?? null;
   const qrContent = checkout?.qrContent ?? null;
   const isPaid = payment?.status === "PAID";
-  const shouldPoll = Boolean(payment && !isPaid && isWaitingConfirmation);
+  const shouldPoll = Boolean(payment && !isPaid);
 
   const loadCheckout = useCallback(async () => {
     setIsBootstrapping(true);
@@ -121,11 +121,12 @@ export function PayOSPaymentScreen(): React.JSX.Element {
     }
   }, []);
 
-  usePaymentRealtime({
+  const hubConnected = usePaymentRealtime({
     paymentId: payment?.paymentId ?? null,
     enabled: Boolean(payment && !isPaid),
     onUpdated: handlePaymentUpdated,
   });
+  const pollIntervalMs = isWaitingConfirmation ? 3_000 : hubConnected ? 6_000 : 4_000;
 
   useEffect(() => {
     if (!shouldPoll || !payment?.paymentCode) {
@@ -135,12 +136,12 @@ export function PayOSPaymentScreen(): React.JSX.Element {
     void refreshPaymentStatus();
     const intervalId = setInterval(() => {
       void refreshPaymentStatus();
-    }, 4000);
+    }, pollIntervalMs);
 
     return () => {
       clearInterval(intervalId);
     };
-  }, [payment?.paymentCode, refreshPaymentStatus, shouldPoll]);
+  }, [payment?.paymentCode, pollIntervalMs, refreshPaymentStatus, shouldPoll]);
 
   useEffect(() => {
     const handleAppState = (nextState: AppStateStatus) => {

@@ -1,14 +1,6 @@
 import React, { useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { mailIconDefinition } from "../../../icons/auth/definitions";
@@ -68,13 +60,9 @@ export function VerifyEmailScreen(): React.JSX.Element {
   };
 
   return (
-    <ScreenContainer>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-        style={styles.screen}
-      >
-        <ScrollView
+    <ScreenContainer keyboard={false}>
+        <KeyboardSafeScroll
+          style={styles.screen}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -143,8 +131,7 @@ export function VerifyEmailScreen(): React.JSX.Element {
               <Text style={styles.linkText}>{resendMutation.isPending ? "Sending..." : "Resend OTP"}</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardSafeScroll>
     </ScreenContainer>
   );
 }

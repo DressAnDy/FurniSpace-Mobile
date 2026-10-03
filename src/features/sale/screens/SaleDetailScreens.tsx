@@ -6,12 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -30,6 +28,7 @@ import {
   uploadIconDefinition,
 } from "../../../icons/file/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll, KeyboardSafeView } from "../../../shared/components/KeyboardSafe";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { useProjectDetailQuery } from "../../project/hooks/useProjects";
@@ -47,6 +46,8 @@ import { projectTabs, type ProjectDetailTab } from "../data/sale.mock";
 import {
   useAssignProjectDesignerMutation,
   useAvailableDesignersQuery,
+  useClaimSalesAssignmentMutation,
+  useRequestProjectInformationMutation,
 } from "../hooks/useSaleDashboard";
 import type { SpaceDataStatus } from "../services/sale.api";
 import { useSaleProposalsQuery, useSaleQuotationsQuery, useCreateQuotationMutation, refetchSaleProjectOverviewQueries } from "../hooks/useSaleCommercial";
@@ -295,7 +296,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
         statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
       />
       <ProjectTabs active={activeTab} projectId={projectId ?? undefined} />
-      <ScrollView
+      <KeyboardSafeScroll
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -334,7 +335,7 @@ export function SaleProjectDetailScreen({ route, navigation }: ProjectProps): Re
           <SchedulesTab projectId={projectId} project={project} onCreate={() => setScheduleModal(true)} />
         ) : null}
         {activeTab === "Issues" ? <SaleIssuesTab projectId={projectId} /> : null}
-      </ScrollView>
+      </KeyboardSafeScroll>
       {showFixedActions ? (
         <DetailFixedActions
           showAssignDesigner={Boolean(needsDesigner)}
@@ -506,10 +507,62 @@ function OverviewTab({
   const productionRequestsQuery = useSaleProductionRequestsQuery(projectId, primaryOrderId);
   const startFeeStatusQuery = useProjectStartFeeStatusQuery(projectId);
   const completeProjectMutation = useCompleteProjectMutation();
+  const requestInfoMutation = useRequestProjectInformationMutation();
+  const claimMutation = useClaimSalesAssignmentMutation();
+  const [requestInfoOpen, setRequestInfoOpen] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
 
   if (!project) {
     return <Text style={s.centerMuted}>Select a project to view details.</Text>;
   }
+
+  const canRequestMoreInfo = project.status === "IN_CONSULTATION";
+  const canAcceptConsultation =
+    project.status === "NEED_BASIC_INFORMATION" || project.status === "SUBMITTED";
+
+  const handleSubmitRequestInfo = () => {
+    const message = requestMessage.trim();
+    if (!projectId) return;
+    if (!message) {
+      Alert.alert("Validation", "Request message is required.");
+      return;
+    }
+    requestInfoMutation.mutate(
+      { projectId, message },
+      {
+        onSuccess: () => {
+          setRequestInfoOpen(false);
+          setRequestMessage("");
+          Alert.alert("Requested", "Customer will be asked to update basic information.");
+        },
+        onError: (error) =>
+          Alert.alert("Request failed", getErrorMessage(error, "Request failed. Please try again.")),
+      },
+    );
+  };
+
+  const handleAcceptConsultation = () => {
+    if (!projectId) return;
+    const note =
+      project.status === "NEED_BASIC_INFORMATION"
+        ? "Customer provided additional basic information. Sales accepted the project for consultation."
+        : "Sales accepted the submitted project for consultation.";
+    Alert.alert("Accept for consultation", "Move this project to In Consultation?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Accept",
+        onPress: () =>
+          claimMutation.mutate(
+            { projectId, note },
+            {
+              onSuccess: () => Alert.alert("Accepted", "Project is now In Consultation."),
+              onError: (error) =>
+                Alert.alert("Error", getErrorMessage(error, "Unable to accept this project.")),
+            },
+          ),
+      },
+    ]);
+  };
 
   const overviewContent = buildProjectOverviewContent(project);
   const budget =
@@ -552,8 +605,94 @@ function OverviewTab({
           <Text style={[s.alertBody, { color: statusTone.color }]}>
             {getProjectStatusLabel(project.status)}
           </Text>
+          {project.status === "NEED_BASIC_INFORMATION" ? (
+            <Text style={[s.cardMeta, { marginTop: 6, lineHeight: 16 }]}>
+              Waiting for the customer to update basic information.
+            </Text>
+          ) : null}
         </View>
       </View>
+
+      {canRequestMoreInfo || canAcceptConsultation ? (
+        <View style={s.quotationOverviewCard}>
+          <View style={s.quotationOverviewAccent} />
+          <View style={s.quotationOverviewBody}>
+            <Text style={s.sectionLabel}>Consultation actions</Text>
+            {canRequestMoreInfo ? (
+              <>
+                <Text style={[s.cardMeta, { lineHeight: 16, marginBottom: 10 }]}>
+                  Ask the customer to provide missing project details before continuing.
+                </Text>
+                <Pressable
+                  style={[s.fixedPrimary, { flex: undefined, width: "100%" }]}
+                  onPress={() => setRequestInfoOpen(true)}
+                >
+                  <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>Request more information</Text>
+                </Pressable>
+              </>
+            ) : null}
+            {canAcceptConsultation ? (
+              <>
+                <Text style={[s.cardMeta, { lineHeight: 16, marginBottom: 10, marginTop: canRequestMoreInfo ? 12 : 0 }]}>
+                  {project.status === "NEED_BASIC_INFORMATION"
+                    ? "Customer may have updated details. Accept to continue consultation."
+                    : "Claim this submitted request for consultation."}
+                </Text>
+                <Pressable
+                  style={[
+                    s.fixedPrimary,
+                    { flex: undefined, width: "100%" },
+                    claimMutation.isPending && { opacity: 0.6 },
+                  ]}
+                  disabled={claimMutation.isPending}
+                  onPress={handleAcceptConsultation}
+                >
+                  <Text style={[s.buttonPrimaryText, { fontSize: 13 }]}>
+                    {claimMutation.isPending ? "Accepting…" : "Accept for consultation"}
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      <Modal visible={requestInfoOpen} transparent animationType="slide" onRequestClose={() => setRequestInfoOpen(false)}>
+        <KeyboardSafeView style={s.modalBackdrop}>
+          <View style={s.sheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>Request more information</Text>
+              <Pressable onPress={() => setRequestInfoOpen(false)}>
+                <Text style={s.cardMeta}>Close</Text>
+              </Pressable>
+            </View>
+            <Text style={[s.cardMeta, { marginBottom: 10, lineHeight: 16 }]}>
+              Describe what the customer should update. This message is required.
+            </Text>
+            <TextInput
+              value={requestMessage}
+              onChangeText={setRequestMessage}
+              placeholder="Please update store dimensions, floor plan, and target opening date."
+              placeholderTextColor="rgba(122,111,104,.5)"
+              multiline
+              style={[s.sheetInput, { minHeight: 110, textAlignVertical: "top" }]}
+            />
+            <Pressable
+              style={[
+                s.buttonPrimary,
+                { marginTop: 14 },
+                (requestInfoMutation.isPending || !requestMessage.trim()) && { opacity: 0.6 },
+              ]}
+              disabled={requestInfoMutation.isPending || !requestMessage.trim()}
+              onPress={handleSubmitRequestInfo}
+            >
+              <Text style={s.buttonPrimaryText}>
+                {requestInfoMutation.isPending ? "Sending…" : "Send request"}
+              </Text>
+            </Pressable>
+          </View>
+        </KeyboardSafeView>
+      </Modal>
 
       {shouldShowStartFeeSection(project, startFeeStatusQuery.data) ? (
         <ProjectStartFeeCard projectId={projectId} project={project} />
@@ -1527,19 +1666,24 @@ function CreateScheduleModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={s.modalBackdrop} onPress={onClose}>
-        <Pressable style={s.sheet} onPress={(event) => event.stopPropagation()}>
-          <View style={s.sheetHandle} />
-          <View style={s.sheetHeader}>
-            <View>
-              <Text style={s.sheetTitle}>New Schedule</Text>
-              <Text style={s.cardMeta}>{project?.projectCode ?? "Project"}</Text>
+      <KeyboardSafeView style={s.modalBackdrop}>
+        <Pressable style={{ flex: 1, justifyContent: "flex-end" }} onPress={onClose}>
+          <Pressable style={s.sheet} onPress={(event) => event.stopPropagation()}>
+            <View style={s.sheetHandle} />
+            <View style={s.sheetHeader}>
+              <View>
+                <Text style={s.sheetTitle}>New Schedule</Text>
+                <Text style={s.cardMeta}>{project?.projectCode ?? "Project"}</Text>
+              </View>
+              <Pressable style={s.settingIcon} onPress={onClose}>
+                <Text style={{ color: SALE.muted, fontSize: 18 }}>×</Text>
+              </Pressable>
             </View>
-            <Pressable style={s.settingIcon} onPress={onClose}>
-              <Text style={{ color: SALE.muted, fontSize: 18 }}>×</Text>
-            </Pressable>
-          </View>
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.sheetBody}>
+            <KeyboardSafeScroll
+              fill={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={s.sheetBody}
+            >
             <View style={s.typeRow}>
               {typeOptions.map((item) => (
                 <Pressable
@@ -1618,9 +1762,10 @@ function CreateScheduleModal({
                 <Text style={s.buttonPrimaryText}>{createMutation.isPending ? "Creating…" : "Create"}</Text>
               </Pressable>
             </View>
-          </ScrollView>
+            </KeyboardSafeScroll>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardSafeView>
     </Modal>
   );
 }

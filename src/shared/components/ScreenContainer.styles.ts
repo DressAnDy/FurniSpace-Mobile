@@ -6,4 +6,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  fill: {
+    flex: 1,
+  },
 });

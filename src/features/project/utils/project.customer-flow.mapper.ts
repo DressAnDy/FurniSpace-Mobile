@@ -85,16 +85,16 @@ export function resolveCustomerFlowDecision(status: ProjectStatus): CustomerFlow
     case "NEED_BASIC_INFORMATION":
       return {
         stage: "project",
-        headline: "More information needed",
-        description: "Sales requested additional project details.",
+        headline: "Need Info",
+        description: "Sales requested additional project details. Please update your information.",
         actions: [
           {
             id: "update_basic_information",
-            label: "Update basic information",
+            label: "Update information",
             screen: "update_basic_info",
             primary: true,
           },
-          { id: "pay_start_fee", label: "Pay Start Fee", screen: "payment_start_fee" },
+          { id: "open_chat", label: "Message sales", screen: "chat" },
         ],
         fetchKeys: [...BASE_FETCH, "payments"],
       };

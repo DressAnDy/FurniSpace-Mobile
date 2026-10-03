@@ -34,9 +34,33 @@ export async function getProductIssueApi(issueId: string): Promise<ProductIssueR
   return response.data.data;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const current = nextIndex;
+      nextIndex += 1;
+      results[current] = await worker(items[current], current);
+    }
+  }
+
+  const pool = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: pool }, () => runWorker()));
+  return results;
+}
+
 export async function createProductIssueApi(input: CreateProductIssueInput): Promise<ProductIssueReportDto> {
-  const evidenceFileIds: string[] = [];
-  for (const file of input.files ?? []) {
+  const evidenceFileIds = await mapWithConcurrency(input.files ?? [], 3, async (file) => {
     const uploaded = await directUploadFile<{ fileId: string }>({
       preparePath: endpoints.orders.productIssueEvidenceUploadUrl(input.orderId),
       completePath: endpoints.orders.productIssueEvidenceComplete(input.orderId),
@@ -52,8 +76,8 @@ export async function createProductIssueApi(input: CreateProductIssueInput): Pro
     if (!fileId) {
       throw new Error("Evidence upload did not return a file id.");
     }
-    evidenceFileIds.push(fileId);
-  }
+    return fileId;
+  });
 
   try {
     const response = await httpClient.post<ApiResponse<ProductIssueReportDto>>(

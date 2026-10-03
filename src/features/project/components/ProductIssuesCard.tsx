@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   DeviceEventEmitter,
+  Dimensions,
   Image,
   Linking,
   Modal,
@@ -17,6 +18,7 @@ import {
 import { copyPickedFileToCache } from "../../../core/upload/readableFile";
 import { closeIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { useOrderDetailQuery } from "../hooks/useCustomerFlow";
 import {
   formatProductIssueStatusLabel,
@@ -244,6 +246,28 @@ export function ProductIssuesCard({
     }
   };
 
+  const normalizeImageAssets = async (
+    assets: ImagePicker.ImagePickerAsset[],
+    namePrefix: string,
+  ): Promise<ProductIssueEvidenceLocalFile[]> => {
+    return Promise.all(
+      assets.map(async (asset, index) => {
+        const name = asset.fileName ?? `${namePrefix}-${index + 1}.jpg`;
+        const copied = await copyPickedFileToCache({
+          uri: asset.uri,
+          name,
+          size: asset.fileSize,
+        });
+        return {
+          uri: copied.uri,
+          name,
+          mimeType: asset.mimeType ?? "image/jpeg",
+          size: copied.size ?? asset.fileSize,
+        } satisfies ProductIssueEvidenceLocalFile;
+      }),
+    );
+  };
+
   const handlePickPhotos = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -262,25 +286,32 @@ export function ProductIssuesCard({
         return;
       }
 
-      const normalized = await Promise.all(
-        result.assets.map(async (asset, index) => {
-          const name = asset.fileName ?? `evidence-${index + 1}.jpg`;
-          const copied = await copyPickedFileToCache({
-            uri: asset.uri,
-            name,
-            size: asset.fileSize,
-          });
-          return {
-            uri: copied.uri,
-            name,
-            mimeType: asset.mimeType ?? "image/jpeg",
-            size: copied.size ?? asset.fileSize,
-          } satisfies ProductIssueEvidenceLocalFile;
-        }),
-      );
-      appendEvidenceFiles(normalized);
+      appendEvidenceFiles(await normalizeImageAssets(result.assets, "evidence"));
     } catch {
       Alert.alert("Unable to pick photos", "Please try again.");
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission needed", "Allow camera access to take evidence photos.");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.85,
+        allowsEditing: false,
+      });
+      if (result.canceled || !result.assets?.length) {
+        return;
+      }
+
+      appendEvidenceFiles(await normalizeImageAssets(result.assets, "camera"));
+    } catch {
+      Alert.alert("Unable to open camera", "Please try again.");
     }
   };
 
@@ -466,6 +497,7 @@ export function ProductIssuesCard({
           setAffectedQuantity(sanitizeIntegerInput(value));
           setFieldErrors((current) => ({ ...current, affectedQuantity: undefined }));
         }}
+        onTakePhoto={() => void handleTakePhoto()}
         onPickPhotos={() => void handlePickPhotos()}
         onPickDocuments={() => void handlePickDocuments()}
         onRemoveFile={(index) => setFiles((current) => current.filter((_, i) => i !== index))}
@@ -493,6 +525,7 @@ function CreateIssueModal({
   onSelectType,
   onChangeDescription,
   onChangeQuantity,
+  onTakePhoto,
   onPickPhotos,
   onPickDocuments,
   onRemoveFile,
@@ -513,6 +546,7 @@ function CreateIssueModal({
   onSelectType: (type: DeliveryProductIssueType) => void;
   onChangeDescription: (value: string) => void;
   onChangeQuantity: (value: string) => void;
+  onTakePhoto: () => void;
   onPickPhotos: () => void;
   onPickDocuments: () => void;
   onRemoveFile: (index: number) => void;
@@ -532,7 +566,13 @@ function CreateIssueModal({
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <KeyboardSafeScroll
+            fill={false}
+            style={[styles.modalScroll, { maxHeight: Math.round(Dimensions.get("window").height * 0.72) }]}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.fieldLabel}>Delivered product *</Text>
             <Text style={styles.fieldHint}>Only items with delivered quantity &gt; 0 can be reported.</Text>
             {eligibleItems.map((item) => {
@@ -609,6 +649,9 @@ function CreateIssueModal({
               Images or PDF, up to {PRODUCT_ISSUE_EVIDENCE_MAX_FILES} files, 10 MB each.
             </Text>
             <View style={styles.evidenceActions}>
+              <Pressable style={[styles.secondaryButton, styles.evidenceAction]} onPress={onTakePhoto}>
+                <Text style={styles.secondaryButtonText}>Take photo</Text>
+              </Pressable>
               <Pressable style={[styles.secondaryButton, styles.evidenceAction]} onPress={onPickPhotos}>
                 <Text style={styles.secondaryButtonText}>Add photos</Text>
               </Pressable>
@@ -647,7 +690,7 @@ function CreateIssueModal({
                 <Text style={styles.primaryButtonText}>Submit report</Text>
               )}
             </Pressable>
-          </ScrollView>
+          </KeyboardSafeScroll>
         </View>
       </View>
     </Modal>

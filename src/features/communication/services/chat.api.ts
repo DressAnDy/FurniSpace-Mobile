@@ -13,6 +13,7 @@ import {
   ProjectChatSummaryDto,
   SendTextMessageRequest,
 } from "../models/chat.model";
+import { normalizeChatMessagesPage } from "../utils/chatMessage.normalize";
 
 export type ChatUploadFileType =
   | "REFERENCE_IMAGE"
@@ -58,7 +59,7 @@ export async function getChatMessagesApi(
   chatId: string,
   query: ChatMessageListQuery = {},
 ): Promise<PaginatedResponse<ChatMessageDto>> {
-  const response = await httpClient.get<ApiResponse<PaginatedResponse<ChatMessageDto>>>(
+  const response = await httpClient.get<ApiResponse<PaginatedResponse<ChatMessageDto> | ChatMessageDto[]>>(
     endpoints.chat.messages(chatId),
     {
       params: {
@@ -69,7 +70,15 @@ export async function getChatMessagesApi(
     },
   );
 
-  return response.data.data;
+  // Axios body may be ApiResponse<data> or the page itself; Items vs items varies by serializer.
+  const payload = (response.data as { data?: unknown }).data ?? response.data;
+  const page = normalizeChatMessagesPage(payload);
+  return {
+    items: page.items as ChatMessageDto[],
+    page: page.page,
+    limit: page.limit,
+    total: page.total,
+  };
 }
 
 export async function sendChatTextMessageApi(chatId: string, content: string): Promise<ChatMessageDto> {

@@ -3,7 +3,7 @@ import { useCallback, useMemo } from "react";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useAuthStore } from "../../auth/store/auth.store";
 import { getPaymentsApi } from "../../payment/services/payment.api";
-import { ProjectStatus } from "../models/project.model";
+import { ProjectDetailDto, ProjectStatus } from "../models/project.model";
 import { OrderDto, PhaseDeadlinesResponseDto, ProjectScheduleDto } from "../models/project.tracking.model";
 import { getProjectByIdApi, reopenProjectProposalApi } from "../services/project.api";
 import {
@@ -27,7 +27,7 @@ export type ProjectTrackingData = {
   tracking: ReturnType<typeof buildProjectTrackingSummary>;
 };
 
-const TRACKING_STALE_MS = 30_000;
+const TRACKING_STALE_MS = 60_000;
 
 export function buildProjectTrackingQueryOptions(projectId: string, isLoggedIn = true) {
   const enabled = isLoggedIn && Boolean(projectId);
@@ -127,16 +127,28 @@ function buildTrackingQueryOptions(projectId: string, isLoggedIn: boolean) {
 export function refetchProjectTrackingQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   projectId: string,
+  options?: { mode?: "full" | "pull" },
 ): Promise<void> {
-  return Promise.all([
+  const mode = options?.mode ?? "full";
+
+  // Core data shown on the Tracking screen — keep pull refresh lean.
+  const core = [
     queryClient.refetchQueries({ queryKey: queryKeys.project.detail(projectId), type: "active" }),
     queryClient.refetchQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId), type: "active" }),
     queryClient.refetchQueries({ queryKey: queryKeys.project.schedules(projectId), type: "active" }),
     queryClient.refetchQueries({ queryKey: queryKeys.project.trackingOrders(projectId), type: "active" }),
     queryClient.refetchQueries({
-      queryKey: ["payment", "list"],
+      queryKey: queryKeys.payment.list({ projectId, limit: 20 }),
       type: "active",
     }),
+  ];
+
+  if (mode === "pull") {
+    return Promise.all(core).then(() => undefined);
+  }
+
+  return Promise.all([
+    ...core,
     queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] }),
     queryClient.invalidateQueries({ queryKey: ["project", "quotations", projectId] }),
     queryClient.refetchQueries({ queryKey: ["project", "list"], type: "active" }),
@@ -240,15 +252,82 @@ export function useConfirmOrderDeliveryMutation(projectId: string | null) {
 
   return useMutation({
     mutationFn: (orderId: string) => confirmOrderDeliveryApi(orderId),
-    onSuccess: (_order, orderId) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(orderId) });
-      void queryClient.invalidateQueries({ queryKey: ["payment", "list"] });
-      if (projectId) {
-        void refetchProjectTrackingQueries(queryClient, projectId);
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.orders(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.trackingOrders(projectId) });
-        void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
+    onMutate: async (orderId) => {
+      if (!projectId) {
+        return {};
       }
+
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: queryKeys.project.detail(projectId) }),
+        queryClient.cancelQueries({ queryKey: queryKeys.project.trackingOrders(projectId) }),
+      ]);
+
+      const previousDetail = queryClient.getQueryData(queryKeys.project.detail(projectId));
+      const previousOrders = queryClient.getQueryData<OrderDto[]>(
+        queryKeys.project.trackingOrders(projectId),
+      );
+
+      // Unlock DELIVERED flow actions immediately — don't wait on full refetch cascade.
+      queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(projectId), (current) =>
+        current ? { ...current, status: "DELIVERED" } : current,
+      );
+      queryClient.setQueryData<OrderDto[]>(queryKeys.project.trackingOrders(projectId), (current) =>
+        current?.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                status: "FINAL_PAYMENT_PENDING",
+                customerConfirmedDeliveryAt: new Date().toISOString(),
+              }
+            : order,
+        ),
+      );
+
+      return { previousDetail, previousOrders };
+    },
+    onError: (_error, _orderId, context) => {
+      if (!projectId || !context) {
+        return;
+      }
+      if (context.previousDetail !== undefined) {
+        queryClient.setQueryData(queryKeys.project.detail(projectId), context.previousDetail);
+      }
+      if (context.previousOrders !== undefined) {
+        queryClient.setQueryData(queryKeys.project.trackingOrders(projectId), context.previousOrders);
+      }
+    },
+    onSuccess: (response, orderId) => {
+      if (!projectId) {
+        return;
+      }
+
+      queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(projectId), (current) =>
+        current
+          ? {
+              ...current,
+              status: (response.projectStatus as ProjectStatus) || "DELIVERED",
+            }
+          : current,
+      );
+      queryClient.setQueryData<OrderDto[]>(queryKeys.project.trackingOrders(projectId), (current) =>
+        current?.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                status: response.orderStatus,
+                customerConfirmedDeliveryAt: response.customerConfirmedDeliveryAt,
+              }
+            : order,
+        ),
+      );
+
+      // Remaining payment is created server-side — only refetch what unlocks Pay Remaining.
+      void queryClient.refetchQueries({
+        queryKey: queryKeys.payment.list({ projectId, limit: 20 }),
+        type: "active",
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.order.detail(orderId) });
+      void queryClient.invalidateQueries({ queryKey: ["project", "list"], refetchType: "inactive" });
     },
   });
 }

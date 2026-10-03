@@ -183,27 +183,113 @@ export function validateProjectRequestForm(
   };
 }
 
-export function validateUpdateProjectBasicInfoForm(values: {
-  projectName: string;
-  businessType: string;
-  furnitureRequirement: string;
-  projectAddress: string;
-  description: string;
-  targetCompletionDate?: string | null;
-}): ProjectRequestFieldErrors {
-  const result = validateProjectRequestForm({
-    ...values,
-    totalAreaSqm: "",
-    numberOfFloors: "",
-    budgetMin: "",
-    budgetMax: "",
-    targetCompletionDate: values.targetCompletionDate ?? null,
-  });
+export type UpdateBasicInfoFormInput = ProjectRequestFormInput & {
+  businessPurpose: string;
+};
 
-  if (result.ok) {
-    return {};
+/** Validation messages aligned with FE web / mobile handoff. */
+export function validateUpdateProjectBasicInfoForm(
+  values: UpdateBasicInfoFormInput,
+): ProjectRequestFieldErrors & { businessPurpose?: string } {
+  const errors: ProjectRequestFieldErrors & { businessPurpose?: string } = {};
+
+  const projectName = requiredTrimmed(values.projectName, "Project name is required.");
+  if (projectName.error) {
+    errors.projectName = projectName.error;
   }
 
-  const { totalAreaSqm: _a, numberOfFloors: _b, budgetMin: _c, budgetMax: _d, ...rest } = result.errors;
-  return rest;
+  const businessType = requiredTrimmed(values.businessType, "Business type is required.");
+  if (businessType.error) {
+    errors.businessType = businessType.error;
+  }
+
+  const furnitureRequirement = requiredTrimmed(
+    values.furnitureRequirement,
+    "Furniture requirement is required.",
+  );
+  if (furnitureRequirement.error) {
+    errors.furnitureRequirement = furnitureRequirement.error;
+  }
+
+  const areaRaw = values.totalAreaSqm.trim().replace(",", ".");
+  if (areaRaw) {
+    const area = Number(areaRaw);
+    if (!Number.isFinite(area)) {
+      errors.totalAreaSqm = "Total Area (sqm) must be a valid number.";
+    } else if (area < 0) {
+      errors.totalAreaSqm = "Total Area (sqm) cannot be negative.";
+    } else if (area > 10_000) {
+      errors.totalAreaSqm =
+        "Total Area (sqm) cannot exceed 10,000. This project request is not feasible.";
+    }
+  }
+
+  const floorsRaw = values.numberOfFloors.trim();
+  if (floorsRaw) {
+    const floors = Number(floorsRaw.replace(/[,\s]/g, ""));
+    if (!Number.isInteger(floors) || floors <= 0) {
+      errors.numberOfFloors = "Number of Floors must be an integer greater than 0.";
+    }
+  }
+
+  const budgetMin = values.budgetMin.trim() ? parseVndAmount(values.budgetMin) : undefined;
+  const budgetMax = values.budgetMax.trim() ? parseVndAmount(values.budgetMax) : undefined;
+  if (values.budgetMin.trim()) {
+    if (budgetMin === undefined) {
+      errors.budgetMin = "Minimum Budget must be a valid number.";
+    } else if (budgetMin < 100_000) {
+      errors.budgetMin = "Minimum Budget must be at least 100,000.";
+    } else if (budgetMin > 1_000_000_000) {
+      errors.budgetMin = "Minimum Budget cannot exceed 1,000,000,000.";
+    }
+  }
+  if (values.budgetMax.trim()) {
+    if (budgetMax === undefined) {
+      errors.budgetMax = "Maximum Budget must be a valid number.";
+    } else if (budgetMax < 100_000) {
+      errors.budgetMax = "Maximum Budget must be at least 100,000.";
+    } else if (budgetMax > 1_000_000_000) {
+      errors.budgetMax = "Maximum Budget cannot exceed 1,000,000,000.";
+    }
+  }
+  if (budgetMin != null && budgetMax != null && budgetMin > budgetMax) {
+    errors.budgetMax = "Minimum Budget cannot be greater than Maximum Budget.";
+  }
+
+  if (values.targetCompletionDate) {
+    const selected = new Date(`${values.targetCompletionDate}T00:00:00`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (Number.isNaN(selected.getTime()) || selected < today) {
+      errors.targetCompletionDate = "Target completion date cannot be in the past.";
+    }
+  }
+
+  return errors;
+}
+
+export function buildUpdateBasicInfoPayload(values: UpdateBasicInfoFormInput): {
+  payload: import("../models/project.model").UpdateProjectBasicInfoRequestDto;
+  targetCompletionDate: string | null;
+} {
+  const areaRaw = values.totalAreaSqm.trim().replace(",", ".");
+  const floorsRaw = values.numberOfFloors.trim();
+  const budgetMin = values.budgetMin.trim() ? parseVndAmount(values.budgetMin) : undefined;
+  const budgetMax = values.budgetMax.trim() ? parseVndAmount(values.budgetMax) : undefined;
+
+  return {
+    payload: {
+      projectName: values.projectName.trim(),
+      businessType: values.businessType.trim(),
+      furnitureRequirement: values.furnitureRequirement.trim(),
+      projectAddress: values.projectAddress.trim() || null,
+      businessPurpose: values.businessPurpose.trim() || null,
+      description: values.description.trim() || null,
+      totalAreaSqm: areaRaw ? Number(areaRaw) : null,
+      numberOfFloors: floorsRaw ? Number(floorsRaw.replace(/[,\s]/g, "")) : null,
+      budgetMin: budgetMin ?? null,
+      budgetMax: budgetMax ?? null,
+    },
+    targetCompletionDate: values.targetCompletionDate,
+  };
 }

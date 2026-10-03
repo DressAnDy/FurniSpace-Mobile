@@ -314,7 +314,10 @@ export async function navigateFromNotification(
     referenceType === "PROJECT" ||
     type.includes("project.request") ||
     type.includes("projectrequestsubmitted") ||
-    type.includes("basic_information")
+    type.includes("basic_information") ||
+    type.includes("information_request") ||
+    type.includes("information-request") ||
+    type.includes("need_basic")
   ) {
     if (sales) {
       if (type.includes("project.request.submitted") || type.includes("projectrequestsubmitted")) {
@@ -330,6 +333,20 @@ export async function navigateFromNotification(
         return;
       }
       navigateSalesHome(navigation);
+      return;
+    }
+
+    // Customer: information-request / need basic info → update form
+    if (
+      !designer &&
+      projectId &&
+      (type.includes("information_request") ||
+        type.includes("information-request") ||
+        type.includes("need_basic") ||
+        type.includes("basic_information"))
+    ) {
+      options?.setActiveProjectId?.(projectId);
+      navigation.navigate("UpdateProjectBasicInfo", { projectId });
       return;
     }
   }

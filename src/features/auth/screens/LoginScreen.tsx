@@ -13,7 +13,7 @@ export function LoginScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
-    <ScreenContainer>
+    <ScreenContainer keyboard={false}>
       <LoginForm
         isSubmitting={loginMutation.isPending}
         onForgotPassword={() => navigation.navigate("ForgotPassword")}

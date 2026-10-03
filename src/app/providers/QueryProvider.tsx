@@ -11,7 +11,7 @@ export function QueryProvider({ children }: QueryProviderProps): React.JSX.Eleme
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30 * 1000,
+            staleTime: 45 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
           },

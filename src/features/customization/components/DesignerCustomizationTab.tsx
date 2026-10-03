@@ -1,14 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { KeyboardSafeScroll, KeyboardSafeView } from "../../../shared/components/KeyboardSafe";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { useProjectProposalsQuery, useProposalItemsQuery } from "../../project/hooks/useCustomerFlow";
 import { CustomizationStatus } from "../models/customization.model";
@@ -271,10 +263,7 @@ export function DesignerCustomizationTab({ projectId }: { projectId: string | nu
       )}
 
       <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={closeModal}>
-        <KeyboardAvoidingView
-          style={styles.modalBackdrop}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+        <KeyboardSafeView style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Designer assisted request</Text>
@@ -282,7 +271,11 @@ export function DesignerCustomizationTab({ projectId }: { projectId: string | nu
                 <Text style={styles.closeText}>Close</Text>
               </Pressable>
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <KeyboardSafeScroll
+              fill={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.helperText}>
                 Create this request for the customer when they described the change in chat or review.
               </Text>
@@ -358,9 +351,9 @@ export function DesignerCustomizationTab({ projectId }: { projectId: string | nu
                   {submitMutation.isPending ? "Submitting..." : "Submit assisted request"}
                 </Text>
               </Pressable>
-            </ScrollView>
+            </KeyboardSafeScroll>
           </View>
-        </KeyboardAvoidingView>
+        </KeyboardSafeView>
       </Modal>
     </View>
   );

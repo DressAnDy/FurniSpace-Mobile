@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { closeIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { formatTrackingDate, formatTrackingDateTime } from "../../project/utils/project.tracking.mapper";
 import {
   formatDelayLabel,
@@ -209,7 +210,11 @@ export function OperationalDelayPanel({
                 <AppIcon definition={closeIconDefinition} size={16} color="#3A3330" />
               </Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <KeyboardSafeScroll
+              fill={false}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.hintText}>This report is permanent and does not create a resolution workflow.</Text>
 
               <Text style={styles.fieldLabel}>{phase === "PRODUCTION" ? "Production reason" : "Delivery reason"}</Text>
@@ -263,7 +268,7 @@ export function OperationalDelayPanel({
                   <Text style={styles.primaryButtonText}>Save report</Text>
                 )}
               </Pressable>
-            </ScrollView>
+            </KeyboardSafeScroll>
           </View>
         </View>
       </Modal>

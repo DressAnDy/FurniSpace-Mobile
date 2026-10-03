@@ -43,6 +43,7 @@ import {
 import { DESIGNER, designerStyles as s } from "../styles/designer.styles";
 import { detailStyles as detail } from "../styles/designer.detail.styles";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { chevronDownIconDefinition } from "../../../icons/navigation/definitions";
 import { rulerIconDefinition } from "../../../icons/design/definitions";
 import { cameraIconDefinition } from "../../../icons/common/definitions";
@@ -132,7 +133,7 @@ export function DesignerProjectDetailScreen({ route }: Props): React.JSX.Element
         statusLabel={project ? getProjectStatusLabel(project.status) : projectQuery.isLoading ? "Loading…" : undefined}
       />
       <DesignerProjectTabs active={activeTab} projectId={projectId ?? undefined} />
-      <ScrollView
+      <KeyboardSafeScroll
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -162,7 +163,7 @@ export function DesignerProjectDetailScreen({ route }: Props): React.JSX.Element
         ) : null}
         {activeTab === "Catalog" ? <CatalogTab projectId={projectId} /> : null}
         {activeTab === "Customization" ? <DesignerCustomizationTab projectId={projectId} /> : null}
-      </ScrollView>
+      </KeyboardSafeScroll>
     </DesignerFrame>
   );
 }

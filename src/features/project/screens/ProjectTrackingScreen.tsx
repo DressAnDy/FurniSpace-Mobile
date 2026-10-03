@@ -39,6 +39,7 @@ import {
   canReopenProposal,
   getPrimaryOrder,
   getUpcomingSchedules,
+  refetchProjectTrackingQueries,
   useConfirmOrderDeliveryMutation,
   useProjectTrackingQueries,
   useReopenProjectProposalMutation,
@@ -149,17 +150,27 @@ export function ProjectTrackingScreen(): React.JSX.Element {
 
     setIsPullRefreshing(true);
     try {
+      // Pull only refreshes what this screen shows — skip project-list / proposals / all product-issues.
       await Promise.all([
-        refetchAll(),
-        queryClient.refetchQueries({ queryKey: ["product-issue"] }),
+        refetchProjectTrackingQueries(queryClient, projectId, { mode: "pull" }),
+        queryClient.refetchQueries({
+          queryKey: queryKeys.productIssue.byProject(projectId),
+          type: "active",
+        }),
         issueOrderId
-          ? queryClient.refetchQueries({ queryKey: queryKeys.order.detail(issueOrderId) })
+          ? queryClient.refetchQueries({
+              queryKey: queryKeys.productIssue.byOrder(issueOrderId),
+              type: "active",
+            })
+          : Promise.resolve(),
+        issueOrderId
+          ? queryClient.refetchQueries({ queryKey: queryKeys.order.detail(issueOrderId), type: "active" })
           : Promise.resolve(),
       ]);
     } finally {
       setIsPullRefreshing(false);
     }
-  }, [issueOrderId, projectId, queryClient, refetchAll]);
+  }, [issueOrderId, projectId, queryClient]);
 
   const payments = data?.payments.items ?? [];
   const pendingStartFeePayment = useMemo(() => findPendingPayment(payments, "PROJECT_START_FEE"), [payments]);
@@ -178,9 +189,12 @@ export function ProjectTrackingScreen(): React.JSX.Element {
       {
         text: "Confirm",
         onPress: () => {
-          confirmDeliveryMutation.mutate(primaryOrder.orderId, {
-            onError: () => Alert.alert("Error", "Unable to confirm delivery. Please try again."),
-          });
+          // Let the alert dismiss first to avoid a frame hitch, then mutate.
+          setTimeout(() => {
+            confirmDeliveryMutation.mutate(primaryOrder.orderId, {
+              onError: () => Alert.alert("Error", "Unable to confirm delivery. Please try again."),
+            });
+          }, 0);
         },
       },
     ]);

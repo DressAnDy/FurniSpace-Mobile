@@ -6,12 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -25,6 +21,7 @@ import { fileTextIconDefinition, paperclipIconDefinition } from "../../../icons/
 import { sendIconDefinition } from "../../../icons/communication/definitions";
 import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeView } from "../../../shared/components/KeyboardSafe";
 import { useChatActions, useVisibleChatMessages } from "../hooks/useChatMessages";
 import { useProjectChatRealtime } from "../hooks/useProjectChatRealtime";
 import { ChatAttachmentDto, ChatMessageListItem } from "../models/chat.model";
@@ -32,23 +29,6 @@ import { mapChatMessageToListItem, getInitials } from "../utils/chat.mapper";
 import { styles } from "./MessageChatScreen.styles";
 
 type MessageChatRoute = RouteProp<RootStackParamList, "MessageChat" | "SaleChat" | "DesignerChat">;
-
-function resolveAndroidKeyboardOffset(
-  event: { endCoordinates: { height: number; screenY: number } },
-  baselineWindowHeight: number,
-): number {
-  const currentWindowHeight = Dimensions.get("window").height;
-  const windowShrunk = baselineWindowHeight - currentWindowHeight > 48;
-
-  if (windowShrunk) {
-    return 0;
-  }
-
-  const keyboardTop = event.endCoordinates.screenY;
-  const insetFromTop = Math.max(0, currentWindowHeight - keyboardTop);
-
-  return insetFromTop > 0 ? insetFromTop : event.endCoordinates.height;
-}
 
 export function MessageChatScreen(): React.JSX.Element {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -60,11 +40,8 @@ export function MessageChatScreen(): React.JSX.Element {
   const isDesignerShell = route.name === "DesignerChat";
   const textOnlyComposer = isSaleShell;
   const [draft, setDraft] = useState("");
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const listRef = useRef<FlatList<ChatMessageListItem>>(null);
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
-  const baselineWindowHeightRef = useRef(Dimensions.get("window").height);
 
   const messagesQuery = useVisibleChatMessages(chatId);
   const { sendTextMutation, sendFileMutation, appendMessageToCache } = useChatActions(
@@ -77,45 +54,13 @@ export function MessageChatScreen(): React.JSX.Element {
   const isChatOpen = status === "OPEN";
   const isSendingFile = sendFileMutation.isPending;
   const headerInitials = getInitials(staffName || title);
-  const composerBottomPadding = keyboardVisible ? 8 : Math.max(insets.bottom, 10);
-  const androidKeyboardOffset =
-    Platform.OS === "android" && keyboardVisible ? keyboardHeight : 0;
+  const composerBottomPadding = Math.max(insets.bottom, 10);
 
   useEffect(() => {
     for (const message of messagesQuery.messages) {
       knownMessageIdsRef.current.add(message.id);
     }
   }, [messagesQuery.messages]);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const frameEvent = Platform.OS === "android" ? "keyboardDidChangeFrame" : null;
-
-    const handleKeyboardShow = (event: { endCoordinates: { height: number; screenY: number } }) => {
-      setKeyboardVisible(true);
-
-      if (Platform.OS === "android") {
-        setKeyboardHeight(resolveAndroidKeyboardOffset(event, baselineWindowHeightRef.current));
-      }
-    };
-
-    const handleKeyboardHide = () => {
-      setKeyboardVisible(false);
-      setKeyboardHeight(0);
-      baselineWindowHeightRef.current = Dimensions.get("window").height;
-    };
-
-    const showSub = Keyboard.addListener(showEvent, handleKeyboardShow);
-    const hideSub = Keyboard.addListener(hideEvent, handleKeyboardHide);
-    const frameSub = frameEvent ? Keyboard.addListener(frameEvent, handleKeyboardShow) : null;
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-      frameSub?.remove();
-    };
-  }, []);
 
   const handleRealtimeMessage = useCallback(
     (payload: {
@@ -205,9 +150,9 @@ export function MessageChatScreen(): React.JSX.Element {
     }
   };
 
-  const renderMessage = ({ item }: { item: ChatMessageListItem }) => {
-    const originalIndex = messagesQuery.messages.findIndex((message) => message.id === item.id);
-    const previous = originalIndex > 0 ? messagesQuery.messages[originalIndex - 1] : undefined;
+  const renderMessage = ({ item, index }: { item: ChatMessageListItem; index: number }) => {
+    // displayMessages is newest-first; with inverted list, chronological previous is at index + 1.
+    const previous = displayMessages[index + 1];
     const showSender = !item.isMine && (!previous || previous.senderId !== item.senderId);
 
     return <MessageBubble item={item} showSender={showSender} />;
@@ -215,7 +160,7 @@ export function MessageChatScreen(): React.JSX.Element {
 
   const chatContent = (
     <>
-      {messagesQuery.isLoading ? (
+      {messagesQuery.isLoading || (messagesQuery.isFetching && displayMessages.length === 0) ? (
         <View style={styles.centerState}>
           <ActivityIndicator color="#C9A86A" />
         </View>
@@ -350,15 +295,7 @@ export function MessageChatScreen(): React.JSX.Element {
         </View>
       ) : null}
 
-      {Platform.OS === "ios" ? (
-        <KeyboardAvoidingView style={styles.chatArea} behavior="padding" keyboardVerticalOffset={0}>
-          {chatContent}
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={[styles.chatArea, androidKeyboardOffset > 0 ? { marginBottom: androidKeyboardOffset } : null]}>
-          {chatContent}
-        </View>
-      )}
+      <KeyboardSafeView style={styles.chatArea}>{chatContent}</KeyboardSafeView>
     </View>
   );
 }
@@ -425,7 +362,7 @@ function AttachmentCard({
   );
 }
 
-function MessageBubble({
+const MessageBubble = React.memo(function MessageBubble({
   item,
   showSender,
 }: Readonly<{
@@ -467,4 +404,4 @@ function MessageBubble({
       <Text style={item.isMine ? styles.timeRight : styles.timeLeft}>{item.timeLabel}</Text>
     </View>
   );
-}
+});

@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { HttpTransportType, LogLevel } from "@microsoft/signalr";
 import { ensureFreshAccessToken } from "../api/interceptors";
 import { env } from "../config/env";
@@ -29,11 +28,8 @@ export function getHubUrl(hubPath: string): string {
 export function getSignalRTransportOptions() {
   return {
     accessTokenFactory: async () => (await ensureFreshAccessToken()) ?? "",
-    // Native WebSocket often fails against ASP.NET SignalR (proxy/TLS). Long polling is reliable on mobile.
-    transport:
-      Platform.OS === "web"
-        ? HttpTransportType.WebSockets | HttpTransportType.LongPolling
-        : HttpTransportType.LongPolling,
+    // Prefer WebSockets; LongPolling is the automatic fallback when WS is blocked.
+    transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling,
     skipNegotiation: false,
   };
 }

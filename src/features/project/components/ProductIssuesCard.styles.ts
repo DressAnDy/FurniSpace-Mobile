@@ -113,11 +113,14 @@ export const styles = StyleSheet.create({
   },
   evidenceActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   evidenceAction: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "30%",
     marginTop: 0,
+    minWidth: 96,
   },
   modalBackdrop: {
     backgroundColor: "rgba(26,22,20,0.45)",
@@ -132,6 +135,12 @@ export const styles = StyleSheet.create({
     paddingBottom: 24,
     paddingHorizontal: 18,
     paddingTop: 16,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
   },
   modalHandle: {
     alignSelf: "center",

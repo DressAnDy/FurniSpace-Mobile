@@ -39,7 +39,7 @@ export function useHomeProjectRealtime({
       }
 
       hasFocusedRef.current = true;
-      if (Date.now() - lastRefreshAtRef.current >= 30_000) {
+      if (Date.now() - lastRefreshAtRef.current >= 45_000) {
         lastRefreshAtRef.current = Date.now();
         void refetchProjectsRef.current();
       }
