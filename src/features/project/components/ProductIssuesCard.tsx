@@ -14,6 +14,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { copyPickedFileToCache } from "../../../core/upload/readableFile";
 import { closeIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { useOrderDetailQuery } from "../hooks/useCustomerFlow";
@@ -221,14 +222,23 @@ export function ProductIssuesCard({
         return;
       }
 
-      appendEvidenceFiles(
-        result.assets.map((asset) => ({
-          uri: asset.uri,
-          name: asset.name ?? "evidence",
-          mimeType: asset.mimeType,
-          size: asset.size,
-        })),
+      const normalized = await Promise.all(
+        result.assets.map(async (asset) => {
+          const name = asset.name ?? "evidence";
+          const copied = await copyPickedFileToCache({
+            uri: asset.uri,
+            name,
+            size: asset.size,
+          });
+          return {
+            uri: copied.uri,
+            name,
+            mimeType: asset.mimeType,
+            size: copied.size ?? asset.size,
+          } satisfies ProductIssueEvidenceLocalFile;
+        }),
       );
+      appendEvidenceFiles(normalized);
     } catch {
       Alert.alert("Unable to pick files", "Please try again.");
     }
@@ -252,14 +262,23 @@ export function ProductIssuesCard({
         return;
       }
 
-      appendEvidenceFiles(
-        result.assets.map((asset, index) => ({
-          uri: asset.uri,
-          name: asset.fileName ?? `evidence-${index + 1}.jpg`,
-          mimeType: asset.mimeType ?? "image/jpeg",
-          size: asset.fileSize,
-        })),
+      const normalized = await Promise.all(
+        result.assets.map(async (asset, index) => {
+          const name = asset.fileName ?? `evidence-${index + 1}.jpg`;
+          const copied = await copyPickedFileToCache({
+            uri: asset.uri,
+            name,
+            size: asset.fileSize,
+          });
+          return {
+            uri: copied.uri,
+            name,
+            mimeType: asset.mimeType ?? "image/jpeg",
+            size: copied.size ?? asset.fileSize,
+          } satisfies ProductIssueEvidenceLocalFile;
+        }),
       );
+      appendEvidenceFiles(normalized);
     } catch {
       Alert.alert("Unable to pick photos", "Please try again.");
     }

@@ -82,6 +82,19 @@ function omitEmpty(body: Record<string, unknown>): Record<string, unknown> {
 }
 
 async function resolveFileSize(file: DirectUploadFile): Promise<number> {
+  // Prefer the bytes we will actually PUT. Picker `fileSize` is often wrong after
+  // ImagePicker recompression / HEIC→JPEG conversion on Android.
+  if (Platform.OS !== "web") {
+    try {
+      const info = await FileSystem.getInfoAsync(file.uri);
+      if (info.exists && !info.isDirectory && typeof info.size === "number" && info.size > 0) {
+        return info.size;
+      }
+    } catch {
+      // Fall through to picker size / fetch.
+    }
+  }
+
   if (typeof file.size === "number" && Number.isFinite(file.size) && file.size > 0) {
     return file.size;
   }
@@ -90,11 +103,6 @@ async function resolveFileSize(file: DirectUploadFile): Promise<number> {
     const response = await fetch(file.uri);
     const blob = await response.blob();
     return blob.size;
-  }
-
-  const info = await FileSystem.getInfoAsync(file.uri);
-  if (info.exists && !info.isDirectory && typeof info.size === "number" && info.size > 0) {
-    return info.size;
   }
 
   return 0;
@@ -130,8 +138,13 @@ async function putRawFile(uri: string, uploadUrl: string, contentType: string): 
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    if (/isn't readable|uploadAsync/i.test(message)) {
+    if (/isn't readable|uploadAsync/i.test(message) && !/Unable to resolve host|UnknownHost|Network is unreachable|ENOTFOUND|EAI_AGAIN/i.test(message)) {
       throw uploadError("Could not read the selected file. Please choose it again.");
+    }
+    if (/Unable to resolve host|UnknownHostException|No address associated with hostname|ENOTFOUND|EAI_AGAIN|Network is unreachable|Failed to connect/i.test(message)) {
+      throw uploadError(
+        "Cannot reach file storage. Check Wi‑Fi/mobile data (and emulator DNS), then try again.",
+      );
     }
     throw error instanceof Error ? error : uploadError("Upload failed.");
   }
@@ -185,7 +198,8 @@ export async function directUploadFile<TComplete>(options: {
   completeBody?: Record<string, unknown>;
 }): Promise<TComplete> {
   const localUri = await ensureReadableUploadUri(options.file.uri, options.file.name);
-  const file: DirectUploadFile = { ...options.file, uri: localUri };
+  // Drop picker size so prepare/complete always match the copied local file.
+  const file: DirectUploadFile = { ...options.file, uri: localUri, size: null };
   const contentType = resolveUploadContentType(file.name, file.mimeType);
   const fileSizeBytes = await resolveFileSize(file);
   if (fileSizeBytes <= 0) {
