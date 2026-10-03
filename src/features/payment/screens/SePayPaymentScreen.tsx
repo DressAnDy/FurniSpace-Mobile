@@ -56,7 +56,8 @@ export function SePayPaymentScreen(): React.JSX.Element {
   const transaction = checkout?.transaction ?? null;
   const transferDetails = checkout?.transferDetails;
   const isPaid = payment?.status === "PAID";
-  const shouldPoll = Boolean(payment && !isPaid && isWaitingConfirmation);
+  // Keep checking while the QR screen is open so PAID can appear without waiting on SignalR.
+  const shouldPoll = Boolean(payment && !isPaid);
 
   const transferContent = transferDetails?.transferContent ?? payment?.paymentCode ?? "";
   const accountNo = transferDetails?.accountNo ?? "";
@@ -133,11 +134,13 @@ export function SePayPaymentScreen(): React.JSX.Element {
     }
   }, []);
 
-  usePaymentRealtime({
+  const hubConnected = usePaymentRealtime({
     paymentId: payment?.paymentId ?? null,
     enabled: Boolean(payment && !isPaid),
     onUpdated: handlePaymentUpdated,
   });
+  // Hub is best-effort; poll fast while user is waiting for bank confirmation.
+  const pollIntervalMs = isWaitingConfirmation ? 3_000 : hubConnected ? 6_000 : 4_000;
 
   useEffect(() => {
     if (!shouldPoll || !payment?.paymentCode) {
@@ -175,13 +178,13 @@ export function SePayPaymentScreen(): React.JSX.Element {
     void poll();
     const intervalId = setInterval(() => {
       void poll();
-    }, 4000);
+    }, pollIntervalMs);
 
     return () => {
       active = false;
       clearInterval(intervalId);
     };
-  }, [payment?.paymentCode, shouldPoll]);
+  }, [payment?.paymentCode, pollIntervalMs, shouldPoll]);
 
   const statusLabel = useMemo(() => {
     if (!payment) {
@@ -212,6 +215,24 @@ export function SePayPaymentScreen(): React.JSX.Element {
 
   const handleConfirmTransferred = () => {
     setIsWaitingConfirmation(true);
+    if (payment?.paymentCode) {
+      void getPaymentStatusByCodeApi(payment.paymentCode)
+        .then((status) => {
+          if (status.status !== "PAID") {
+            return;
+          }
+          setCheckout((current) =>
+            current
+              ? {
+                  ...current,
+                  payment: { ...current.payment, status: status.status, paidAt: status.paidAt },
+                }
+              : current,
+          );
+          setIsWaitingConfirmation(false);
+        })
+        .catch(() => undefined);
+    }
     Alert.alert(
       "Waiting for confirmation",
       "We are checking your transfer. This usually takes a few seconds after the bank processes it.",

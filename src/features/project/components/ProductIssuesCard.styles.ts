@@ -136,6 +136,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 16,
   },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
+  },
   modalHandle: {
     alignSelf: "center",
     backgroundColor: "rgba(58,51,48,0.18)",

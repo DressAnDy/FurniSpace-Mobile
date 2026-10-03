@@ -14,6 +14,7 @@ export function useProjectsQuery(query: ProjectListQuery = {}) {
   return useQuery({
     queryKey: queryKeys.project.list(query),
     enabled: isLoggedIn,
+    staleTime: 60_000,
     queryFn: async () => {
       const response = await getProjectsApi(query);
       return {

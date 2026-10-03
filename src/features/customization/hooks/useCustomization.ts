@@ -22,11 +22,6 @@ function invalidateCustomizationQueries(
   scope: CustomizationScope,
 ): void {
   void queryClient.invalidateQueries({ queryKey: ["customization"] });
-  void queryClient.invalidateQueries({ queryKey: ["notification"] });
-  void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
-  void queryClient.invalidateQueries({ queryKey: ["proposal", "detail"] });
-  void queryClient.invalidateQueries({ queryKey: ["proposal", "items"] });
-  void queryClient.invalidateQueries({ queryKey: ["quotation"] });
 
   if (scope.projectId) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(scope.projectId) });
@@ -37,6 +32,9 @@ function invalidateCustomizationQueries(
   if (scope.proposalId) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.proposal.detail(scope.proposalId) });
     void queryClient.invalidateQueries({ queryKey: ["proposal", "items", scope.proposalId] });
+  } else if (!scope.projectId) {
+    void queryClient.invalidateQueries({ queryKey: ["proposal", "detail"] });
+    void queryClient.invalidateQueries({ queryKey: ["proposal", "items"] });
   }
 }
 

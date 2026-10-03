@@ -9,7 +9,6 @@ import {
   Alert,
   Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +21,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardSafeView } from "../../../shared/components/KeyboardSafe";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { AppIcon } from "../../../shared/components/AppIcon";
@@ -398,11 +398,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
 
   return (
     <View style={[s.screen, { paddingTop: insets.top }]}>
-      <KeyboardAvoidingView
-        style={[s.frame, s.fill]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 8 : 0}
-      >
+      <KeyboardSafeView style={[s.frame, s.fill]} offset={insets.top + 8}>
         <View style={[s.header, { paddingTop: 12, paddingBottom: 16 }]}>
           <View style={s.headerTopRow}>
             <Pressable style={s.headerIcon} onPress={() => navigation.goBack()}>
@@ -743,7 +739,7 @@ export function SaleQuotationDetailScreen(): React.JSX.Element {
             ) : null}
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </KeyboardSafeView>
     </View>
   );
 }

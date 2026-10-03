@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   DeviceEventEmitter,
+  Dimensions,
   Image,
   Linking,
   Modal,
@@ -17,6 +18,7 @@ import {
 import { copyPickedFileToCache } from "../../../core/upload/readableFile";
 import { closeIconDefinition } from "../../../icons/navigation/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { useOrderDetailQuery } from "../hooks/useCustomerFlow";
 import {
   formatProductIssueStatusLabel,
@@ -564,7 +566,13 @@ function CreateIssueModal({
             </Pressable>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <KeyboardSafeScroll
+            fill={false}
+            style={[styles.modalScroll, { maxHeight: Math.round(Dimensions.get("window").height * 0.72) }]}
+            contentContainerStyle={styles.modalScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.fieldLabel}>Delivered product *</Text>
             <Text style={styles.fieldHint}>Only items with delivered quantity &gt; 0 can be reported.</Text>
             {eligibleItems.map((item) => {
@@ -682,7 +690,7 @@ function CreateIssueModal({
                 <Text style={styles.primaryButtonText}>Submit report</Text>
               )}
             </Pressable>
-          </ScrollView>
+          </KeyboardSafeScroll>
         </View>
       </View>
     </Modal>

@@ -3,10 +3,8 @@ import * as DocumentPicker from "expo-document-picker";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -23,6 +21,7 @@ import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { AppIcon } from "../../../shared/components/AppIcon";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { copyPickedFileToCache } from "../../../core/upload/readableFile";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { ScreenContainer } from "../../../shared/components/ScreenContainer";
 import { useCreateProjectMutation } from "../hooks/useProjects";
 import { uploadCustomerProjectFileApi } from "../services/project.api";
@@ -240,9 +239,8 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
   const showError = (field: keyof FormErrors) => (hasSubmitted ? errors[field] : undefined);
 
   return (
-    <ScreenContainer style={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <ScreenContainer style={styles.screen} keyboard={false}>
+        <KeyboardSafeScroll style={styles.screen} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <View style={styles.headerRow}>
               <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -441,8 +439,7 @@ export function CreateProjectRequestScreen(): React.JSX.Element {
               )}
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardSafeScroll>
     </ScreenContainer>
   );
 }

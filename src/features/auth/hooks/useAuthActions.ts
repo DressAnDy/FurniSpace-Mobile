@@ -42,6 +42,7 @@ export function useLoginAction() {
       }
     },
     onSuccess: (user) => {
+      // Clear before setUser so Home does not start queries that get wiped.
       clearSessionQueryCache(queryClient);
       setUser(user);
     },

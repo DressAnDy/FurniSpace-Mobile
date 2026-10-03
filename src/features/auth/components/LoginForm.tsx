@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import {
   eyeIconDefinition,
   eyeOffIconDefinition,
@@ -33,7 +34,7 @@ export function LoginForm({ isSubmitting, onSubmit, onForgotPassword, onRegister
   };
 
   return (
-    <ScrollView
+    <KeyboardSafeScroll
       style={styles.screen}
       contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled"
@@ -117,6 +118,6 @@ export function LoginForm({ isSubmitting, onSubmit, onForgotPassword, onRegister
 
         <Text style={styles.copyright}>© 2026 FURNISPACE</Text>
       </View>
-    </ScrollView>
+    </KeyboardSafeScroll>
   );
 }

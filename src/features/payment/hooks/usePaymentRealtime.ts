@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { HubConnectionState } from "@microsoft/signalr";
 import { PaymentStatus, PaymentUpdatedRealtimeDto } from "../models/payment.model";
 import {
   connectPaymentHub,
+  getPaymentHubState,
   joinPaymentHub,
   leavePaymentHub,
   subscribePaymentHub,
@@ -13,19 +15,27 @@ type UsePaymentRealtimeOptions = {
   onUpdated?: (payload: PaymentUpdatedRealtimeDto) => void;
 };
 
-export function usePaymentRealtime({ paymentId, enabled = true, onUpdated }: UsePaymentRealtimeOptions): void {
+export function usePaymentRealtime({ paymentId, enabled = true, onUpdated }: UsePaymentRealtimeOptions): boolean {
+  const [hubConnected, setHubConnected] = useState(
+    () => getPaymentHubState() === HubConnectionState.Connected,
+  );
+
   useEffect(() => {
     if (!enabled || !paymentId || !onUpdated) {
+      setHubConnected(false);
       return;
     }
 
     let active = true;
 
     void connectPaymentHub().then((connected) => {
-      if (!active || !connected) {
+      if (!active) {
         return;
       }
-
+      setHubConnected(connected);
+      if (!connected) {
+        return;
+      }
       void joinPaymentHub(paymentId);
     });
 
@@ -33,7 +43,7 @@ export function usePaymentRealtime({ paymentId, enabled = true, onUpdated }: Use
       if (payload.paymentId !== paymentId) {
         return;
       }
-
+      setHubConnected(getPaymentHubState() === HubConnectionState.Connected);
       onUpdated(payload);
     });
 
@@ -45,6 +55,8 @@ export function usePaymentRealtime({ paymentId, enabled = true, onUpdated }: Use
       }
     };
   }, [enabled, onUpdated, paymentId]);
+
+  return hubConnected;
 }
 
 export function isPaymentTerminalStatus(status: PaymentStatus): boolean {

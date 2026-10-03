@@ -3,7 +3,12 @@ import { extractAuthTokensFromSetCookie } from "../../../core/api/authCookies";
 import { endpoints } from "../../../core/api/endpoints";
 import { postAuthJson, postAuthJsonWithBearer } from "../../../core/api/authTransport";
 import { authHttpClient } from "../../../core/api/httpClient";
-import { getAccessToken, getRefreshToken, setAuthTokens } from "../../../core/storage/secureStorage";
+import {
+  cacheAuthTokens,
+  getAccessToken,
+  getRefreshToken,
+  setAuthTokens,
+} from "../../../core/storage/secureStorage";
 import { ApiResponse } from "../../../shared/types/api";
 import {
   AuthSessionMetaDto,
@@ -19,18 +24,28 @@ import {
   VerifyEmailRequestDto,
 } from "../models/auth.model";
 
-async function persistTokensFromCookieLines(setCookieLines: string[]): Promise<void> {
+async function persistTokensFromCookieLines(
+  setCookieLines: string[],
+  options?: { awaitPersist?: boolean },
+): Promise<void> {
   const tokens = extractAuthTokensFromSetCookie(setCookieLines);
-  await setAuthTokens(tokens);
-
   if (!tokens.accessToken) {
     throw new AppError("Unable to read access token from auth response.", "UNAUTHORIZED", 401);
   }
+
+  // Memory first so getCurrentUser can start without waiting on Keychain.
+  cacheAuthTokens(tokens);
+  if (options?.awaitPersist === false) {
+    void setAuthTokens(tokens);
+    return;
+  }
+  await setAuthTokens(tokens);
 }
 
 export async function loginApi(payload: LoginRequestDto): Promise<AuthSessionMetaDto> {
   const response = await postAuthJson<AuthSessionMetaDto>(endpoints.auth.login, payload);
-  await persistTokensFromCookieLines(response.setCookieLines);
+  // Don't block login UX on Keychain/AsyncStorage writes.
+  await persistTokensFromCookieLines(response.setCookieLines, { awaitPersist: false });
   return response.payload.data;
 }
 

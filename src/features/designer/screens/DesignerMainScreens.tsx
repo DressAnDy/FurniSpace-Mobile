@@ -22,6 +22,7 @@ import {
 import { calendarIconDefinition, clipboardIconDefinition, projectIconDefinition } from "../../../icons/project/definitions";
 import { rulerIconDefinition } from "../../../icons/design/definitions";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import type { IconDefinition } from "../../../icons/types";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import { useLogoutAction } from "../../auth/hooks/useAuthActions";
@@ -390,7 +391,7 @@ export function DesignerProjectsScreen(): React.JSX.Element {
 
   return (
     <DesignerFrame>
-      <ScrollView
+      <KeyboardSafeScroll
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -536,7 +537,7 @@ export function DesignerProjectsScreen(): React.JSX.Element {
             </View>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardSafeScroll>
       <DesignerBottomNav active="projects" />
     </DesignerFrame>
   );
@@ -606,7 +607,7 @@ export function DesignerMessagesScreen(): React.JSX.Element {
 
   return (
     <DesignerFrame>
-      <ScrollView
+      <KeyboardSafeScroll
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -826,7 +827,7 @@ export function DesignerMessagesScreen(): React.JSX.Element {
             })
           )}
         </View>
-      </ScrollView>
+      </KeyboardSafeScroll>
       <DesignerBottomNav active="messages" />
     </DesignerFrame>
   );

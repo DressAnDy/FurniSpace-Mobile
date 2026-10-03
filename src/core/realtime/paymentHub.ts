@@ -256,12 +256,20 @@ export async function disconnectPaymentHub(): Promise<void> {
 }
 
 export async function restartPaymentHub(): Promise<boolean> {
+  if (joinedPaymentIds.size === 0) {
+    return false;
+  }
+
   clearReconnectTimer();
   allowReconnect = true;
   const hub = connection;
   connection = null;
   await hub?.stop().catch(() => undefined);
   return connectPaymentHub();
+}
+
+export function hasJoinedPayments(): boolean {
+  return joinedPaymentIds.size > 0;
 }
 
 export async function joinPaymentHub(paymentId: string): Promise<void> {

@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
@@ -103,13 +94,9 @@ export function ChangePasswordScreen(): React.JSX.Element {
   }
 
   return (
-    <ScreenContainer>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
-        style={styles.screen}
-      >
-        <ScrollView
+    <ScreenContainer keyboard={false}>
+        <KeyboardSafeScroll
+          style={styles.screen}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -170,8 +157,7 @@ export function ChangePasswordScreen(): React.JSX.Element {
               <Text style={styles.footerLink}>Back to profile</Text>
             </Pressable>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardSafeScroll>
     </ScreenContainer>
   );
 }

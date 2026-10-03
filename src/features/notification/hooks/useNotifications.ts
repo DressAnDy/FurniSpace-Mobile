@@ -20,7 +20,7 @@ import {
 
 export const NOTIFICATIONS_PAGE_SIZE = 20;
 export const DESIGNER_NOTIFICATIONS_PAGE_SIZE = 5;
-const FILTERED_FETCH_LIMIT = 100;
+const FILTERED_FETCH_LIMIT = 40;
 const NOTIFICATIONS_STALE_TIME_MS = 60_000;
 
 function filterNotificationItems(items: NotificationListItem[], filter: NotificationFilter): NotificationListItem[] {

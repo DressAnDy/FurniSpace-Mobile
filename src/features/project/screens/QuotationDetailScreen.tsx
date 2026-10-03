@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RouteProp } from "@react-navigation/native";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
 import { getCustomerFlowErrorMessage, isQuotationExpiredError } from "../utils/customer-flow.errors";
 import { AppIcon } from "../../../shared/components/AppIcon";
@@ -143,7 +144,7 @@ export function QuotationDetailScreen(): React.JSX.Element {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardSafeScroll contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.hero}>
           <View style={styles.heroDecor} />
           <View style={styles.heroTopRow}>
@@ -209,7 +210,14 @@ export function QuotationDetailScreen(): React.JSX.Element {
                     style={[styles.lineItem, index === quotation.items.length - 1 && styles.lineItemLast]}
                   >
                     <View style={styles.lineItemHeader}>
-                      <Text style={styles.lineItemName}>{item.itemName}</Text>
+                      <View style={styles.lineItemNameWrap}>
+                        <Text style={styles.lineItemName}>{item.itemName}</Text>
+                        {item.isCustomized ? (
+                          <View style={styles.customizedBadge}>
+                            <Text style={styles.customizedBadgeText}>Customized</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={styles.lineItemAmount}>{formatVndAmount(item.totalAmount, quotation.currency)}</Text>
                     </View>
                     <View style={styles.lineItemMeta}>
@@ -339,7 +347,7 @@ export function QuotationDetailScreen(): React.JSX.Element {
             </>
           )}
         </View>
-      </ScrollView>
+      </KeyboardSafeScroll>
     </View>
   );
 }

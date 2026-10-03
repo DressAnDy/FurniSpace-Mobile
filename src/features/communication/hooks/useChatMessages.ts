@@ -143,8 +143,9 @@ export function useChatMessagesQuery(chatId: string | null) {
     queryKey: queryKeys.chat.messages(chatId ?? "none"),
     enabled: isLoggedIn && Boolean(chatId),
     initialPageParam: 1,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    // Opening a thread should always re-fetch; stale empty cache was hiding real messages.
+    refetchOnMount: "always",
+    refetchOnReconnect: true,
     queryFn: async ({ pageParam }) => {
       const response = await getChatMessagesApi(chatId!, {
         page: pageParam,
@@ -153,7 +154,7 @@ export function useChatMessagesQuery(chatId: string | null) {
       });
 
       const items = response.items
-        .map((item) => normalizeChatMessageDto(item))
+        .map((item) => normalizeChatMessageDto(item, { chatId: chatId! }))
         .filter((item): item is ChatMessageDto => item !== null)
         .map((item) => mapChatMessageToListItem(item, currentUserId));
 
@@ -184,13 +185,23 @@ export function useVisibleChatMessages(chatId: string | null) {
   }, [chatId]);
 
   useEffect(() => {
-    const serverMessages = readCacheMessages(messagesQuery.data);
-    if (serverMessages.length === 0) {
+    // Wait until at least one fetch has resolved so we don't clear optimistic rows on mount.
+    if (!messagesQuery.isFetched && !messagesQuery.data) {
       return;
     }
 
-    setMessages((current) => mergeMessageLists(current, serverMessages));
-  }, [messagesQuery.data]);
+    const serverMessages = readCacheMessages(messagesQuery.data);
+    setMessages((current) => {
+      if (serverMessages.length === 0) {
+        // Keep optimistic temps while a refetch is in flight.
+        if (messagesQuery.isFetching && current.some((item) => isTempMessageKey(item.id))) {
+          return current;
+        }
+        return current.filter((item) => isTempMessageKey(item.id));
+      }
+      return mergeMessageLists(current, serverMessages);
+    });
+  }, [messagesQuery.data, messagesQuery.isFetched, messagesQuery.isFetching]);
 
   return {
     ...messagesQuery,
@@ -227,7 +238,7 @@ export function useChatActions(
 
   const appendMessageToCache = useCallback(
     (message: ChatMessageDto) => {
-      const normalized = normalizeChatMessageDto(message);
+      const normalized = normalizeChatMessageDto(message, { chatId });
       if (!chatId || !normalized) {
         return;
       }
@@ -241,7 +252,7 @@ export function useChatActions(
   const sendTextMutation = useMutation({
     mutationFn: async (content: string) => {
       const message = await sendChatTextMessageApi(chatId!, content);
-      const normalized = normalizeChatMessageDto(message);
+      const normalized = normalizeChatMessageDto(message, { chatId });
       if (!normalized) {
         throw new Error("Invalid send message response.");
       }
@@ -343,7 +354,7 @@ export function useChatActions(
       content?: string;
     }) => {
       const message = await sendChatFileMessageApi(chatId!, payload.file, payload.content);
-      const normalized = normalizeChatMessageDto(message);
+      const normalized = normalizeChatMessageDto(message, { chatId });
       if (!normalized) {
         throw new Error("Invalid send file response.");
       }

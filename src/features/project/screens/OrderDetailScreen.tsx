@@ -98,10 +98,12 @@ export function OrderDetailScreen(): React.JSX.Element {
       {
         text: "Confirm",
         onPress: () => {
-          confirmDeliveryMutation.mutate(orderId, {
-            onSuccess: () => Alert.alert("Delivery Confirmed", "Thank you for confirming receipt."),
-            onError: () => Alert.alert("Error", "Unable to confirm delivery. Please try again."),
-          });
+          setTimeout(() => {
+            confirmDeliveryMutation.mutate(orderId, {
+              onSuccess: () => Alert.alert("Delivery Confirmed", "Thank you for confirming receipt."),
+              onError: () => Alert.alert("Error", "Unable to confirm delivery. Please try again."),
+            });
+          }, 0);
         },
       },
     ]);

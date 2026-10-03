@@ -323,7 +323,17 @@ export function useRequestProjectInformationMutation() {
   return useMutation({
     mutationFn: ({ projectId, message }: { projectId: string } & RequestProjectInformationDto) =>
       requestProjectInformationApi(projectId, { message }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<ProjectDetailDto>(queryKeys.project.detail(variables.projectId), (current) => {
+        if (!current) {
+          return current;
+        }
+        const nextStatus = (data as { status?: ProjectStatus }).status ?? "NEED_BASIC_INFORMATION";
+        return normalizeProjectDetailDto({
+          ...current,
+          status: nextStatus,
+        });
+      });
       void queryClient.invalidateQueries({ queryKey: ["project", "list"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(variables.projectId) });
       void queryClient.invalidateQueries({ queryKey: ["sale"] });

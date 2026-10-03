@@ -8,10 +8,43 @@ function pickString(source: Record<string, unknown>, ...keys: string[]): string 
   for (const key of keys) {
     const value = source[key];
     if (typeof value === "string" && value.trim()) {
-      return value;
+      return value.trim();
+    }
+    // Guid / numeric ids sometimes arrive as non-strings from serializers.
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
     }
   }
 
+  return null;
+}
+
+function pickDateIso(source: Record<string, unknown>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const ms = value < 1_000_000_000_000 ? value * 1000 : value;
+      const date = new Date(ms);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    }
+  }
+
+  return null;
+}
+
+function normalizeMessageType(value: string | null): ChatMessageType | null {
+  if (!value) {
+    return null;
+  }
+  const normalized = value.trim().toUpperCase();
+  if (normalized === "TEXT" || normalized === "FILE" || normalized === "SYSTEM") {
+    return normalized;
+  }
   return null;
 }
 
@@ -30,7 +63,10 @@ function normalizeAttachment(raw: unknown): ChatAttachmentDto | null {
   };
 }
 
-export function normalizeChatMessageDto(rawMessage: unknown): ChatMessageDto | null {
+export function normalizeChatMessageDto(
+  rawMessage: unknown,
+  fallbacks?: { chatId?: string | null },
+): ChatMessageDto | null {
   const root = asRecord(rawMessage);
   if (!root) {
     return null;
@@ -39,14 +75,31 @@ export function normalizeChatMessageDto(rawMessage: unknown): ChatMessageDto | n
   // Some APIs wrap the DTO again under data/message.
   const raw = asRecord(root.data) ?? asRecord(root.message) ?? asRecord(root.Message) ?? root;
 
-  const messageId = pickString(raw, "messageId", "MessageId");
-  const chatId = pickString(raw, "chatId", "ChatId");
-  const senderId = pickString(raw, "senderId", "SenderId");
+  const messageId = pickString(raw, "messageId", "MessageId", "id", "Id");
+  const chatId = pickString(raw, "chatId", "ChatId") ?? fallbacks?.chatId?.trim() ?? null;
+  const senderId =
+    pickString(raw, "senderId", "SenderId", "senderAccountId", "SenderAccountId", "userId", "UserId") ??
+    "unknown";
   const senderName = pickString(raw, "senderName", "SenderName") ?? "Unknown";
-  const messageType = pickString(raw, "messageType", "MessageType") as ChatMessageType | null;
-  const createdAt = pickString(raw, "createdAt", "CreatedAt");
+  const attachment = normalizeAttachment(raw.attachment ?? raw.Attachment);
+  let content = pickString(raw, "content", "Content", "text", "Text", "body", "Body");
+  if (content == null && typeof raw.content === "string") {
+    content = raw.content;
+  } else if (content == null && typeof raw.Content === "string") {
+    content = raw.Content;
+  }
 
-  if (!messageId || !chatId || !senderId || !messageType || !createdAt) {
+  let messageType = normalizeMessageType(pickString(raw, "messageType", "MessageType", "type", "Type"));
+  if (!messageType && attachment?.fileUrl) {
+    messageType = "FILE";
+  } else if (!messageType && content != null) {
+    messageType = "TEXT";
+  }
+  const createdAt =
+    pickDateIso(raw, "createdAt", "CreatedAt", "sentAt", "SentAt", "timestamp", "Timestamp") ??
+    new Date().toISOString();
+
+  if (!messageId || !chatId || !messageType) {
     return null;
   }
 
@@ -57,11 +110,39 @@ export function normalizeChatMessageDto(rawMessage: unknown): ChatMessageDto | n
     senderName,
     senderRole: pickString(raw, "senderRole", "SenderRole") ?? "",
     messageType,
-    content: pickString(raw, "content", "Content"),
-    attachment: normalizeAttachment(raw.attachment ?? raw.Attachment),
+    content,
+    attachment,
     createdAt,
-    editedAt: pickString(raw, "editedAt", "EditedAt"),
-    deletedAt: pickString(raw, "deletedAt", "DeletedAt"),
-    readAt: pickString(raw, "readAt", "ReadAt"),
+    editedAt: pickDateIso(raw, "editedAt", "EditedAt"),
+    deletedAt: pickDateIso(raw, "deletedAt", "DeletedAt"),
+    readAt: pickDateIso(raw, "readAt", "ReadAt"),
+  };
+}
+
+export function normalizeChatMessagesPage(raw: unknown): {
+  items: unknown[];
+  page: number;
+  limit: number;
+  total: number;
+} {
+  if (Array.isArray(raw)) {
+    return { items: raw, page: 1, limit: raw.length, total: raw.length };
+  }
+
+  const record = asRecord(raw);
+  if (!record) {
+    return { items: [], page: 1, limit: 0, total: 0 };
+  }
+
+  const nested = asRecord(record.data) ?? asRecord(record.Data);
+  const source = nested ?? record;
+  const itemsRaw = source.items ?? source.Items ?? source.messages ?? source.Messages;
+  const items = Array.isArray(itemsRaw) ? itemsRaw : [];
+
+  return {
+    items,
+    page: Number(source.page ?? source.Page ?? 1) || 1,
+    limit: Number(source.limit ?? source.Limit ?? items.length) || items.length,
+    total: Number(source.total ?? source.Total ?? items.length) || items.length,
   };
 }

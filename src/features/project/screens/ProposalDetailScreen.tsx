@@ -8,7 +8,6 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  ScrollView,
   Text,
   TextInput,
   View,
@@ -18,6 +17,7 @@ import { queryKeys } from "../../../shared/constants/queryKeys";
 import { CustomerProposalCustomization } from "../../customization/components/CustomerProposalCustomization";
 import { getCustomerFlowErrorMessage } from "../utils/customer-flow.errors";
 import { AppIcon } from "../../../shared/components/AppIcon";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { arrowLeftIconDefinition } from "../../../icons/navigation/definitions";
 import { formatTrackingDate } from "../utils/project.tracking.mapper";
 import {
@@ -124,7 +124,7 @@ export function ProposalDetailScreen(): React.JSX.Element {
 
   return (
     <View style={styles.screen}>
-      <ScrollView
+      <KeyboardSafeScroll
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -246,7 +246,7 @@ export function ProposalDetailScreen(): React.JSX.Element {
             </>
           )}
         </View>
-      </ScrollView>
+      </KeyboardSafeScroll>
     </View>
   );
 }

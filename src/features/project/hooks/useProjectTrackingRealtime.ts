@@ -40,7 +40,7 @@ export function useProjectTrackingRealtime({
       }
 
       hasFocusedRef.current = true;
-      if (Date.now() - lastRefreshAtRef.current >= 30_000) {
+      if (Date.now() - lastRefreshAtRef.current >= 45_000) {
         lastRefreshAtRef.current = Date.now();
         void refetchAllRef.current();
       }
@@ -67,6 +67,8 @@ export function useProjectTrackingRealtime({
       refreshTimerRef.current = setTimeout(() => {
         lastRefreshAtRef.current = Date.now();
         const type = (eventName || payload.notificationType || "").toLowerCase();
+        // Invalidate only — React Query refetches active observers. Avoid also calling refetchAll
+        // (that was double-fetching with NotificationRealtimeBridge).
         if (type.includes("project_schedule") || type.includes("projectschedule") || type.includes("measurement_image")) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.project.schedules(projectId) });
         } else if (type.includes("payment")) {
@@ -79,9 +81,10 @@ export function useProjectTrackingRealtime({
           void queryClient.invalidateQueries({ queryKey: ["project", "proposals", projectId] });
         } else if (type.includes("quotation")) {
           void queryClient.invalidateQueries({ queryKey: ["project", "quotations", projectId] });
+        } else {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.project.phaseDeadlines(projectId) });
         }
         void queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) });
-        void refetchAllRef.current();
       }, 350);
     });
 

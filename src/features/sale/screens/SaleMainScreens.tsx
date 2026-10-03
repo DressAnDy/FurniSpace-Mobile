@@ -540,8 +540,12 @@ function RequestCard({
       {
         text: "Accept",
         onPress: () => {
+          const note =
+            item.rawStatus === "NEED_BASIC_INFORMATION"
+              ? "Customer provided additional basic information. Sales accepted the project for consultation."
+              : "Sales accepted the submitted project for consultation.";
           claimMutation.mutate(
-            { projectId: item.projectId },
+            { projectId: item.projectId, note },
             {
               onSuccess: (response) => {
                 const hasSalesChat = Boolean(response.salesChat?.chatId);

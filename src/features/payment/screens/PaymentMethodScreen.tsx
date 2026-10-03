@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ActivityIndicator, AppState, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, AppState, Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardSafeScroll } from "../../../shared/components/KeyboardSafe";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getErrorMessage } from "../../../core/errors/getErrorMessage";
 import type { RootStackParamList } from "../../../app/navigation/RootNavigator";
@@ -219,7 +220,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <KeyboardSafeScroll contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
           <View style={styles.heroDecorLarge} />
           <View style={styles.heroDecorSmall} />
@@ -511,7 +512,7 @@ export function PaymentMethodScreen(): React.JSX.Element {
             </>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardSafeScroll>
     </View>
   );
 }

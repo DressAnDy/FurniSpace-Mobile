@@ -72,7 +72,7 @@ export function useProjectStartFeeStatusQuery(projectId: string | null) {
     refetchInterval: (query) => {
       const status = query.state.data?.projectStartFeeStatus;
       if (status === "PENDING" || status === "PROCESSING") {
-        return 5000;
+        return 10_000;
       }
       return false;
     },
@@ -102,7 +102,7 @@ export function usePaymentStatusByCodeQuery(paymentCode: string | null, enabled:
     queryKey: queryKeys.payment.statusByCode(paymentCode ?? "none"),
     enabled: isLoggedIn && enabled && Boolean(paymentCode),
     queryFn: () => getPaymentStatusByCodeApi(paymentCode!),
-    refetchInterval: enabled ? 4000 : false,
+    refetchInterval: enabled ? 3_000 : false,
   });
 }
 
@@ -219,17 +219,17 @@ async function findExistingPaymentForOrder(
   return null;
 }
 
-export async function prepareSePayCheckout(paymentId: string) {
+export async function prepareSePayCheckout(paymentOrId: string | PaymentDetailDto) {
+  const payment =
+    typeof paymentOrId === "string" ? await getPaymentDetailApi(paymentOrId) : paymentOrId;
   const role = useAuthStore.getState().user?.role;
   if (usesPaymentHelperCheckout(role)) {
-    return prepareStaffSePayCheckout(paymentId);
+    return prepareStaffSePayCheckout(payment);
   }
-  return prepareCustomerSePayCheckout(paymentId);
+  return prepareCustomerSePayCheckout(payment);
 }
 
-async function prepareStaffSePayCheckout(paymentId: string) {
-  const payment = await getPaymentDetailApi(paymentId);
-
+async function prepareStaffSePayCheckout(payment: PaymentDetailDto) {
   if (payment.status === "PAID") {
     return {
       payment,
@@ -238,7 +238,7 @@ async function prepareStaffSePayCheckout(paymentId: string) {
     };
   }
 
-  const vietQr = await createSePayVietQrApi(paymentId);
+  const vietQr = await createSePayVietQrApi(payment.paymentId);
   return {
     payment,
     transaction: null,
@@ -251,9 +251,7 @@ async function prepareStaffSePayCheckout(paymentId: string) {
   };
 }
 
-async function prepareCustomerSePayCheckout(paymentId: string) {
-  const payment = await getPaymentDetailApi(paymentId);
-
+async function prepareCustomerSePayCheckout(payment: PaymentDetailDto) {
   if (payment.status === "PAID") {
     return {
       payment,
@@ -262,7 +260,7 @@ async function prepareCustomerSePayCheckout(paymentId: string) {
     };
   }
 
-  const activeTransaction = await getActivePaymentTransactionApi(paymentId);
+  const activeTransaction = await getActivePaymentTransactionApi(payment.paymentId).catch(() => null);
   if (activeTransaction?.paymentProvider === "SEPAY" && activeTransaction.paymentUrl) {
     return {
       payment,
@@ -276,7 +274,7 @@ async function prepareCustomerSePayCheckout(paymentId: string) {
     };
   }
 
-  const transaction = await createSePayTransactionApi(paymentId);
+  const transaction = await createSePayTransactionApi(payment.paymentId);
   return {
     payment: {
       ...payment,
@@ -329,7 +327,8 @@ export async function bootstrapSePayCheckout(input: { orderId?: string; paymentI
     };
   }
 
-  return prepareSePayCheckout(payment.paymentId);
+  // Reuse payment from ensurePayment — avoid a second getPaymentDetail round-trip.
+  return prepareSePayCheckout(payment);
 }
 
 export async function bootstrapPayOsCheckout(input: { orderId?: string; paymentId?: string }): Promise<PayOsCheckoutState> {
